@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createClient } from "@/lib/supabase/server";
+import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { Workspace, WorkspaceContext } from "./types";
 
 export const currentWorkspaceCookieName = "osa-current-workspace";
@@ -16,7 +16,7 @@ type WorkspaceRow = {
 };
 
 export async function listWorkspaces(): Promise<Workspace[]> {
-  const supabase = await createClient();
+  const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase
     .from("workspaces")
     .select("id,name,slug,website_url,default_locale,status,created_at,updated_at")
@@ -45,7 +45,7 @@ export async function createWorkspace(input: {
   name: string;
   websiteUrl?: string;
 }): Promise<Workspace> {
-  const supabase = await createClient();
+  const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase.rpc("create_workspace", {
     workspace_name: input.name,
     workspace_website_url: input.websiteUrl ?? null,

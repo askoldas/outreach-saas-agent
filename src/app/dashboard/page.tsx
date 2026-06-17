@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { activity, campaigns, drafts, getOffer, leads } from "@/data/mock/prospecting";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
@@ -7,7 +9,13 @@ import { ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
   const awaitingReview = leads.filter((lead) => lead.status === "needs_review").length;
   const activeCampaigns = campaigns.filter(
     (campaign) => campaign.status === "running",
@@ -17,7 +25,7 @@ export default function DashboardPage() {
     <div className={styles.grid}>
       <PageHeader
         title="Overview"
-        description="Monitor active campaigns, lead quality, and review work before any external outreach."
+        description={`Monitor active campaigns, lead quality, and review work for ${currentWorkspace.name}. Offer and lead records are still mock data until the next persistence slice.`}
         actions={
           <ButtonLink href="/campaigns/new" variant="primary">
             Create campaign

@@ -42,3 +42,12 @@
   background: var(--color-surface);
   box-shadow: var(--shadow-md);
 }
+
+.errorText {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font-weight: 750;
+}

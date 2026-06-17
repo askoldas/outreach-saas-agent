@@ -1,0 +1,36 @@
+.header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.header h1,
+.header p {
+  margin: 0;
+}
+
+.header h1 {
+  font-size: clamp(1.6rem, 3vw, 2.3rem);
+  line-height: 1.05;
+}
+
+.header p {
+  max-width: 780px;
+  margin-top: var(--space-2);
+  color: var(--color-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+@media (max-width: 720px) {
+  .header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "name": "outreach-saas-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Interface-first prototype for a horizontal AI-assisted B2B prospecting platform.",
+  "packageManager": "pnpm@10.13.1",
+  "engines": {
+    "node": ">=22.18.0"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "dependencies": {
+    "next": "16.2.9",
+    "react": "19.2.7",
+    "react-dom": "19.2.7"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.1",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.7",
+    "@types/react-dom": "^19.2.3",
+    "eslint": "^9.39.1",
+    "eslint-config-next": "16.2.9",
+    "prettier": "^3.6.2",
+    "typescript": "^5.9.3"
+  }
+}

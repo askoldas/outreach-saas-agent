@@ -1,0 +1,31 @@
+.stack {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-4);
+}
+
+.line {
+  height: 16px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #eef2f1, #f7faf9, #eef2f1);
+  background-size: 180% 100%;
+  animation: pulse 1.4s infinite linear;
+}
+
+.line:nth-child(2) {
+  width: 82%;
+}
+
+.line:nth-child(3) {
+  width: 64%;
+}
+
+@keyframes pulse {
+  from {
+    background-position: 0 0;
+  }
+
+  to {
+    background-position: -180% 0;
+  }
+}

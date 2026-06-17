@@ -31,40 +31,39 @@ Acceptance:
 - long-running work is separate from web requests;
 - core objects and boundaries are named consistently.
 
-## Milestone 1: Monorepo scaffold
+## Milestone 1: Interface-first root application
 
-Goal: create a reliable development foundation without external business integrations.
+Goal: create a polished root Next.js dashboard prototype without external business integrations.
 
 Deliverables:
 
-- `pnpm` workspace;
-- Turborepo or equivalent task orchestration;
+- root Next.js application;
 - strict TypeScript configuration;
-- Next.js web application;
-- initial shared packages;
+- responsive application shell;
+- offer, campaign, lead, evidence, qualification, and draft review screens;
+- centralized typed mock data;
 - linting and formatting;
-- environment validation;
-- unit test runner;
-- minimal end-to-end test setup;
-- CI workflow;
+- local development scripts;
 - `.env.example`;
 - local setup documentation.
 
 Acceptance:
 
 - clean install from a locked dependency graph;
-- lint, type check, unit tests, and production build run through documented commands;
-- one tested domain primitive is consumed by the web app;
+- formatting check, lint, type check, and production build run through documented commands;
+- the prototype demonstrates the intended workflow with realistic horizontal mock data;
 - no external provider secret is required to render the starter application;
-- CI runs the same core checks as local development.
+- no backend, provider, queue, worker, or email-sending behavior is implied as working.
 
 Recommended Codex task sequence:
 
-1. workspace and package-manager setup;
-2. Next.js app and base TypeScript config;
-3. domain package and test runner;
-4. lint, formatting, and scripts;
-5. CI and setup documentation.
+1. root Next.js scaffold and design system;
+2. overview dashboard;
+3. offers interface;
+4. campaign interface;
+5. lead review and evidence interface;
+6. outreach draft review interface;
+7. responsive QA and documentation cleanup.
 
 ## Milestone 2: Supabase and tenant foundation
 
@@ -323,6 +322,4 @@ Each later sending feature requires the separate controls listed in `docs/SECURI
 
 ## Current next action
 
-After this documentation set is reviewed and merged, the next Codex task should be Milestone 1, task 1:
-
-> Create the minimal `pnpm` monorepo workspace and root configuration files without adding external providers or product features.
+After the interface prototype lands, the next task should add targeted UI tests or begin the next backend milestone only after the product workflow is reviewed.

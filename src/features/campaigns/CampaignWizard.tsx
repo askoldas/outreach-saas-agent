@@ -20,7 +20,11 @@ export function CampaignWizard() {
       <CardHeader
         title={currentStep}
         eyebrow="Campaign wizard"
-        action={<Badge tone="accent">Step {step + 1} of {steps.length}</Badge>}
+        action={
+          <Badge tone="accent">
+            Step {step + 1} of {steps.length}
+          </Badge>
+        }
       />
       <div className={styles.cardBody}>
         <ol className={styles.pillList} aria-label="Campaign wizard steps">
@@ -38,7 +42,10 @@ export function CampaignWizard() {
           {step === 3 ? <StrategyStep /> : null}
           {notice ? <Badge tone="success">{notice}</Badge> : null}
           <div className={styles.filters}>
-            <Button disabled={step === 0} onClick={() => setStep((value) => Math.max(0, value - 1))}>
+            <Button
+              disabled={step === 0}
+              onClick={() => setStep((value) => Math.max(0, value - 1))}
+            >
               Back
             </Button>
             {step < steps.length - 1 ? (
@@ -46,7 +53,10 @@ export function CampaignWizard() {
                 Continue
               </Button>
             ) : (
-              <Button variant="primary" onClick={() => setNotice("Strategy reviewed in prototype")}>
+              <Button
+                variant="primary"
+                onClick={() => setNotice("Strategy reviewed in prototype")}
+              >
                 Confirm mock strategy
               </Button>
             )}
@@ -101,11 +111,19 @@ function CompanyStep() {
     <>
       <label className={form.field} htmlFor="types">
         <span>Preferred company types</span>
-        <textarea className={form.textarea} id="types" defaultValue="Equipment manufacturers, automation integrators" />
+        <textarea
+          className={form.textarea}
+          id="types"
+          defaultValue="Equipment manufacturers, automation integrators"
+        />
       </label>
       <label className={form.field} htmlFor="industries">
         <span>Industries</span>
-        <textarea className={form.textarea} id="industries" defaultValue="Factory automation, industrial equipment, production systems" />
+        <textarea
+          className={form.textarea}
+          id="industries"
+          defaultValue="Factory automation, industrial equipment, production systems"
+        />
       </label>
       <label className={form.field} htmlFor="size">
         <span>Company-size preference</span>
@@ -113,11 +131,21 @@ function CompanyStep() {
       </label>
       <label className={form.field} htmlFor="exclusions">
         <span>Exclusions</span>
-        <textarea className={form.textarea} id="exclusions" defaultValue="Retail-only sellers; prototype-only hobby shops" />
+        <textarea
+          className={form.textarea}
+          id="exclusions"
+          defaultValue="Retail-only sellers; prototype-only hobby shops"
+        />
       </label>
       <label className={form.field} htmlFor="lead-count">
         <span>Desired lead count</span>
-        <input className={form.input} id="lead-count" type="number" defaultValue="40" min="1" />
+        <input
+          className={form.input}
+          id="lead-count"
+          type="number"
+          defaultValue="40"
+          min="1"
+        />
       </label>
     </>
   );
@@ -125,11 +153,20 @@ function CompanyStep() {
 
 function StrategyStep() {
   const strategy = [
-    ["Target segments", "Equipment builders, automation integrators, and industrial OEMs"],
-    ["Search terminology", "custom machined parts, OEM component supplier, automation equipment"],
+    [
+      "Target segments",
+      "Equipment builders, automation integrators, and industrial OEMs",
+    ],
+    [
+      "Search terminology",
+      "custom machined parts, OEM component supplier, automation equipment",
+    ],
     ["Local-language terms", "maskinkomponenter, industrikomponenter, underleverandor"],
     ["Expected sources", "Company sites, industry directories, association lists"],
-    ["Qualification criteria", "Equipment production, recurring component needs, visible contact route"],
+    [
+      "Qualification criteria",
+      "Equipment production, recurring component needs, visible contact route",
+    ],
     ["Exclusions", "Retail-only businesses and companies below prototype stage"],
     ["Known limitations", "Employee counts may be incomplete for private firms"],
   ];

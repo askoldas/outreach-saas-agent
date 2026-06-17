@@ -13,7 +13,11 @@ export default function CampaignsPage() {
       <PageHeader
         title="Campaigns"
         description="Review market strategies, progress, lead volume, and warnings for mock prospecting campaigns."
-        actions={<ButtonLink href="/campaigns/new" variant="primary">Create campaign</ButtonLink>}
+        actions={
+          <ButtonLink href="/campaigns/new" variant="primary">
+            Create campaign
+          </ButtonLink>
+        }
       />
       <Card>
         <CardHeader title="Campaign list" eyebrow="Market objectives" />
@@ -36,7 +40,10 @@ export default function CampaignsPage() {
               {campaigns.map((campaign) => (
                 <tr key={campaign.id}>
                   <td>
-                    <Link className={styles.primaryText} href={`/campaigns/${campaign.id}`}>
+                    <Link
+                      className={styles.primaryText}
+                      href={`/campaigns/${campaign.id}`}
+                    >
                       {campaign.name}
                     </Link>
                   </td>
@@ -45,12 +52,19 @@ export default function CampaignsPage() {
                   <td>{campaign.geography}</td>
                   <td>{campaign.targetSegments.slice(0, 2).join(", ")}</td>
                   <td>
-                    <div className={styles.progress} aria-label={`${campaign.progress}% complete`}>
+                    <div
+                      className={styles.progress}
+                      aria-label={`${campaign.progress}% complete`}
+                    >
                       <span style={{ width: `${campaign.progress}%` }} />
                     </div>
                   </td>
                   <td>{campaign.leadCount}</td>
-                  <td><Badge tone={statusTone(campaign.status)}>{statusLabel(campaign.status)}</Badge></td>
+                  <td>
+                    <Badge tone={statusTone(campaign.status)}>
+                      {statusLabel(campaign.status)}
+                    </Badge>
+                  </td>
                   <td>{campaign.lastActivity}</td>
                 </tr>
               ))}

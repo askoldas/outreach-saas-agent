@@ -22,7 +22,9 @@ export default async function CampaignDetailPage({
       <PageHeader
         title={campaign.name}
         description={`${campaign.objective} for ${getOffer(campaign.offerId)?.name ?? "selected offer"} in ${campaign.geography}.`}
-        actions={<Badge tone={statusTone(campaign.status)}>{statusLabel(campaign.status)}</Badge>}
+        actions={
+          <Badge tone={statusTone(campaign.status)}>{statusLabel(campaign.status)}</Badge>
+        }
       />
 
       <section className={styles.metricGrid}>
@@ -54,8 +56,14 @@ export default async function CampaignDetailPage({
           <div className={styles.cardBody}>
             <Strategy title="Target segments" items={campaign.targetSegments} />
             <Strategy title="Search terminology" items={campaign.strategy.terms} />
-            <Strategy title="Local-language terminology" items={campaign.strategy.localizedTerms} />
-            <Strategy title="Expected source categories" items={campaign.strategy.sources} />
+            <Strategy
+              title="Local-language terminology"
+              items={campaign.strategy.localizedTerms}
+            />
+            <Strategy
+              title="Expected source categories"
+              items={campaign.strategy.sources}
+            />
             <Strategy title="Qualification criteria" items={campaign.strategy.criteria} />
             <Strategy title="Exclusions" items={campaign.strategy.exclusions} />
             <Strategy title="Known limitations" items={campaign.strategy.limitations} />
@@ -66,11 +74,19 @@ export default async function CampaignDetailPage({
             <CardHeader title="Leads by status" eyebrow="Campaign queue" />
             <div className={styles.cardBody}>
               <ul className={styles.pillList}>
-                {["needs_review", "approved", "draft_ready", "researching"].map((status) => (
-                  <li key={status}>
-                    {statusLabel(status)}: {leads.filter((lead) => lead.campaignId === campaign.id && lead.status === status).length}
-                  </li>
-                ))}
+                {["needs_review", "approved", "draft_ready", "researching"].map(
+                  (status) => (
+                    <li key={status}>
+                      {statusLabel(status)}:{" "}
+                      {
+                        leads.filter(
+                          (lead) =>
+                            lead.campaignId === campaign.id && lead.status === status,
+                        ).length
+                      }
+                    </li>
+                  ),
+                )}
               </ul>
             </div>
           </Card>

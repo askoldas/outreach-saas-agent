@@ -8,7 +8,37 @@ Medical sales is the first validation scenario, not a product limitation. The do
 
 ## Current status
 
-The repository is in the product and architecture definition phase. Implementation should not begin until the foundation documents are reviewed.
+The repository now contains an interface-first Next.js prototype in the repository root.
+
+The prototype uses typed mock data to demonstrate the intended workflow: offers, campaigns, lead review, evidence, qualification, and outreach draft review. It does not include authentication, a database, Supabase, providers, queues, workers, or email sending.
+
+## Prerequisites
+
+- Node.js 22.18 or newer
+- Corepack-enabled pnpm 10.13.1
+
+## Local development
+
+Install dependencies:
+
+```bash
+corepack pnpm install
+```
+
+Start the development server:
+
+```bash
+corepack pnpm dev
+```
+
+Run quality checks:
+
+```bash
+corepack pnpm format:check
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm build
+```
 
 ## Documentation
 
@@ -35,6 +65,14 @@ The repository is in the product and architecture definition phase. Implementati
 7. Multi-tenant data isolation is mandatory from the first database migration.
 8. Codex work must be small, testable, and documented.
 
-## Planned stack
+## Current implementation
 
-The current working direction is a TypeScript monorepo with a Next.js dashboard, PostgreSQL through Supabase, durable background jobs, provider adapters for search and language models, and explicit human approval boundaries. Exact provider choices remain replaceable unless recorded as accepted decisions in `docs/DECISIONS.md`.
+The current implementation is a single root Next.js application using:
+
+- App Router;
+- TypeScript with strict checking;
+- CSS Modules and global design tokens;
+- typed centralized mock data;
+- no external API calls or secrets.
+
+Future backend, worker, and provider layers should be introduced only when a milestone requires real runtime behavior.

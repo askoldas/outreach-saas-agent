@@ -58,12 +58,16 @@ Users may copy a draft or open a prefilled external email compose window. That a
 
 ## D-003: Modular TypeScript monorepo
 
-**Status:** accepted  
+**Status:** superseded  
 **Date:** 2026-06-17
 
 ### Decision
 
 Use a TypeScript monorepo organized into a web application, shared packages, and a separately deployable research worker.
+
+### Superseded by
+
+D-017 begins the MVP implementation as a single root Next.js application. Separate packages and workers remain possible later when real runtime requirements justify extraction.
 
 ### Consequences
 
@@ -205,26 +209,28 @@ Do not build the SaaS around n8n workflows. A future n8n connector may expose ev
 
 ## D-011: Package manager
 
-**Status:** proposed  
+**Status:** accepted  
 **Date:** 2026-06-17
 
-### Proposal
+### Decision
 
-Use `pnpm` workspaces.
+Use `pnpm` for the root Next.js application.
 
 ### Rationale
 
-It supports efficient monorepo dependency management and explicit workspace packages.
+It provides a locked dependency graph and efficient local installs without requiring a monorepo workspace.
 
-### Acceptance condition
+### Consequences
 
-Accept during Milestone 1 when the scaffold proves clean install, scripts, lockfile, and deployment compatibility.
+- the root `package.json` declares the pnpm version;
+- the committed `pnpm-lock.yaml` is the install source of truth;
+- no `pnpm-workspace.yaml` is required in the current single-app phase.
 
 ---
 
 ## D-012: Monorepo task orchestration
 
-**Status:** proposed  
+**Status:** rejected  
 **Date:** 2026-06-17
 
 ### Proposal
@@ -236,9 +242,39 @@ Use Turborepo for build, lint, type-check, and test task orchestration.
 - plain `pnpm` recursive scripts;
 - Nx.
 
-### Acceptance condition
+### Decision
 
-Choose the simplest option that supports the initial packages without unnecessary configuration. If plain workspace scripts are sufficient, reject this proposal rather than adding tooling for appearance.
+Do not use Turborepo in the current interface-first single-app phase.
+
+### Consequences
+
+- root scripts call Next.js, TypeScript, ESLint, and Prettier directly;
+- task orchestration can be reconsidered if multiple runtime packages or CI cache needs appear.
+
+---
+
+## D-017: Single root Next.js application for MVP interface
+
+**Status:** accepted  
+**Date:** 2026-06-18
+
+### Decision
+
+Begin implementation as one conventional Next.js application in the repository root.
+
+The first build target is a polished, responsive SaaS dashboard prototype using typed mock data. Internal organization uses `src/app`, `src/components`, `src/features`, `src/data/mock`, `src/lib`, and `src/types`.
+
+### Rationale
+
+The project currently needs a credible product interface and workflow prototype more than separate runtime packages. A root application reduces setup overhead, keeps iteration fast, and avoids speculative packages, workers, providers, and infrastructure.
+
+### Consequences
+
+- do not create `apps/`, `packages/`, `workers/`, Turborepo, Supabase, provider SDKs, queues, or future API routes in this phase;
+- feature folders are the internal module boundary;
+- mock data must be centralized and fictional;
+- backend services, shared packages, and a separate worker may be extracted later when persistence, authorization, provider adapters, or durable execution create real pressure;
+- the horizontal product requirement and human approval before outreach remain binding.
 
 ---
 

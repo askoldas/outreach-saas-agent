@@ -1,6 +1,6 @@
 ## Summary
 
-- 
+-
 
 ## Why
 

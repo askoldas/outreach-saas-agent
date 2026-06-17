@@ -83,47 +83,47 @@ List the relevant files, milestone, accepted decisions, and current behavior.
 List expected commands only when they actually exist in the repository.
 ```
 
-## 5. Example: first implementation task
+## 5. Example: implementation task
 
 ```md
 ## Goal
 
-Create the minimal pnpm monorepo workspace required for Milestone 1 without implementing product features.
+Create one focused screen or interaction inside the root Next.js prototype.
 
 ## Context
 
-Follow `AGENTS.md`, `docs/REPOSITORY_STRUCTURE.md`, `docs/ROADMAP.md`, and accepted decisions D-003 and D-011.
+Follow `AGENTS.md`, `docs/REPOSITORY_STRUCTURE.md`, `docs/ROADMAP.md`, and accepted decisions D-001, D-002, D-004, and D-017.
 
 ## Scope
 
-- add the root package manifest and pnpm workspace configuration;
-- add strict shared TypeScript configuration;
-- create placeholder directories only where required by configured workspaces;
-- add root scripts for commands that are actually installed;
-- document install and basic command usage.
+- add or refine the requested route under `src/app`;
+- keep large mock data in `src/data/mock`;
+- use feature folders for screen-specific components;
+- preserve human review before outreach;
+- update docs when structure or commands change.
 
 ## Out of scope
 
 - authentication;
 - Supabase;
 - AI or search providers;
-- campaign domain implementation;
-- deployment configuration;
-- visual design.
+- queue or worker infrastructure;
+- automatic sending;
+- real persistence.
 
 ## Acceptance criteria
 
-- [ ] `pnpm install` succeeds from a clean checkout;
-- [ ] the lockfile is committed;
-- [ ] workspace packages are discovered correctly;
-- [ ] no script references a missing tool;
-- [ ] documentation matches the implemented commands.
+- [ ] screen renders with realistic fictional data;
+- [ ] layout works on desktop and mobile;
+- [ ] no medical-only assumptions appear;
+- [ ] lint, type check, and build pass;
+- [ ] documentation matches the implemented structure.
 
 ## Constraints
 
 - keep dependencies minimal;
-- do not add Turborepo unless the task explicitly accepts D-012;
-- do not invent application code to demonstrate the workspace.
+- do not add `apps/`, `packages/`, `workers/`, Turborepo, Supabase, provider SDKs, or future API routes;
+- do not imply backend behavior works when it is mock-only.
 ```
 
 ## 6. Codex execution expectations
@@ -274,12 +274,10 @@ Use links between documents and keep the root `AGENTS.md` focused on enforceable
 
 ## 14. Recommended Codex task sequence after this PR
 
-1. Create minimal pnpm workspace configuration.
-2. Scaffold the Next.js web app and strict TypeScript base.
-3. Add domain package, test runner, and one normalization primitive.
-4. Add linting, formatting, and root quality scripts.
-5. Add CI and verify a clean checkout.
-6. Add Supabase local structure and tenant migrations.
-7. Add workspace authorization and RLS integration tests.
+1. Review the interface prototype for workflow gaps.
+2. Add targeted UI or component tests for critical interactions.
+3. Add workspace/authentication backend only when the interface workflow is accepted.
+4. Add Supabase local structure and tenant migrations as a separate backend milestone.
+5. Add workspace authorization and RLS integration tests before campaign persistence.
 
 Do not jump to real AI search workflows before the tenant and runtime foundations are testable.

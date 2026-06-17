@@ -27,7 +27,11 @@ export default function OffersPage() {
           <div className={styles.filters}>
             <label className={form.field} htmlFor="offer-search">
               <span>Search offers</span>
-              <input className={form.input} id="offer-search" placeholder="Search by name or buyer type" />
+              <input
+                className={form.input}
+                id="offer-search"
+                placeholder="Search by name or buyer type"
+              />
             </label>
             <label className={form.field} htmlFor="offer-status">
               <span>Status</span>
@@ -63,7 +67,9 @@ export default function OffersPage() {
                     </td>
                     <td>{statusLabel(offer.type)}</td>
                     <td>
-                      <Badge tone={statusTone(offer.status)}>{statusLabel(offer.status)}</Badge>
+                      <Badge tone={statusTone(offer.status)}>
+                        {statusLabel(offer.status)}
+                      </Badge>
                     </td>
                     <td>{offer.approvedVersion}</td>
                     <td>{offer.campaignCount}</td>

@@ -2,28 +2,33 @@
 
 ## 1. Architectural style
 
-Start as a modular TypeScript monorepo with two deployable runtime surfaces:
+The current implementation starts as one conventional root Next.js application focused on the product interface.
+
+It is an interface-first prototype using typed mock data. It demonstrates the intended workflow without real authentication, persistence, providers, queues, workers, or email sending.
+
+Future production architecture may grow into separate runtime surfaces:
 
 1. a web application for interactive user requests;
 2. a durable worker for long-running research workflows.
 
-Shared packages contain domain rules, AI task contracts, database access, provider adapters, UI primitives, and observability helpers.
-
-This avoids premature microservices while keeping the research runtime independent from short-lived web requests.
+Those surfaces should be extracted only when real runtime requirements appear. Until then, feature folders inside `src/` are the internal module boundary.
 
 ## 2. Working technology direction
 
-The initial working direction is:
+The current interface prototype uses:
 
 - Next.js with the App Router for the dashboard and server endpoints;
 - TypeScript in strict mode;
+- CSS Modules and global design tokens;
+- centralized typed mock data.
+
+Later implementation may add:
+
 - PostgreSQL hosted through Supabase;
 - Supabase Auth for initial authentication;
-- Supabase Storage when uploaded source files are introduced;
 - a durable job platform or queue-backed worker for research workflows;
 - provider adapters for search, crawling, registries, enrichment, and language models;
-- Vercel for the web application, unless runtime constraints require another host;
-- a separately deployable worker environment suited to longer execution.
+- Vercel for the web application, unless runtime constraints require another host.
 
 Provider choices that are not yet accepted remain replaceable. See `docs/DECISIONS.md`.
 

@@ -37,7 +37,7 @@ Treat accepted decisions in `docs/DECISIONS.md` as binding. When implementation 
 
 ## 3. Current phase
 
-The repository is currently in foundation design. Do not build unrelated product features before the foundation milestone in `docs/ROADMAP.md` is complete.
+The repository is currently in an interface-first prototype phase. Build inside the single root Next.js application unless a later accepted decision explicitly extracts another runtime or package.
 
 When no application scaffold or command exists yet, do not invent commands in documentation or claim that checks were run.
 
@@ -58,7 +58,7 @@ Avoid broad refactors during feature work unless the refactor is required for co
 ## 5. Architecture rules
 
 - Use TypeScript with strict type checking.
-- Keep the web application, domain logic, provider adapters, persistence, and long-running workers separated.
+- Keep UI, deterministic workflow logic, provider adapters, persistence, and long-running workers separated by clear modules. In the current phase, use feature folders inside `src/`.
 - Domain code must not import framework-specific UI or route modules.
 - Provider SDKs must remain behind internal interfaces.
 - Long-running research must not execute inside a normal HTTP request lifecycle.

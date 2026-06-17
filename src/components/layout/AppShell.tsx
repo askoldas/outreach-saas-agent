@@ -71,7 +71,11 @@ export function AppShell({ children }: Readonly<{ children: React.ReactNode }>) 
             <button className={styles.workspaceSelect} type="button">
               Northstar Components
             </button>
-            <button className={styles.iconButton} type="button" aria-label="Notifications">
+            <button
+              className={styles.iconButton}
+              type="button"
+              aria-label="Notifications"
+            >
               N
             </button>
             <button className={styles.avatarButton} type="button" aria-label="User menu">

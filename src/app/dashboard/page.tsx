@@ -9,7 +9,9 @@ import { PageHeader } from "@/components/ui/PageHeader";
 
 export default function DashboardPage() {
   const awaitingReview = leads.filter((lead) => lead.status === "needs_review").length;
-  const activeCampaigns = campaigns.filter((campaign) => campaign.status === "running").length;
+  const activeCampaigns = campaigns.filter(
+    (campaign) => campaign.status === "running",
+  ).length;
 
   return (
     <div className={styles.grid}>
@@ -32,7 +34,9 @@ export default function DashboardPage() {
         <Card className={styles.metric}>
           <p>Leads discovered</p>
           <h2>{leads.length}</h2>
-          <span>{campaigns.reduce((sum, campaign) => sum + campaign.leadCount, 0)} total found</span>
+          <span>
+            {campaigns.reduce((sum, campaign) => sum + campaign.leadCount, 0)} total found
+          </span>
         </Card>
         <Card className={styles.metric}>
           <p>Awaiting review</p>
@@ -66,7 +70,10 @@ export default function DashboardPage() {
                 {campaigns.map((campaign) => (
                   <tr key={campaign.id}>
                     <td>
-                      <Link className={styles.primaryText} href={`/campaigns/${campaign.id}`}>
+                      <Link
+                        className={styles.primaryText}
+                        href={`/campaigns/${campaign.id}`}
+                      >
                         {campaign.name}
                       </Link>
                       <span className={styles.secondaryText}>{campaign.objective}</span>
@@ -74,7 +81,10 @@ export default function DashboardPage() {
                     <td>{getOffer(campaign.offerId)?.name}</td>
                     <td>{campaign.geography}</td>
                     <td>
-                      <div className={styles.progress} aria-label={`${campaign.progress}% complete`}>
+                      <div
+                        className={styles.progress}
+                        aria-label={`${campaign.progress}% complete`}
+                      >
                         <span style={{ width: `${campaign.progress}%` }} />
                       </div>
                     </td>
@@ -158,5 +168,7 @@ export default function DashboardPage() {
 }
 
 function getCampaignLabel(campaignId: string) {
-  return campaigns.find((campaign) => campaign.id === campaignId)?.name ?? "Unknown campaign";
+  return (
+    campaigns.find((campaign) => campaign.id === campaignId)?.name ?? "Unknown campaign"
+  );
 }

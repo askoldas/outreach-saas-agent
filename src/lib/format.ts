@@ -21,7 +21,11 @@ export function scoreTone(score: number) {
 }
 
 export function confidenceTone(confidence: Confidence) {
-  return confidence === "high" ? "success" : confidence === "medium" ? "warning" : "danger";
+  return confidence === "high"
+    ? "success"
+    : confidence === "medium"
+      ? "warning"
+      : "danger";
 }
 
 export function statusTone(

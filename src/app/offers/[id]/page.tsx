@@ -21,7 +21,9 @@ export default async function OfferDetailPage({
       <PageHeader
         title={offer.name}
         description={offer.summary}
-        actions={<Badge tone={statusTone(offer.status)}>{statusLabel(offer.status)}</Badge>}
+        actions={
+          <Badge tone={statusTone(offer.status)}>{statusLabel(offer.status)}</Badge>
+        }
       />
 
       <section className={styles.twoColumn}>

@@ -20,12 +20,16 @@ export function LeadsTable() {
   const countries = Array.from(new Set(leads.map((lead) => lead.country)));
   const filtered = useMemo(() => {
     return leads
-      .filter((lead) => `${lead.company} ${lead.industry}`.toLowerCase().includes(query.toLowerCase()))
+      .filter((lead) =>
+        `${lead.company} ${lead.industry}`.toLowerCase().includes(query.toLowerCase()),
+      )
       .filter((lead) => campaignId === "all" || lead.campaignId === campaignId)
       .filter((lead) => country === "all" || lead.country === country)
       .filter((lead) => status === "all" || lead.status === status)
       .filter((lead) => score === "all" || lead.fitScore >= Number(score))
-      .sort((a, b) => (sort === "score" ? b.fitScore - a.fitScore : a.company.localeCompare(b.company)));
+      .sort((a, b) =>
+        sort === "score" ? b.fitScore - a.fitScore : a.company.localeCompare(b.company),
+      );
   }, [campaignId, country, query, score, sort, status]);
 
   return (
@@ -33,13 +37,64 @@ export function LeadsTable() {
       <div className={styles.filters}>
         <label className={form.field} htmlFor="lead-search">
           <span>Text search</span>
-          <input className={form.input} id="lead-search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Company or industry" />
+          <input
+            className={form.input}
+            id="lead-search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Company or industry"
+          />
         </label>
-        <Select label="Campaign" value={campaignId} onChange={setCampaignId} options={[["all", "All campaigns"], ...campaigns.map((campaign) => [campaign.id, campaign.name] as const)]} />
-        <Select label="Country" value={country} onChange={setCountry} options={[["all", "All countries"], ...countries.map((item) => [item, item] as const)]} />
-        <Select label="Status" value={status} onChange={setStatus} options={[["all", "All statuses"], ["needs_review", "Needs review"], ["approved", "Approved"], ["draft_ready", "Draft ready"], ["researching", "Researching"]]} />
-        <Select label="Score" value={score} onChange={setScore} options={[["all", "Any score"], ["80", "80+"], ["70", "70+"], ["60", "60+"]]} />
-        <Select label="Sort" value={sort} onChange={(value) => setSort(value as "score" | "company")} options={[["score", "Fit score"], ["company", "Company"]]} />
+        <Select
+          label="Campaign"
+          value={campaignId}
+          onChange={setCampaignId}
+          options={[
+            ["all", "All campaigns"],
+            ...campaigns.map((campaign) => [campaign.id, campaign.name] as const),
+          ]}
+        />
+        <Select
+          label="Country"
+          value={country}
+          onChange={setCountry}
+          options={[
+            ["all", "All countries"],
+            ...countries.map((item) => [item, item] as const),
+          ]}
+        />
+        <Select
+          label="Status"
+          value={status}
+          onChange={setStatus}
+          options={[
+            ["all", "All statuses"],
+            ["needs_review", "Needs review"],
+            ["approved", "Approved"],
+            ["draft_ready", "Draft ready"],
+            ["researching", "Researching"],
+          ]}
+        />
+        <Select
+          label="Score"
+          value={score}
+          onChange={setScore}
+          options={[
+            ["all", "Any score"],
+            ["80", "80+"],
+            ["70", "70+"],
+            ["60", "60+"],
+          ]}
+        />
+        <Select
+          label="Sort"
+          value={sort}
+          onChange={(value) => setSort(value as "score" | "company")}
+          options={[
+            ["score", "Fit score"],
+            ["company", "Company"],
+          ]}
+        />
       </div>
 
       <div className={styles.tableWrap}>
@@ -62,24 +117,47 @@ export function LeadsTable() {
             {filtered.map((lead) => (
               <tr key={lead.id}>
                 <td>
-                  <Link className={styles.primaryText} href={`/leads/${lead.id}`}>{lead.company}</Link>
+                  <Link className={styles.primaryText} href={`/leads/${lead.id}`}>
+                    {lead.company}
+                  </Link>
                   <span className={styles.secondaryText}>{lead.industry}</span>
                 </td>
                 <td>{lead.website.replace("https://", "")}</td>
-                <td>{lead.city}, {lead.country}</td>
-                <td>{campaigns.find((campaign) => campaign.id === lead.campaignId)?.name}</td>
+                <td>
+                  {lead.city}, {lead.country}
+                </td>
+                <td>
+                  {campaigns.find((campaign) => campaign.id === lead.campaignId)?.name}
+                </td>
                 <td>{lead.companyType}</td>
-                <td><Badge tone={scoreTone(lead.fitScore)}>{lead.fitScore}</Badge></td>
-                <td><Badge tone={confidenceTone(lead.confidence)}>{statusLabel(lead.confidence)}</Badge></td>
-                <td><Badge tone={confidenceTone(lead.contactability)}>{statusLabel(lead.contactability)}</Badge></td>
-                <td><Badge tone={statusTone(lead.status)}>{statusLabel(lead.status)}</Badge></td>
-                <td><ButtonLink href={`/leads/${lead.id}`}>Review</ButtonLink></td>
+                <td>
+                  <Badge tone={scoreTone(lead.fitScore)}>{lead.fitScore}</Badge>
+                </td>
+                <td>
+                  <Badge tone={confidenceTone(lead.confidence)}>
+                    {statusLabel(lead.confidence)}
+                  </Badge>
+                </td>
+                <td>
+                  <Badge tone={confidenceTone(lead.contactability)}>
+                    {statusLabel(lead.contactability)}
+                  </Badge>
+                </td>
+                <td>
+                  <Badge tone={statusTone(lead.status)}>{statusLabel(lead.status)}</Badge>
+                </td>
+                <td>
+                  <ButtonLink href={`/leads/${lead.id}`}>Review</ButtonLink>
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <p className={styles.secondaryText}>Showing {filtered.length} of {leads.length} mock leads. Pagination would be connected when persistence exists.</p>
+      <p className={styles.secondaryText}>
+        Showing {filtered.length} of {leads.length} mock leads. Pagination would be
+        connected when persistence exists.
+      </p>
     </>
   );
 }
@@ -99,9 +177,16 @@ function Select({
   return (
     <label className={form.field} htmlFor={id}>
       <span>{label}</span>
-      <select className={form.select} id={id} value={value} onChange={(event) => onChange(event.target.value)}>
+      <select
+        className={form.select}
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
         {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue}>{optionLabel}</option>
+          <option key={optionValue} value={optionValue}>
+            {optionLabel}
+          </option>
         ))}
       </select>
     </label>

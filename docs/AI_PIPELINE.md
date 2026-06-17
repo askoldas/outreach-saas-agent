@@ -51,13 +51,13 @@ Suggested result wrapper:
 ```ts
 type AiTaskResult<T> =
   | {
-      status: 'succeeded';
+      status: "succeeded";
       data: T;
       executionId: string;
       warnings: string[];
     }
   | {
-      status: 'failed';
+      status: "failed";
       category: string;
       retryable: boolean;
       executionId?: string;
@@ -372,10 +372,10 @@ Map profiles to concrete providers through configuration. Record the concrete pr
 
 ## 14. Prompt organization
 
-Recommended task layout:
+When AI tasks are implemented, keep each task narrow and versioned. In the current root-app phase, do not create a separate package for this. A future extraction may use a package if multiple runtimes need the same task contracts.
 
 ```text
-packages/ai/src/tasks/qualify-lead/
+src/features/ai-tasks/qualify-lead/
 ├─ index.ts
 ├─ input.schema.ts
 ├─ output.schema.ts

@@ -4,7 +4,11 @@ export function Card({
   children,
   className,
 }: Readonly<{ children: React.ReactNode; className?: string }>) {
-  return <section className={[styles.card, className].filter(Boolean).join(" ")}>{children}</section>;
+  return (
+    <section className={[styles.card, className].filter(Boolean).join(" ")}>
+      {children}
+    </section>
+  );
 }
 
 export function CardHeader({

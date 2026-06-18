@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
-import { campaigns } from "@/data/mock/prospecting";
 import { LeadsTable } from "@/features/leads/LeadsTable";
+import { listCampaigns } from "@/server/campaigns/repository";
 import { importSampleLeadsAction } from "@/server/leads/actions";
 import { listLeads } from "@/server/leads/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
@@ -23,7 +23,10 @@ export default async function LeadsPage({
   }
 
   const params = await searchParams;
-  const leads = await listLeads(currentWorkspace.id);
+  const [campaigns, leads] = await Promise.all([
+    listCampaigns(currentWorkspace.id),
+    listLeads(currentWorkspace.id),
+  ]);
 
   return (
     <div className={styles.grid}>

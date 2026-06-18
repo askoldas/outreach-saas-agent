@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { OfferStatus, OfferType } from "@/types/domain";
 import { createOffer, importSampleOffers, updateOfferStatus } from "./repository";
+import { createActivityEvent } from "@/server/activity/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 const offerTypes = new Set<OfferType>([
@@ -34,6 +35,12 @@ export async function updateOfferStatusAction(input: UpdateOfferStatusInput) {
   }
 
   await updateOfferStatus(currentWorkspace.id, input.offerId, input.status);
+  await createActivityEvent(currentWorkspace.id, {
+    description: `Offer ${input.offerId} moved to ${input.status}.`,
+    entityExternalId: input.offerId,
+    entityType: "offer",
+    label: "Offer status updated",
+  });
 
   revalidatePath("/dashboard");
   revalidatePath("/offers");
@@ -79,6 +86,12 @@ export async function createOfferAction(formData: FormData) {
     problems: getList(formData, "problems"),
     summary,
     type,
+  });
+  await createActivityEvent(currentWorkspace.id, {
+    description: `${offer.name} was added to the offer library.`,
+    entityExternalId: offer.id,
+    entityType: "offer",
+    label: "Offer created",
   });
 
   revalidatePath("/dashboard");

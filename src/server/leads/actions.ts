@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { LeadStatus } from "@/types/domain";
 import { importSampleLeads, updateLeadStatus } from "./repository";
+import { createActivityEvent } from "@/server/activity/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 type UpdateLeadReviewInput = {
@@ -31,6 +32,12 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
   }
 
   await updateLeadStatus(currentWorkspace.id, input.leadId, input.status);
+  await createActivityEvent(currentWorkspace.id, {
+    description: `Lead ${input.leadId} moved to ${input.status}.`,
+    entityExternalId: input.leadId,
+    entityType: "lead",
+    label: "Lead review updated",
+  });
 
   revalidatePath("/dashboard");
   revalidatePath("/leads");

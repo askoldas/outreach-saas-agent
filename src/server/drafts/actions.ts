@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { DraftStatus } from "@/types/domain";
 import { importSampleDrafts, updateDraft } from "./repository";
+import { createActivityEvent } from "@/server/activity/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 type UpdateDraftReviewInput = {
@@ -37,6 +38,12 @@ export async function updateDraftReviewAction(input: UpdateDraftReviewInput) {
     body,
     status: input.status,
     subject,
+  });
+  await createActivityEvent(currentWorkspace.id, {
+    description: `Draft ${input.draftId} moved to ${input.status}.`,
+    entityExternalId: input.draftId,
+    entityType: "draft",
+    label: "Draft review updated",
   });
 
   revalidatePath("/dashboard");

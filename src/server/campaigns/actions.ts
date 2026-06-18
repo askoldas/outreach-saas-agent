@@ -8,6 +8,7 @@ import {
   importSampleCampaigns,
   updateCampaignStatus,
 } from "./repository";
+import { createActivityEvent } from "@/server/activity/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 type UpdateCampaignStatusInput = {
@@ -29,6 +30,12 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
   }
 
   await updateCampaignStatus(currentWorkspace.id, input.campaignId, input.status);
+  await createActivityEvent(currentWorkspace.id, {
+    description: `Campaign ${input.campaignId} moved to ${input.status}.`,
+    entityExternalId: input.campaignId,
+    entityType: "campaign",
+    label: "Campaign status updated",
+  });
 
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${input.campaignId}`);
@@ -77,6 +84,12 @@ export async function createCampaignAction(formData: FormData) {
     sourceCategories: getList(formData, "sourceCategories"),
     targetSegments: getList(formData, "targetSegments"),
     terms: getList(formData, "terms"),
+  });
+  await createActivityEvent(currentWorkspace.id, {
+    description: `${campaign.name} was created for ${campaign.geography}.`,
+    entityExternalId: campaign.id,
+    entityType: "campaign",
+    label: "Campaign created",
   });
 
   revalidatePath("/campaigns");

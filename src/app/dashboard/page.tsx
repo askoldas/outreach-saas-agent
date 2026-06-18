@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { activity } from "@/data/mock/prospecting";
+import { listActivityEvents } from "@/server/activity/repository";
 import { listCampaigns } from "@/server/campaigns/repository";
 import { listDrafts } from "@/server/drafts/repository";
 import { listLeads } from "@/server/leads/repository";
@@ -20,7 +20,8 @@ export default async function DashboardPage() {
     redirect("/onboarding/workspace");
   }
 
-  const [campaigns, drafts, leads, offers] = await Promise.all([
+  const [activity, campaigns, drafts, leads, offers] = await Promise.all([
+    listActivityEvents(currentWorkspace.id),
     listCampaigns(currentWorkspace.id),
     listDrafts(currentWorkspace.id),
     listLeads(currentWorkspace.id),
@@ -126,6 +127,12 @@ export default async function DashboardPage() {
           <CardHeader title="Recent activity" eyebrow="Timeline" />
           <div className={styles.cardBody}>
             <ul className={styles.feed}>
+              {activity.length === 0 ? (
+                <li>
+                  <strong>No activity yet</strong>
+                  <p>Workspace actions will appear here.</p>
+                </li>
+              ) : null}
               {activity.map((item) => (
                 <li key={item.id}>
                   <span>{item.time}</span>

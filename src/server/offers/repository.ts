@@ -89,6 +89,32 @@ export async function getOffer(
   return data ? mapOffer(data as OfferRow) : null;
 }
 
+export async function updateOfferStatus(
+  workspaceId: string,
+  offerId: string,
+  status: OfferStatus,
+): Promise<Offer> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const updatePayload = {
+    last_updated_label: "Just now",
+    status,
+    ...(status === "active" ? { approved_version: "Approved" } : {}),
+  };
+  const { data, error } = await supabase
+    .from("offers")
+    .update(updatePayload)
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", offerId)
+    .select(offerSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not update offer: ${error.message}`);
+  }
+
+  return mapOffer(data as OfferRow);
+}
+
 export async function createOffer(
   workspaceId: string,
   input: CreateOfferInput,

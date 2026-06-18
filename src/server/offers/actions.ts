@@ -2,8 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { OfferType } from "@/types/domain";
-import { createOffer, importSampleOffers } from "./repository";
+import type { OfferStatus, OfferType } from "@/types/domain";
+import { createOffer, importSampleOffers, updateOfferStatus } from "./repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 const offerTypes = new Set<OfferType>([
@@ -14,6 +14,40 @@ const offerTypes = new Set<OfferType>([
   "service",
   "software",
 ]);
+
+type UpdateOfferStatusInput = {
+  offerId: string;
+  status: OfferStatus;
+};
+
+const offerStatuses = new Set<OfferStatus>(["active", "archived", "draft"]);
+
+export async function updateOfferStatusAction(input: UpdateOfferStatusInput) {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    throw new Error("Authentication required");
+  }
+
+  if (!input.offerId || !offerStatuses.has(input.status)) {
+    throw new Error("Unsupported offer status.");
+  }
+
+  await updateOfferStatus(currentWorkspace.id, input.offerId, input.status);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/offers");
+  revalidatePath(`/offers/${input.offerId}`);
+
+  return {
+    message:
+      input.status === "active"
+        ? "Offer activated"
+        : input.status === "archived"
+          ? "Offer archived"
+          : "Offer moved to draft",
+  };
+}
 
 export async function createOfferAction(formData: FormData) {
   const { currentWorkspace } = await getWorkspaceContext();

@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { OfferControls } from "@/features/offers/OfferControls";
 import { getOffer } from "@/server/offers/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
@@ -46,6 +47,13 @@ export default async function OfferDetailPage({
         </Card>
 
         <div className={styles.stack}>
+          <Card>
+            <CardHeader title="Status controls" eyebrow="Workspace status" />
+            <div className={styles.cardBody}>
+              <OfferControls offerId={offer.id} status={offer.status} />
+            </div>
+          </Card>
+
           <Card>
             <CardHeader title="AI-proposed information" eyebrow="Needs review" />
             <div className={styles.cardBody}>

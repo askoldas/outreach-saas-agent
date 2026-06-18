@@ -8,9 +8,9 @@ Medical sales is the first validation scenario, not a product limitation. The do
 
 ## Current status
 
-The repository now contains an interface-first Next.js prototype in the repository root.
+The repository contains a single-root Next.js app with Supabase-backed authentication, workspaces, offers, campaigns, leads, outreach drafts, activity events, and admin settings.
 
-The prototype uses typed mock data to demonstrate the intended workflow: offers, campaigns, lead review, evidence, qualification, and outreach draft review. It does not include authentication, a database, Supabase, providers, queues, workers, or email sending.
+Tavily and OpenRouter provider configuration is scaffolded behind internal modules, but search and AI workflows are not active yet.
 
 ## Prerequisites
 
@@ -23,6 +23,21 @@ Install dependencies:
 
 ```bash
 corepack pnpm install
+```
+
+Create `.env.local` from `.env.example` and set the Supabase values:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+```
+
+Optional provider values for the next integration stage:
+
+```bash
+TAVILY_API_KEY=
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4.1-mini
 ```
 
 Start the development server:
@@ -72,7 +87,10 @@ The current implementation is a single root Next.js application using:
 - App Router;
 - TypeScript with strict checking;
 - CSS Modules and global design tokens;
-- typed centralized mock data;
-- no external API calls or secrets.
+- Supabase Auth and Postgres with RLS;
+- workspace-scoped repositories and server actions;
+- persisted offer, campaign, lead, draft, activity, and settings flows;
+- dev sample import actions backed by local seed data;
+- provider config wrappers for Tavily and OpenRouter.
 
-Future backend, worker, and provider layers should be introduced only when a milestone requires real runtime behavior.
+External provider workflows, background jobs, lead discovery, and AI draft generation are the next runtime milestones.

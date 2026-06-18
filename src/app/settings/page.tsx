@@ -8,6 +8,7 @@ import {
   updateProfileSettingsAction,
   updateWorkspaceSettingsAction,
 } from "@/server/workspaces/actions";
+import { getProviderStatus } from "@/lib/providers/config";
 import { statusLabel } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import form from "@/components/ui/FormControls.module.css";
@@ -42,6 +43,7 @@ export default async function SettingsPage({
     searchParams,
     getCurrentProfile(),
   ]);
+  const providerStatus = getProviderStatus();
 
   return (
     <div className={styles.grid}>
@@ -199,6 +201,34 @@ export default async function SettingsPage({
           <p>
             <strong>Current workspace id:</strong> {currentWorkspace.id}
           </p>
+        </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Provider readiness" eyebrow="External services" />
+        <div className={styles.tableWrap}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>Provider</th>
+                <th>Purpose</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {providerStatus.map((provider) => (
+                <tr key={provider.name}>
+                  <td>{provider.label}</td>
+                  <td>{provider.purpose}</td>
+                  <td>
+                    <Badge tone={provider.configured ? "success" : "warning"}>
+                      {provider.configured ? "Configured" : "Missing key"}
+                    </Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Card>
     </div>

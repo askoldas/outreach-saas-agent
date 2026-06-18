@@ -62,15 +62,19 @@ export function OfferForm({ error }: Readonly<{ error?: string }>) {
                 <input
                   className={form.input}
                   id={id}
+                  minLength={2}
                   name={id}
                   placeholder={placeholder}
+                  required
                 />
               ) : (
                 <textarea
                   className={form.textarea}
                   id={id}
+                  minLength={id === "summary" ? 12 : undefined}
                   name={id}
                   placeholder={placeholder}
+                  required={id === "summary"}
                 />
               )}
             </div>

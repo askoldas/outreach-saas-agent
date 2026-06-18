@@ -24,6 +24,22 @@ type CampaignRow = {
   warnings: string[];
 };
 
+type CreateCampaignInput = {
+  desiredLeadCount: number;
+  exclusions: string[];
+  geography: string;
+  industryTerms: string[];
+  language: string;
+  localizedTerms: string[];
+  name: string;
+  objective: string;
+  offerId: string;
+  qualificationCriteria: string[];
+  sourceCategories: string[];
+  targetSegments: string[];
+  terms: string[];
+};
+
 const campaignSelect = `
   external_id,
   name,
@@ -78,6 +94,49 @@ export async function getCampaign(
   }
 
   return data ? mapCampaign(data as CampaignRow) : null;
+}
+
+export async function createCampaign(
+  workspaceId: string,
+  input: CreateCampaignInput,
+): Promise<Campaign> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const externalId = await createUniqueCampaignExternalId(workspaceId, input.name);
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      awaiting_review: 0,
+      external_id: externalId,
+      geography: input.geography,
+      language: input.language,
+      last_activity_label: "Just now",
+      lead_count: input.desiredLeadCount,
+      name: input.name,
+      objective: input.objective,
+      offer_external_id: input.offerId,
+      progress: 0,
+      status: "planning",
+      strategy_criteria: input.qualificationCriteria,
+      strategy_exclusions: input.exclusions,
+      strategy_limitations: [
+        "New campaign has not run discovery yet.",
+        "Lead counts are targets until discovery creates records.",
+      ],
+      strategy_localized_terms: input.localizedTerms,
+      strategy_sources: input.sourceCategories,
+      strategy_terms: [...input.terms, ...input.industryTerms],
+      target_segments: input.targetSegments,
+      warnings: ["Review strategy before starting discovery."],
+      workspace_id: workspaceId,
+    })
+    .select(campaignSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not create campaign: ${error.message}`);
+  }
+
+  return mapCampaign(data as CampaignRow);
 }
 
 export async function importSampleCampaigns(workspaceId: string): Promise<number> {
@@ -142,4 +201,38 @@ function mapCampaign(row: CampaignRow): Campaign {
     targetSegments: row.target_segments,
     warnings: row.warnings,
   };
+}
+
+async function createUniqueCampaignExternalId(workspaceId: string, name: string) {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const baseSlug = slugify(name) || "campaign";
+  let candidate = baseSlug;
+  let suffix = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("campaigns")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("external_id", candidate)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Could not check campaign slug: ${error.message}`);
+    }
+
+    if (!data) {
+      return candidate;
+    }
+
+    suffix += 1;
+    candidate = `${baseSlug}-${suffix}`;
+  }
+}
+
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

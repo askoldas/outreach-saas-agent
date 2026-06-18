@@ -20,6 +20,12 @@ type DraftRow = {
   warnings: string[];
 };
 
+type UpdateDraftInput = {
+  body: string;
+  status: DraftStatus;
+  subject: string;
+};
+
 const draftSelect = `
   external_id,
   lead_external_id,
@@ -68,6 +74,32 @@ export async function getDraft(
   }
 
   return data ? mapDraft(data as DraftRow) : null;
+}
+
+export async function updateDraft(
+  workspaceId: string,
+  draftId: string,
+  input: UpdateDraftInput,
+): Promise<OutreachDraft> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("outreach_drafts")
+    .update({
+      body: input.body,
+      last_edited_label: "Just now",
+      status: input.status,
+      subject: input.subject,
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", draftId)
+    .select(draftSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not update draft: ${error.message}`);
+  }
+
+  return mapDraft(data as DraftRow);
 }
 
 export async function importSampleDrafts(workspaceId: string): Promise<number> {

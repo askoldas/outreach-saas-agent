@@ -96,6 +96,30 @@ export async function getCampaign(
   return data ? mapCampaign(data as CampaignRow) : null;
 }
 
+export async function updateCampaignStatus(
+  workspaceId: string,
+  campaignId: string,
+  status: CampaignStatus,
+): Promise<Campaign> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update({
+      last_activity_label: "Just now",
+      status,
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignId)
+    .select(campaignSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not update campaign: ${error.message}`);
+  }
+
+  return mapCampaign(data as CampaignRow);
+}
+
 export async function createCampaign(
   workspaceId: string,
   input: CreateCampaignInput,

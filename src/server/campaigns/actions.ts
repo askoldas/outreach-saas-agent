@@ -2,8 +2,47 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createCampaign, importSampleCampaigns } from "./repository";
+import type { CampaignStatus } from "@/types/domain";
+import {
+  createCampaign,
+  importSampleCampaigns,
+  updateCampaignStatus,
+} from "./repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
+
+type UpdateCampaignStatusInput = {
+  campaignId: string;
+  status: CampaignStatus;
+};
+
+const controlStatuses = new Set<CampaignStatus>(["completed", "paused", "running"]);
+
+export async function updateCampaignStatusAction(input: UpdateCampaignStatusInput) {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    throw new Error("Authentication required");
+  }
+
+  if (!input.campaignId || !controlStatuses.has(input.status)) {
+    throw new Error("Unsupported campaign status.");
+  }
+
+  await updateCampaignStatus(currentWorkspace.id, input.campaignId, input.status);
+
+  revalidatePath("/campaigns");
+  revalidatePath(`/campaigns/${input.campaignId}`);
+  revalidatePath("/dashboard");
+
+  return {
+    message:
+      input.status === "running"
+        ? "Campaign running"
+        : input.status === "paused"
+          ? "Campaign paused"
+          : "Campaign completed",
+  };
+}
 
 export async function createCampaignAction(formData: FormData) {
   const { currentWorkspace } = await getWorkspaceContext();

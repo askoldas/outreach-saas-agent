@@ -1,4 +1,5 @@
 import { notFound, redirect } from "next/navigation";
+import { CampaignControls } from "@/features/campaigns/CampaignControls";
 import { getCampaign } from "@/server/campaigns/repository";
 import { listLeads } from "@/server/leads/repository";
 import { getOffer } from "@/server/offers/repository";
@@ -6,7 +7,6 @@ import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -122,12 +122,9 @@ export default async function CampaignDetailPage({
             </div>
           </Card>
           <Card>
-            <CardHeader title="Controls" eyebrow="Interface placeholders" />
+            <CardHeader title="Controls" eyebrow="Workspace status" />
             <div className={styles.cardBody}>
-              <div className={styles.filters}>
-                <Button>Pause</Button>
-                <Button variant="primary">Continue</Button>
-              </div>
+              <CampaignControls campaignId={campaign.id} status={campaign.status} />
             </div>
           </Card>
         </div>

@@ -1,6 +1,9 @@
-import { notFound } from "next/navigation";
-import { drafts, getCampaign, getDraft, getLead } from "@/data/mock/prospecting";
+import { notFound, redirect } from "next/navigation";
 import { DraftEditor } from "@/features/drafts/DraftEditor";
+import { getCampaign } from "@/server/campaigns/repository";
+import { getDraft } from "@/server/drafts/repository";
+import { getLead } from "@/server/leads/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
@@ -11,14 +14,22 @@ export default async function DraftDetailPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
-  const draft = getDraft(id);
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
+  const draft = await getDraft(currentWorkspace.id, id);
 
   if (!draft) {
     notFound();
   }
 
-  const lead = getLead(draft.leadId);
-  const campaign = getCampaign(draft.campaignId);
+  const [lead, campaign] = await Promise.all([
+    getLead(currentWorkspace.id, draft.leadId),
+    getCampaign(currentWorkspace.id, draft.campaignId),
+  ]);
 
   return (
     <div className={styles.grid}>
@@ -91,8 +102,4 @@ export default async function DraftDetailPage({
       </section>
     </div>
   );
-}
-
-export function generateStaticParams() {
-  return drafts.map((draft) => ({ id: draft.id }));
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { activity, drafts } from "@/data/mock/prospecting";
+import { activity } from "@/data/mock/prospecting";
 import { listCampaigns } from "@/server/campaigns/repository";
+import { listDrafts } from "@/server/drafts/repository";
 import { listLeads } from "@/server/leads/repository";
 import { listOffers } from "@/server/offers/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
@@ -19,8 +20,9 @@ export default async function DashboardPage() {
     redirect("/onboarding/workspace");
   }
 
-  const [campaigns, leads, offers] = await Promise.all([
+  const [campaigns, drafts, leads, offers] = await Promise.all([
     listCampaigns(currentWorkspace.id),
+    listDrafts(currentWorkspace.id),
     listLeads(currentWorkspace.id),
     listOffers(currentWorkspace.id),
   ]);

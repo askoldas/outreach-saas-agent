@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { activity, campaigns, drafts, getOffer, leads } from "@/data/mock/prospecting";
+import { activity, campaigns, drafts, getOffer } from "@/data/mock/prospecting";
+import { listLeads } from "@/server/leads/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
@@ -16,6 +17,7 @@ export default async function DashboardPage() {
     redirect("/onboarding/workspace");
   }
 
+  const leads = await listLeads(currentWorkspace.id);
   const awaitingReview = leads.filter((lead) => lead.status === "needs_review").length;
   const activeCampaigns = campaigns.filter(
     (campaign) => campaign.status === "running",
@@ -25,7 +27,7 @@ export default async function DashboardPage() {
     <div className={styles.grid}>
       <PageHeader
         title="Overview"
-        description={`Monitor active campaigns, lead quality, and review work for ${currentWorkspace.name}. Offer and lead records are still mock data until the next persistence slice.`}
+        description={`Monitor active campaigns, lead quality, and review work for ${currentWorkspace.name}.`}
         actions={
           <ButtonLink href="/campaigns/new" variant="primary">
             Create campaign
@@ -42,9 +44,7 @@ export default async function DashboardPage() {
         <Card className={styles.metric}>
           <p>Leads discovered</p>
           <h2>{leads.length}</h2>
-          <span>
-            {campaigns.reduce((sum, campaign) => sum + campaign.leadCount, 0)} total found
-          </span>
+          <span>Workspace lead records in Supabase</span>
         </Card>
         <Card className={styles.metric}>
           <p>Awaiting review</p>
@@ -167,6 +167,11 @@ export default async function DashboardPage() {
                   </tr>
                 );
               })}
+              {leads.length === 0 ? (
+                <tr>
+                  <td colSpan={6}>No workspace leads are ready for review yet.</td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

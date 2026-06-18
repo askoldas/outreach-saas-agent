@@ -2,14 +2,17 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { campaigns, leads } from "@/data/mock/prospecting";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
+import type { Campaign, Lead } from "@/types/domain";
 import form from "@/components/ui/FormControls.module.css";
 import { Badge } from "@/components/ui/Badge";
 import { ButtonLink } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
 
-export function LeadsTable() {
+export function LeadsTable({
+  campaigns,
+  leads,
+}: Readonly<{ campaigns: Campaign[]; leads: Lead[] }>) {
   const [query, setQuery] = useState("");
   const [campaignId, setCampaignId] = useState("all");
   const [country, setCountry] = useState("all");
@@ -30,7 +33,7 @@ export function LeadsTable() {
       .sort((a, b) =>
         sort === "score" ? b.fitScore - a.fitScore : a.company.localeCompare(b.company),
       );
-  }, [campaignId, country, query, score, sort, status]);
+  }, [campaignId, country, leads, query, score, sort, status]);
 
   return (
     <>
@@ -97,6 +100,12 @@ export function LeadsTable() {
         />
       </div>
 
+      {leads.length === 0 ? (
+        <p className={styles.secondaryText}>
+          No leads have been saved for this workspace yet.
+        </p>
+      ) : null}
+
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <thead>
@@ -155,8 +164,7 @@ export function LeadsTable() {
         </table>
       </div>
       <p className={styles.secondaryText}>
-        Showing {filtered.length} of {leads.length} mock leads. Pagination would be
-        connected when persistence exists.
+        Showing {filtered.length} of {leads.length} workspace leads.
       </p>
     </>
   );

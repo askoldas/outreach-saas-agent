@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
-import { getCampaign, getLead, leads } from "@/data/mock/prospecting";
+import { redirect } from "next/navigation";
+import { getCampaign } from "@/data/mock/prospecting";
 import { LeadActions } from "@/features/leads/LeadActions";
+import { getLead } from "@/server/leads/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
@@ -11,7 +14,13 @@ export default async function LeadDetailPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
-  const lead = getLead(id);
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
+  const lead = await getLead(currentWorkspace.id, id);
 
   if (!lead) {
     notFound();
@@ -183,8 +192,4 @@ export default async function LeadDetailPage({
       </section>
     </div>
   );
-}
-
-export function generateStaticParams() {
-  return leads.map((lead) => ({ id: lead.id }));
 }

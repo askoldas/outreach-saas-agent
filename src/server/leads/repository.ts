@@ -141,6 +141,27 @@ export async function getLead(workspaceId: string, leadId: string): Promise<Lead
   return data ? mapLead(data as LeadRow) : null;
 }
 
+export async function updateLeadStatus(
+  workspaceId: string,
+  leadId: string,
+  status: LeadStatus,
+): Promise<Lead> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .update({ status })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", leadId)
+    .select(leadSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not update lead: ${error.message}`);
+  }
+
+  return mapLead(data as LeadRow);
+}
+
 export async function importSampleLeads(workspaceId: string): Promise<number> {
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase

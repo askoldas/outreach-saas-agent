@@ -1,7 +1,6 @@
-import { notFound } from "next/navigation";
-import { redirect } from "next/navigation";
-import { getCampaign } from "@/data/mock/prospecting";
+import { notFound, redirect } from "next/navigation";
 import { LeadActions } from "@/features/leads/LeadActions";
+import { getCampaign } from "@/server/campaigns/repository";
 import { getLead } from "@/server/leads/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
@@ -25,6 +24,10 @@ export default async function LeadDetailPage({
   if (!lead) {
     notFound();
   }
+
+  const campaign = lead.campaignId
+    ? await getCampaign(currentWorkspace.id, lead.campaignId)
+    : null;
 
   return (
     <div className={styles.grid}>
@@ -62,7 +65,7 @@ export default async function LeadDetailPage({
           <Card>
             <CardHeader
               title="Company summary"
-              eyebrow={getCampaign(lead.campaignId)?.name}
+              eyebrow={campaign?.name ?? "Unknown campaign"}
             />
             <div className={styles.cardBody}>
               <p>
@@ -183,9 +186,9 @@ export default async function LeadDetailPage({
             </div>
           </Card>
           <Card>
-            <CardHeader title="Review actions" eyebrow="Local feedback only" />
+            <CardHeader title="Review actions" eyebrow="Workspace status" />
             <div className={styles.cardBody}>
-              <LeadActions />
+              <LeadActions leadId={lead.id} status={lead.status} />
             </div>
           </Card>
         </div>

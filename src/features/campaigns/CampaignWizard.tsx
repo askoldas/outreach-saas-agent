@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { offers } from "@/data/mock/prospecting";
+import type { Offer } from "@/types/domain";
 import form from "@/components/ui/FormControls.module.css";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -10,7 +10,7 @@ import styles from "@/features/shared/Feature.module.css";
 
 const steps = ["Select offer", "Define market", "Ideal companies", "Review strategy"];
 
-export function CampaignWizard() {
+export function CampaignWizard({ offers }: Readonly<{ offers: Offer[] }>) {
   const [step, setStep] = useState(0);
   const [notice, setNotice] = useState("");
   const currentStep = steps[step] ?? "Select offer";
@@ -36,7 +36,7 @@ export function CampaignWizard() {
         </ol>
 
         <div className={styles.stack} style={{ marginTop: "var(--space-5)" }}>
-          {step === 0 ? <OfferStep /> : null}
+          {step === 0 ? <OfferStep offers={offers} /> : null}
           {step === 1 ? <MarketStep /> : null}
           {step === 2 ? <CompanyStep /> : null}
           {step === 3 ? <StrategyStep /> : null}
@@ -67,11 +67,14 @@ export function CampaignWizard() {
   );
 }
 
-function OfferStep() {
+function OfferStep({ offers }: Readonly<{ offers: Offer[] }>) {
   return (
     <label className={form.field} htmlFor="campaign-offer">
       <span>Selected offer</span>
       <select className={form.select} id="campaign-offer" defaultValue={offers[0]?.id}>
+        {offers.length === 0 ? (
+          <option value="">Create or load an offer first</option>
+        ) : null}
         {offers.map((offer) => (
           <option key={offer.id} value={offer.id}>
             {offer.name}

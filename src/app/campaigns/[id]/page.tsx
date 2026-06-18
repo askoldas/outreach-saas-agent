@@ -1,5 +1,8 @@
-import { notFound } from "next/navigation";
-import { campaigns, getCampaign, getOffer, leads } from "@/data/mock/prospecting";
+import { notFound, redirect } from "next/navigation";
+import { getCampaign } from "@/server/campaigns/repository";
+import { listLeads } from "@/server/leads/repository";
+import { getOffer } from "@/server/offers/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
@@ -11,17 +14,28 @@ export default async function CampaignDetailPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
-  const campaign = getCampaign(id);
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
+  const [campaign, leads] = await Promise.all([
+    getCampaign(currentWorkspace.id, id),
+    listLeads(currentWorkspace.id),
+  ]);
 
   if (!campaign) {
     notFound();
   }
 
+  const offer = await getOffer(currentWorkspace.id, campaign.offerId);
+
   return (
     <div className={styles.grid}>
       <PageHeader
         title={campaign.name}
-        description={`${campaign.objective} for ${getOffer(campaign.offerId)?.name ?? "selected offer"} in ${campaign.geography}.`}
+        description={`${campaign.objective} for ${offer?.name ?? "selected offer"} in ${campaign.geography}.`}
         actions={
           <Badge tone={statusTone(campaign.status)}>{statusLabel(campaign.status)}</Badge>
         }
@@ -120,10 +134,6 @@ export default async function CampaignDetailPage({
       </section>
     </div>
   );
-}
-
-export function generateStaticParams() {
-  return campaigns.map((campaign) => ({ id: campaign.id }));
 }
 
 function Strategy({ title, items }: Readonly<{ title: string; items: string[] }>) {

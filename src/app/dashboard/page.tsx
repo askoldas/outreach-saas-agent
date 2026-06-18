@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { activity, campaigns, drafts, getOffer } from "@/data/mock/prospecting";
+import { activity, drafts } from "@/data/mock/prospecting";
+import { listCampaigns } from "@/server/campaigns/repository";
 import { listLeads } from "@/server/leads/repository";
+import { listOffers } from "@/server/offers/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
@@ -17,7 +19,15 @@ export default async function DashboardPage() {
     redirect("/onboarding/workspace");
   }
 
-  const leads = await listLeads(currentWorkspace.id);
+  const [campaigns, leads, offers] = await Promise.all([
+    listCampaigns(currentWorkspace.id),
+    listLeads(currentWorkspace.id),
+    listOffers(currentWorkspace.id),
+  ]);
+  const offerNameById = new Map(offers.map((offer) => [offer.id, offer.name]));
+  const campaignNameById = new Map(
+    campaigns.map((campaign) => [campaign.id, campaign.name]),
+  );
   const awaitingReview = leads.filter((lead) => lead.status === "needs_review").length;
   const activeCampaigns = campaigns.filter(
     (campaign) => campaign.status === "running",
@@ -86,7 +96,7 @@ export default async function DashboardPage() {
                       </Link>
                       <span className={styles.secondaryText}>{campaign.objective}</span>
                     </td>
-                    <td>{getOffer(campaign.offerId)?.name}</td>
+                    <td>{offerNameById.get(campaign.offerId) ?? "Unknown offer"}</td>
                     <td>{campaign.geography}</td>
                     <td>
                       <div
@@ -142,7 +152,7 @@ export default async function DashboardPage() {
             </thead>
             <tbody>
               {leads.slice(0, 4).map((lead) => {
-                const campaign = getCampaignLabel(lead.campaignId);
+                const campaign = campaignNameById.get(lead.campaignId);
                 return (
                   <tr key={lead.id}>
                     <td>
@@ -152,7 +162,7 @@ export default async function DashboardPage() {
                       <span className={styles.secondaryText}>{lead.companyType}</span>
                     </td>
                     <td>{lead.country}</td>
-                    <td>{campaign}</td>
+                    <td>{campaign ?? "Unknown campaign"}</td>
                     <td>
                       <Badge tone={scoreTone(lead.fitScore)}>{lead.fitScore}</Badge>
                     </td>
@@ -177,11 +187,5 @@ export default async function DashboardPage() {
         </div>
       </Card>
     </div>
-  );
-}
-
-function getCampaignLabel(campaignId: string) {
-  return (
-    campaigns.find((campaign) => campaign.id === campaignId)?.name ?? "Unknown campaign"
   );
 }

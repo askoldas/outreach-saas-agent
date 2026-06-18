@@ -1,18 +1,41 @@
 import Link from "next/link";
-import { campaigns, getOffer } from "@/data/mock/prospecting";
+import { redirect } from "next/navigation";
+import { importSampleCampaignsAction } from "@/server/campaigns/actions";
+import { listCampaigns } from "@/server/campaigns/repository";
+import { listOffers } from "@/server/offers/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
-import { ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-export default function CampaignsPage() {
+type SearchParams = {
+  message?: string;
+};
+
+export default async function CampaignsPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<SearchParams> }>) {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
+  const params = await searchParams;
+  const [campaigns, offers] = await Promise.all([
+    listCampaigns(currentWorkspace.id),
+    listOffers(currentWorkspace.id),
+  ]);
+  const offerNameById = new Map(offers.map((offer) => [offer.id, offer.name]));
+
   return (
     <div className={styles.grid}>
       <PageHeader
         title="Campaigns"
-        description="Review market strategies, progress, lead volume, and warnings for mock prospecting campaigns."
+        description={`Review market strategies, progress, lead volume, and warnings for ${currentWorkspace.name}.`}
         actions={
           <ButtonLink href="/campaigns/new" variant="primary">
             Create campaign
@@ -20,7 +43,26 @@ export default function CampaignsPage() {
         }
       />
       <Card>
-        <CardHeader title="Campaign list" eyebrow="Market objectives" />
+        <CardHeader
+          title="Campaign list"
+          eyebrow="Market objectives"
+          action={
+            campaigns.length === 0 ? (
+              <form action={importSampleCampaignsAction}>
+                <Button type="submit" variant="primary">
+                  Load sample campaigns
+                </Button>
+              </form>
+            ) : null
+          }
+        />
+        {params.message === "sample-campaigns-imported" ? (
+          <div className={styles.cardBody}>
+            <p className={styles.secondaryText}>
+              Sample campaigns loaded for this workspace.
+            </p>
+          </div>
+        ) : null}
         <div className={styles.tableWrap}>
           <table className={styles.table}>
             <thead>
@@ -37,6 +79,13 @@ export default function CampaignsPage() {
               </tr>
             </thead>
             <tbody>
+              {campaigns.length === 0 ? (
+                <tr>
+                  <td colSpan={9}>
+                    No campaigns have been saved for this workspace yet.
+                  </td>
+                </tr>
+              ) : null}
               {campaigns.map((campaign) => (
                 <tr key={campaign.id}>
                   <td>
@@ -47,7 +96,7 @@ export default function CampaignsPage() {
                       {campaign.name}
                     </Link>
                   </td>
-                  <td>{getOffer(campaign.offerId)?.name}</td>
+                  <td>{offerNameById.get(campaign.offerId) ?? "Unknown offer"}</td>
                   <td>{campaign.objective}</td>
                   <td>{campaign.geography}</td>
                   <td>{campaign.targetSegments.slice(0, 2).join(", ")}</td>

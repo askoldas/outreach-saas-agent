@@ -1,5 +1,6 @@
-import { notFound } from "next/navigation";
-import { getOffer } from "@/data/mock/prospecting";
+import { notFound, redirect } from "next/navigation";
+import { getOffer } from "@/server/offers/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
@@ -10,7 +11,13 @@ export default async function OfferDetailPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
-  const offer = getOffer(id);
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
+  const offer = await getOffer(currentWorkspace.id, id);
 
   if (!offer) {
     notFound();

@@ -1,8 +1,5 @@
-"use client";
-
-import { useState } from "react";
+import { createOfferAction } from "@/server/offers/actions";
 import form from "@/components/ui/FormControls.module.css";
-import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import styles from "@/features/shared/Feature.module.css";
@@ -31,24 +28,13 @@ const fields = [
   ["keywords", "Keywords", "Search terms and synonyms for later campaign planning"],
 ] as const;
 
-export function OfferForm() {
-  const [notice, setNotice] = useState("");
-
+export function OfferForm({ error }: Readonly<{ error?: string }>) {
   return (
     <Card>
-      <CardHeader
-        title="Offer profile"
-        eyebrow="Mock form"
-        action={notice ? <Badge tone="success">{notice}</Badge> : null}
-      />
-      <form
-        className={styles.cardBody}
-        onSubmit={(event) => {
-          event.preventDefault();
-          setNotice("Prototype notice shown");
-        }}
-      >
+      <CardHeader title="Offer profile" eyebrow="Workspace record" />
+      <form className={styles.cardBody} action={createOfferAction}>
         <div className={styles.stack}>
+          {error ? <p className={styles.secondaryText}>{error}</p> : null}
           <div className={form.field}>
             <label htmlFor="offer-type">Offer type</label>
             <select
@@ -91,7 +77,7 @@ export function OfferForm() {
           ))}
 
           <Button variant="primary" type="submit">
-            Show success notice
+            Save offer
           </Button>
         </div>
       </form>

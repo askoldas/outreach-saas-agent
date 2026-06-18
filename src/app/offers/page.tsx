@@ -1,19 +1,37 @@
 import Link from "next/link";
-import { offers } from "@/data/mock/prospecting";
+import { redirect } from "next/navigation";
+import { importSampleOffersAction } from "@/server/offers/actions";
+import { listOffers } from "@/server/offers/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import form from "@/components/ui/FormControls.module.css";
 import { Badge } from "@/components/ui/Badge";
-import { ButtonLink } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-export default function OffersPage() {
+type SearchParams = {
+  message?: string;
+};
+
+export default async function OffersPage({
+  searchParams,
+}: Readonly<{ searchParams: Promise<SearchParams> }>) {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    redirect("/onboarding/workspace");
+  }
+
+  const params = await searchParams;
+  const offers = await listOffers(currentWorkspace.id);
+
   return (
     <div className={styles.grid}>
       <PageHeader
         title="Offers"
-        description="Manage reusable product and service profiles before campaigns use them."
+        description={`Manage reusable product and service profiles for ${currentWorkspace.name}.`}
         actions={
           <ButtonLink href="/offers/new" variant="primary">
             Add offer
@@ -22,8 +40,25 @@ export default function OffersPage() {
       />
 
       <Card>
-        <CardHeader title="Offer library" eyebrow="Seller knowledge" />
+        <CardHeader
+          title="Offer library"
+          eyebrow="Seller knowledge"
+          action={
+            offers.length === 0 ? (
+              <form action={importSampleOffersAction}>
+                <Button type="submit" variant="primary">
+                  Load sample offers
+                </Button>
+              </form>
+            ) : null
+          }
+        />
         <div className={styles.cardBody}>
+          {params.message === "sample-offers-imported" ? (
+            <p className={styles.secondaryText}>
+              Sample offers loaded for this workspace.
+            </p>
+          ) : null}
           <div className={styles.filters}>
             <label className={form.field} htmlFor="offer-search">
               <span>Search offers</span>
@@ -57,6 +92,11 @@ export default function OffersPage() {
                 </tr>
               </thead>
               <tbody>
+                {offers.length === 0 ? (
+                  <tr>
+                    <td colSpan={6}>No offers have been saved for this workspace yet.</td>
+                  </tr>
+                ) : null}
                 {offers.map((offer) => (
                   <tr key={offer.id}>
                     <td>

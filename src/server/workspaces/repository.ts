@@ -23,7 +23,6 @@ type ProfileRow = {
 
 type WorkspaceMemberRow = {
   created_at: string;
-  profiles: ProfileRow | ProfileRow[] | null;
   role: WorkspaceMember["role"];
   status: WorkspaceMember["status"];
   user_id: string;
@@ -140,7 +139,7 @@ export async function listWorkspaceMembers(
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase
     .from("workspace_members")
-    .select("user_id,role,status,created_at,profiles(id,display_name,locale)")
+    .select("user_id,role,status,created_at")
     .eq("workspace_id", workspaceId)
     .order("created_at", { ascending: true });
 
@@ -148,7 +147,24 @@ export async function listWorkspaceMembers(
     throw new Error(`Could not load workspace members: ${error.message}`);
   }
 
-  return ((data ?? []) as unknown as WorkspaceMemberRow[]).map(mapWorkspaceMember);
+  const members = (data ?? []) as WorkspaceMemberRow[];
+  const userIds = members.map((member) => member.user_id);
+  const { data: profiles, error: profilesError } = await supabase
+    .from("profiles")
+    .select("id,display_name,locale")
+    .in("id", userIds);
+
+  if (profilesError) {
+    throw new Error(`Could not load member profiles: ${profilesError.message}`);
+  }
+
+  const profileById = new Map(
+    ((profiles ?? []) as ProfileRow[]).map((profile) => [profile.id, profile]),
+  );
+
+  return members.map((member) =>
+    mapWorkspaceMember(member, profileById.get(member.user_id)),
+  );
 }
 
 function mapWorkspace(row: WorkspaceRow): Workspace {
@@ -172,9 +188,10 @@ function mapProfile(row: ProfileRow): Profile {
   };
 }
 
-function mapWorkspaceMember(row: WorkspaceMemberRow): WorkspaceMember {
-  const profile = Array.isArray(row.profiles) ? row.profiles[0] : row.profiles;
-
+function mapWorkspaceMember(
+  row: WorkspaceMemberRow,
+  profile: ProfileRow | undefined,
+): WorkspaceMember {
   return {
     createdAt: row.created_at,
     displayName: profile?.display_name ?? null,

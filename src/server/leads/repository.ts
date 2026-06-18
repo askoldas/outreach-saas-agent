@@ -1,6 +1,6 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { leads as sampleLeads } from "@/data/mock/prospecting";
-import type { SearchResult } from "@/lib/providers/tavily";
+import type { EvaluatedLeadCandidate } from "@/lib/providers/lead-evaluator";
 import type {
   Confidence,
   ContactRoute,
@@ -68,10 +68,8 @@ type PersistedLeadIdentifier = {
 
 type DiscoveredLeadInput = {
   campaignId: string;
-  companyType: string;
+  candidate: EvaluatedLeadCandidate;
   country: string;
-  industry: string;
-  result: SearchResult;
 };
 
 const leadSelect = `
@@ -175,28 +173,33 @@ export async function importDiscoveredLeads(
   workspaceId: string,
   inputs: DiscoveredLeadInput[],
 ): Promise<number> {
+  if (inputs.length === 0) {
+    return 0;
+  }
+
   const { supabase } = await createAuthenticatedDatabaseClient();
   const leadRows = inputs.map((input) => {
-    const website = getOrigin(input.result.url);
-    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
+    const website = getOrigin(input.candidate.result.url);
+    const externalId = createDiscoveredLeadId(
+      input.candidate.result.url,
+      input.candidate.companyName,
+    );
 
     return {
       campaign_id: input.campaignId,
       city: "Unknown",
-      company: normalizeTitle(input.result.title),
-      company_type: input.companyType,
-      confidence: "low" as const,
+      company: normalizeCompanyName(input.candidate.companyName),
+      company_type: input.candidate.companyType,
+      confidence: input.candidate.confidence,
       contactability: "low" as const,
       country: input.country,
-      description: input.result.content || input.result.title,
+      description: input.candidate.summary,
       estimated_size: "Unknown",
       external_id: externalId,
-      fit_score: scoreToFit(input.result.score),
-      industry: input.industry,
-      status: "researching" as const,
-      summary:
-        input.result.content ||
-        "Discovered from web search. Review evidence before approving.",
+      fit_score: input.candidate.fitScore,
+      industry: input.candidate.industry,
+      status: "needs_review" as const,
+      summary: input.candidate.summary,
       website,
       workspace_id: workspaceId,
     };
@@ -216,7 +219,10 @@ export async function importDiscoveredLeads(
     persistedLeads.map((lead) => [lead.external_id, lead.id]),
   );
   const evidenceRows = inputs.flatMap((input, index) => {
-    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
+    const externalId = createDiscoveredLeadId(
+      input.candidate.result.url,
+      input.candidate.companyName,
+    );
     const leadId = leadIdByExternalId.get(externalId);
 
     return leadId
@@ -228,12 +234,10 @@ export async function importDiscoveredLeads(
             lead_id: leadId,
             retrieved_at: new Date().toISOString().slice(0, 10),
             sort_order: 0,
-            source_label: input.result.title,
-            source_type: "Tavily search result",
-            source_url: input.result.url,
-            text:
-              input.result.content ||
-              `Tavily returned ${input.result.title} for the campaign query.`,
+            source_label: input.candidate.result.title,
+            source_type: "AI-qualified Tavily search result",
+            source_url: input.candidate.result.url,
+            text: input.candidate.reason,
           },
         ]
       : [];
@@ -423,29 +427,16 @@ function createDiscoveredLeadId(url: string, title: string) {
   return `web-${slugify(source)}`.slice(0, 80).replace(/-+$/g, "");
 }
 
+function normalizeCompanyName(companyName: string) {
+  return companyName.trim().slice(0, 180) || "Unknown company";
+}
+
 function getOrigin(url: string) {
   try {
     return new URL(url).origin;
   } catch {
     return url;
   }
-}
-
-function normalizeTitle(title: string) {
-  return (
-    title
-      .replace(/\s+[|-]\s+.*$/, "")
-      .trim()
-      .slice(0, 180) || "Unknown company"
-  );
-}
-
-function scoreToFit(score: number | null) {
-  if (typeof score !== "number") {
-    return 55;
-  }
-
-  return Math.max(45, Math.min(85, Math.round(score * 100)));
 }
 
 function slugify(input: string) {

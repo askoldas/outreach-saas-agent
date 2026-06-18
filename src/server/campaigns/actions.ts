@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { CampaignStatus } from "@/types/domain";
+import { evaluateLeadCandidates } from "@/lib/providers/lead-evaluator";
 import { searchWeb } from "@/lib/providers/tavily";
 import { importDiscoveredLeads } from "@/server/leads/repository";
 import {
@@ -36,14 +37,13 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
 
   const query = buildCampaignSearchQuery(campaign);
   const results = await searchWeb(query);
+  const candidates = await evaluateLeadCandidates(campaign, results);
   const importedCount = await importDiscoveredLeads(
     currentWorkspace.id,
-    results.map((result) => ({
+    candidates.map((candidate) => ({
       campaignId: campaign.id,
-      companyType: campaign.targetSegments[0] ?? "Unknown",
+      candidate,
       country: campaign.geography,
-      industry: campaign.strategy.terms[0] ?? "Research result",
-      result,
     })),
   );
 
@@ -62,8 +62,8 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
   return {
     message:
       importedCount === 0
-        ? "No new lead candidates found"
-        : `${importedCount} lead candidate${importedCount === 1 ? "" : "s"} saved`,
+        ? "AI did not find relevant company leads in these results"
+        : `${importedCount} qualified lead candidate${importedCount === 1 ? "" : "s"} saved`,
   };
 }
 

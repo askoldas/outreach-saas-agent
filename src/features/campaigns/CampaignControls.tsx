@@ -2,7 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateCampaignStatusAction } from "@/server/campaigns/actions";
+import {
+  discoverCampaignLeadsAction,
+  updateCampaignStatusAction,
+} from "@/server/campaigns/actions";
 import type { CampaignStatus } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
@@ -36,17 +39,29 @@ export function CampaignControls({
     });
   }
 
+  function discoverLeads() {
+    startTransition(async () => {
+      try {
+        const result = await discoverCampaignLeadsAction(campaignId);
+
+        setMessage(result.message);
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not discover leads");
+      }
+    });
+  }
+
   return (
     <div className={styles.stack}>
       <div className={styles.filters}>
+        <Button disabled={isPending} variant="primary" onClick={discoverLeads}>
+          Discover leads
+        </Button>
         <Button disabled={isPending} onClick={() => updateStatus("paused")}>
           Pause
         </Button>
-        <Button
-          disabled={isPending}
-          variant="primary"
-          onClick={() => updateStatus("running")}
-        >
+        <Button disabled={isPending} onClick={() => updateStatus("running")}>
           Continue
         </Button>
         <Button disabled={isPending} onClick={() => updateStatus("completed")}>

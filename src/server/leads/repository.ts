@@ -1,5 +1,6 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { leads as sampleLeads } from "@/data/mock/prospecting";
+import type { SearchResult } from "@/lib/providers/tavily";
 import type {
   Confidence,
   ContactRoute,
@@ -63,6 +64,14 @@ type ContactRouteRow = {
 type PersistedLeadIdentifier = {
   external_id: string;
   id: string;
+};
+
+type DiscoveredLeadInput = {
+  campaignId: string;
+  companyType: string;
+  country: string;
+  industry: string;
+  result: SearchResult;
 };
 
 const leadSelect = `
@@ -160,6 +169,89 @@ export async function updateLeadStatus(
   }
 
   return mapLead(data as LeadRow);
+}
+
+export async function importDiscoveredLeads(
+  workspaceId: string,
+  inputs: DiscoveredLeadInput[],
+): Promise<number> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const leadRows = inputs.map((input) => {
+    const website = getOrigin(input.result.url);
+    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
+
+    return {
+      campaign_id: input.campaignId,
+      city: "Unknown",
+      company: normalizeTitle(input.result.title),
+      company_type: input.companyType,
+      confidence: "low" as const,
+      contactability: "low" as const,
+      country: input.country,
+      description: input.result.content || input.result.title,
+      estimated_size: "Unknown",
+      external_id: externalId,
+      fit_score: scoreToFit(input.result.score),
+      industry: input.industry,
+      status: "researching" as const,
+      summary:
+        input.result.content ||
+        "Discovered from web search. Review evidence before approving.",
+      website,
+      workspace_id: workspaceId,
+    };
+  });
+
+  const { data, error } = await supabase
+    .from("leads")
+    .upsert(leadRows, { onConflict: "workspace_id,external_id" })
+    .select("id,external_id");
+
+  if (error) {
+    throw new Error(`Could not import discovered leads: ${error.message}`);
+  }
+
+  const persistedLeads = (data ?? []) as PersistedLeadIdentifier[];
+  const leadIdByExternalId = new Map(
+    persistedLeads.map((lead) => [lead.external_id, lead.id]),
+  );
+  const evidenceRows = inputs.flatMap((input, index) => {
+    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
+    const leadId = leadIdByExternalId.get(externalId);
+
+    return leadId
+      ? [
+          {
+            confidence: "medium" as const,
+            external_id: `search-${index + 1}`,
+            kind: "fact" as const,
+            lead_id: leadId,
+            retrieved_at: new Date().toISOString().slice(0, 10),
+            sort_order: 0,
+            source_label: input.result.title,
+            source_type: "Tavily search result",
+            source_url: input.result.url,
+            text:
+              input.result.content ||
+              `Tavily returned ${input.result.title} for the campaign query.`,
+          },
+        ]
+      : [];
+  });
+
+  if (evidenceRows.length > 0) {
+    const { error: evidenceError } = await supabase
+      .from("lead_evidence_claims")
+      .upsert(evidenceRows, { onConflict: "lead_id,external_id" });
+
+    if (evidenceError) {
+      throw new Error(
+        `Could not save discovered lead evidence: ${evidenceError.message}`,
+      );
+    }
+  }
+
+  return persistedLeads.length;
 }
 
 export async function importSampleLeads(workspaceId: string): Promise<number> {
@@ -324,6 +416,43 @@ function mapContacts(rows: ContactRouteRow[] | null): ContactRoute[] {
 
 function sortByOrder<T extends { sort_order: number }>(rows: T[] | null): T[] {
   return [...(rows ?? [])].sort((first, second) => first.sort_order - second.sort_order);
+}
+
+function createDiscoveredLeadId(url: string, title: string) {
+  const source = getOrigin(url).replace(/^https?:\/\//, "") || title;
+  return `web-${slugify(source)}`.slice(0, 80).replace(/-+$/g, "");
+}
+
+function getOrigin(url: string) {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return url;
+  }
+}
+
+function normalizeTitle(title: string) {
+  return (
+    title
+      .replace(/\s+[|-]\s+.*$/, "")
+      .trim()
+      .slice(0, 180) || "Unknown company"
+  );
+}
+
+function scoreToFit(score: number | null) {
+  if (typeof score !== "number") {
+    return 55;
+  }
+
+  return Math.max(45, Math.min(85, Math.round(score * 100)));
+}
+
+function slugify(input: string) {
+  return input
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }
 
 async function replaceLeadChildren<Row extends { lead_id: string }>(

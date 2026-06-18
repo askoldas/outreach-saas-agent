@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { CampaignStatus } from "@/types/domain";
+import { searchWeb } from "@/lib/providers/tavily";
+import { importDiscoveredLeads } from "@/server/leads/repository";
 import {
   createCampaign,
+  getCampaign,
   importSampleCampaigns,
   updateCampaignStatus,
 } from "./repository";
@@ -17,6 +20,52 @@ type UpdateCampaignStatusInput = {
 };
 
 const controlStatuses = new Set<CampaignStatus>(["completed", "paused", "running"]);
+
+export async function discoverCampaignLeadsAction(campaignId: string) {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    throw new Error("Authentication required");
+  }
+
+  const campaign = await getCampaign(currentWorkspace.id, campaignId);
+
+  if (!campaign) {
+    throw new Error("Campaign not found.");
+  }
+
+  const query = buildCampaignSearchQuery(campaign);
+  const results = await searchWeb(query);
+  const importedCount = await importDiscoveredLeads(
+    currentWorkspace.id,
+    results.map((result) => ({
+      campaignId: campaign.id,
+      companyType: campaign.targetSegments[0] ?? "Unknown",
+      country: campaign.geography,
+      industry: campaign.strategy.terms[0] ?? "Research result",
+      result,
+    })),
+  );
+
+  await createActivityEvent(currentWorkspace.id, {
+    description: `${importedCount} lead candidate${importedCount === 1 ? "" : "s"} discovered for ${campaign.name}.`,
+    entityExternalId: campaign.id,
+    entityType: "campaign",
+    label: "Campaign discovery run",
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/leads");
+  revalidatePath("/campaigns");
+  revalidatePath(`/campaigns/${campaign.id}`);
+
+  return {
+    message:
+      importedCount === 0
+        ? "No new lead candidates found"
+        : `${importedCount} lead candidate${importedCount === 1 ? "" : "s"} saved`,
+  };
+}
 
 export async function updateCampaignStatusAction(input: UpdateCampaignStatusInput) {
   const { currentWorkspace } = await getWorkspaceContext();
@@ -126,4 +175,17 @@ function getList(formData: FormData, key: string) {
 function getPositiveNumber(formData: FormData, key: string, fallback: number) {
   const value = Number(getString(formData, key));
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function buildCampaignSearchQuery(
+  campaign: NonNullable<Awaited<ReturnType<typeof getCampaign>>>,
+) {
+  return [
+    campaign.strategy.terms.slice(0, 3).join(" "),
+    campaign.targetSegments.slice(0, 2).join(" "),
+    campaign.geography,
+    "company contact",
+  ]
+    .filter(Boolean)
+    .join(" ");
 }

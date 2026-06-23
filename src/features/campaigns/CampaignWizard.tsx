@@ -162,7 +162,7 @@ export function CampaignWizard({
 
 function mapCampaignToDraft(campaign: Campaign): CampaignDraft {
   return {
-    desiredLeadCount: String(campaign.leadCount || 25),
+    desiredLeadCount: String(campaign.desiredLeadCount || 25),
     exclusions: campaign.strategy.exclusions.join(", "),
     geography: campaign.geography,
     industryTerms: campaign.industryTerms.join(", "),

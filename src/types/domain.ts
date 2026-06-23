@@ -25,6 +25,47 @@ export type LeadQualificationStatus =
   | "needs_manual_review"
   | "non_ai_manual_review";
 
+export type DiscoveryReportResult = {
+  query: string;
+  title: string;
+  url: string;
+};
+
+export type DiscoveryReportRejectedResult = DiscoveryReportResult & {
+  reason: string;
+};
+
+export type DiscoveryReportAiFailure = {
+  error: string;
+  leadId: string;
+};
+
+export type ContactDiscoveryAttempt = {
+  error: string;
+  status: "failed" | "fetched" | "skipped";
+  url: string;
+};
+
+export type ContactDiscoveryReport = {
+  attempts: ContactDiscoveryAttempt[];
+  leadId: string;
+  routesFound: number;
+};
+
+export type DiscoveryReport = {
+  aiQualificationFailures: DiscoveryReportAiFailure[];
+  aiQualificationSuccesses: string[];
+  contactDiscovery: ContactDiscoveryReport[];
+  contactRoutesFound: number;
+  duplicateResults: DiscoveryReportRejectedResult[];
+  finalReviewableLeads: string[];
+  generatedAt: string;
+  leadsSavedBeforeAiQualification: string[];
+  queriesExecuted: string[];
+  rawTavilyResults: DiscoveryReportResult[];
+  rejectedResults: DiscoveryReportRejectedResult[];
+};
+
 export type Offer = {
   id: string;
   name: string;
@@ -55,11 +96,13 @@ export type Campaign = {
   targetSegments: string[];
   progress: number;
   leadCount: number;
+  desiredLeadCount: number;
   awaitingReview: number;
   status: CampaignStatus;
   lastActivity: string;
   language: string;
   warnings: string[];
+  latestDiscoveryReport: DiscoveryReport | null;
   strategy: {
     terms: string[];
     localizedTerms: string[];

@@ -125,11 +125,13 @@ export const campaigns: Campaign[] = [
       "Health retail groups",
     ],
     progress: 0,
+    desiredLeadCount: 25,
     leadCount: 0,
     awaitingReview: 0,
     status: "planning",
     lastActivity: "Ready to launch",
     language: "Italian",
+    latestDiscoveryReport: null,
     warnings: [],
     strategy: {
       terms: [

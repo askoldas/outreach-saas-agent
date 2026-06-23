@@ -82,14 +82,6 @@ export type SavedDiscoveredLead = {
   result: SearchResult;
 };
 
-export type DiscoveredContactRoute = {
-  source: string;
-  suggestedRole: string;
-  type: string;
-  value: string;
-  verification: ContactRoute["verification"];
-};
-
 const leadSelect = `
   external_id,
   company,
@@ -185,6 +177,29 @@ export async function updateLeadStatus(
   }
 
   return mapLead(data as LeadRow);
+}
+
+export async function getCampaignLeadCounts(
+  workspaceId: string,
+  campaignId: string,
+): Promise<{ awaitingReview: number; total: number }> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select("status")
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_id", campaignId);
+
+  if (error) {
+    throw new Error(`Could not count campaign leads: ${error.message}`);
+  }
+
+  const rows = (data ?? []) as Array<{ status: LeadStatus }>;
+
+  return {
+    awaitingReview: rows.filter((row) => row.status === "needs_review").length,
+    total: rows.length,
+  };
 }
 
 export async function importRawDiscoveredLeads(
@@ -529,7 +544,7 @@ export async function markLeadQualificationForManualReview(
 
 export async function replaceLeadContactRoutes(
   leadDatabaseId: string,
-  routes: DiscoveredContactRoute[],
+  routes: ContactRoute[],
 ): Promise<void> {
   if (routes.length === 0) {
     return;

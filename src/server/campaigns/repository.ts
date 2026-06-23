@@ -1,14 +1,16 @@
 import { campaigns as sampleCampaigns } from "@/data/mock/prospecting";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
-import type { Campaign, CampaignStatus } from "@/types/domain";
+import type { Campaign, CampaignStatus, DiscoveryReport } from "@/types/domain";
 
 type CampaignRow = {
   awaiting_review: number;
+  desired_lead_count?: number;
   external_id: string;
   geography: string;
   industry_terms?: string[];
   language: string;
   last_activity_label: string;
+  latest_discovery_report?: DiscoveryReport | null;
   lead_count: number;
   name: string;
   objective: string;
@@ -69,7 +71,9 @@ const campaignSelect = `
 
 const campaignSelectWithIndustryTerms = `
   ${campaignSelect},
-  industry_terms
+  desired_lead_count,
+  industry_terms,
+  latest_discovery_report
 `;
 
 export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
@@ -142,6 +146,68 @@ export async function updateCampaignStatus(
   return mapCampaign(data as CampaignRow);
 }
 
+export async function updateCampaignDiscoveryState(
+  workspaceId: string,
+  campaignId: string,
+  input: {
+    awaitingReview: number;
+    latestDiscoveryReport: DiscoveryReport;
+    leadCount: number;
+    progress: number;
+    status: CampaignStatus;
+  },
+): Promise<void> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { error } = await supabase
+    .from("campaigns")
+    .update({
+      awaiting_review: input.awaitingReview,
+      last_activity_label: "Just now",
+      latest_discovery_report: input.latestDiscoveryReport,
+      lead_count: input.leadCount,
+      progress: input.progress,
+      status: input.status,
+      warnings:
+        input.latestDiscoveryReport.aiQualificationFailures.length > 0
+          ? [
+              `${input.latestDiscoveryReport.aiQualificationFailures.length} lead qualification result${input.latestDiscoveryReport.aiQualificationFailures.length === 1 ? "" : "s"} need manual review.`,
+            ]
+          : [],
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignId);
+
+  if (isMissingCampaignWorkflowColumnError(error)) {
+    const fallback = await supabase
+      .from("campaigns")
+      .update({
+        awaiting_review: input.awaitingReview,
+        last_activity_label: "Just now",
+        lead_count: input.leadCount,
+        progress: input.progress,
+        status: input.status,
+        warnings:
+          input.latestDiscoveryReport.aiQualificationFailures.length > 0
+            ? [
+                `${input.latestDiscoveryReport.aiQualificationFailures.length} lead qualification result${input.latestDiscoveryReport.aiQualificationFailures.length === 1 ? "" : "s"} need manual review.`,
+              ]
+            : [],
+      })
+      .eq("workspace_id", workspaceId)
+      .eq("external_id", campaignId);
+
+    if (fallback.error) {
+      throw new Error(`Could not update discovery state: ${fallback.error.message}`);
+    }
+
+    return;
+  }
+
+  if (error) {
+    throw new Error(`Could not update discovery state: ${error.message}`);
+  }
+}
+
 export async function createCampaign(
   workspaceId: string,
   input: CreateCampaignInput,
@@ -152,12 +218,13 @@ export async function createCampaign(
     .from("campaigns")
     .insert({
       awaiting_review: 0,
+      desired_lead_count: input.desiredLeadCount,
       external_id: externalId,
       geography: input.geography,
       industry_terms: input.industryTerms,
       language: input.language,
       last_activity_label: "Just now",
-      lead_count: input.desiredLeadCount,
+      lead_count: 0,
       name: input.name,
       objective: input.objective,
       offer_external_id: input.offerId,
@@ -198,11 +265,11 @@ export async function updateCampaign(
   const { data, error } = await supabase
     .from("campaigns")
     .update({
+      desired_lead_count: input.desiredLeadCount,
       geography: input.geography,
       industry_terms: input.industryTerms,
       language: input.language,
       last_activity_label: "Just now",
-      lead_count: input.desiredLeadCount,
       name: input.name,
       objective: input.objective,
       offer_external_id: input.offerId,
@@ -238,11 +305,13 @@ export async function importSampleCampaigns(workspaceId: string): Promise<number
     .upsert(
       sampleCampaigns.map((campaign) => ({
         awaiting_review: campaign.awaitingReview,
+        desired_lead_count: campaign.desiredLeadCount,
         external_id: campaign.id,
         geography: campaign.geography,
         industry_terms: campaign.industryTerms,
         language: campaign.language,
         last_activity_label: campaign.lastActivity,
+        latest_discovery_report: campaign.latestDiscoveryReport,
         lead_count: campaign.leadCount,
         name: campaign.name,
         objective: campaign.objective,
@@ -277,11 +346,13 @@ export async function importSampleCampaigns(workspaceId: string): Promise<number
 function mapCampaign(row: CampaignRow): Campaign {
   return {
     awaitingReview: row.awaiting_review,
+    desiredLeadCount: row.desired_lead_count ?? (row.lead_count || 25),
     geography: row.geography,
     industryTerms: row.industry_terms ?? [],
     id: row.external_id,
     language: row.language,
     lastActivity: row.last_activity_label,
+    latestDiscoveryReport: row.latest_discovery_report ?? null,
     leadCount: row.lead_count,
     name: row.name,
     objective: row.objective,
@@ -513,11 +584,26 @@ async function importSampleCampaignsWithoutIndustryTerms(
 function isMissingIndustryTermsColumnError(error: { message?: string } | null) {
   const message = error?.message ?? "";
   return (
-    message.includes("industry_terms") &&
+    (message.includes("industry_terms") ||
+      message.includes("desired_lead_count") ||
+      message.includes("latest_discovery_report")) &&
     (message.includes("does not exist") ||
       message.includes("Could not find") ||
       message.includes("schema cache"))
   );
+}
+
+function isMissingCampaignWorkflowColumnError(error: { message?: string } | null) {
+  const message = error?.message ?? "";
+  const mentionsWorkflowColumn =
+    message.includes("desired_lead_count") ||
+    message.includes("latest_discovery_report");
+  const isMissingColumn =
+    message.includes("does not exist") ||
+    message.includes("Could not find") ||
+    message.includes("schema cache");
+
+  return mentionsWorkflowColumn && isMissingColumn;
 }
 
 function slugify(input: string) {

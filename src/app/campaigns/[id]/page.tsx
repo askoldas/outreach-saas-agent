@@ -31,6 +31,8 @@ export default async function CampaignDetailPage({
   }
 
   const offer = await getOffer(currentWorkspace.id, campaign.offerId);
+  const campaignLeads = leads.filter((lead) => lead.campaignId === campaign.id);
+  const latestReport = campaign.latestDiscoveryReport;
 
   return (
     <div className={styles.grid}>
@@ -56,7 +58,9 @@ export default async function CampaignDetailPage({
         <Card className={styles.metric}>
           <p>Leads found</p>
           <h2>{campaign.leadCount}</h2>
-          <span>{campaign.awaitingReview} awaiting review</span>
+          <span>
+            {campaign.awaitingReview} awaiting review of {campaign.desiredLeadCount} target
+          </span>
         </Card>
         <Card className={styles.metric}>
           <p>Language</p>
@@ -64,9 +68,9 @@ export default async function CampaignDetailPage({
           <span>Drafting remains external-review only</span>
         </Card>
         <Card className={styles.metric}>
-          <p>Warnings</p>
-          <h2>{campaign.warnings.length}</h2>
-          <span>Visible research limitations</span>
+          <p>Latest run</p>
+          <h2>{latestReport ? latestReport.leadsSavedBeforeAiQualification.length : 0}</h2>
+          <span>Saved before AI qualification</span>
         </Card>
       </section>
 
@@ -100,10 +104,7 @@ export default async function CampaignDetailPage({
                     <li key={status}>
                       {statusLabel(status)}:{" "}
                       {
-                        leads.filter(
-                          (lead) =>
-                            lead.campaignId === campaign.id && lead.status === status,
-                        ).length
+                        campaignLeads.filter((lead) => lead.status === status).length
                       }
                     </li>
                   ),
@@ -128,6 +129,57 @@ export default async function CampaignDetailPage({
               </ul>
             </div>
           </Card>
+          {latestReport ? (
+            <Card>
+              <CardHeader title="Latest discovery report" eyebrow="Provider run" />
+              <div className={styles.cardBody}>
+                <section className={styles.stack}>
+                  <Strategy title="Queries executed" items={latestReport.queriesExecuted} />
+                  <DiagnosticList
+                    title="Raw Tavily results"
+                    items={latestReport.rawTavilyResults.map(
+                      (result) => `${result.title} (${result.query})`,
+                    )}
+                  />
+                  <DiagnosticList
+                    title="Duplicate domains removed"
+                    items={latestReport.duplicateResults.map(
+                      (result) => `${result.title}: ${result.reason}`,
+                    )}
+                  />
+                  <DiagnosticList
+                    title="Rejected URLs"
+                    items={latestReport.rejectedResults.map(
+                      (result) => `${result.title}: ${result.reason}`,
+                    )}
+                  />
+                  <DiagnosticList
+                    title="Saved before AI"
+                    items={latestReport.leadsSavedBeforeAiQualification}
+                  />
+                  <DiagnosticList
+                    title="AI qualification failures"
+                    items={latestReport.aiQualificationFailures.map(
+                      (failure) => `${failure.leadId}: ${failure.error}`,
+                    )}
+                  />
+                  <DiagnosticList
+                    title="Contact discovery"
+                    items={latestReport.contactDiscovery.map((item) => {
+                      const fetched = item.attempts.filter(
+                        (attempt) => attempt.status === "fetched",
+                      ).length;
+                      const failed = item.attempts.filter(
+                        (attempt) => attempt.status === "failed",
+                      ).length;
+
+                      return `${item.leadId}: ${item.routesFound} route${item.routesFound === 1 ? "" : "s"}, ${fetched} fetched, ${failed} failed`;
+                    })}
+                  />
+                </section>
+              </div>
+            </Card>
+          ) : null}
           <Card>
             <CardHeader title="Controls" eyebrow="Workspace status" />
             <div className={styles.cardBody}>
@@ -145,8 +197,30 @@ function Strategy({ title, items }: Readonly<{ title: string; items: string[] }>
     <section className={styles.stack}>
       <h2 className={styles.primaryText}>{title}</h2>
       <ul className={styles.pillList}>
+        {items.length === 0 ? <li>No values yet</li> : null}
         {items.map((item) => (
           <li key={item}>{item}</li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+function DiagnosticList({ title, items }: Readonly<{ title: string; items: string[] }>) {
+  return (
+    <section className={styles.stack}>
+      <h2 className={styles.primaryText}>{title}</h2>
+      <ul className={styles.feed}>
+        {items.length === 0 ? (
+          <li>
+            <strong>None</strong>
+            <p>No entries recorded for this run.</p>
+          </li>
+        ) : null}
+        {items.slice(0, 12).map((item) => (
+          <li key={item}>
+            <strong>{item}</strong>
+          </li>
         ))}
       </ul>
     </section>

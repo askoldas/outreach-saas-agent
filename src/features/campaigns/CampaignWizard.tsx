@@ -408,8 +408,8 @@ function SummaryBlock({ items, title }: Readonly<{ items: string[]; title: strin
       <h2 className={styles.primaryText}>{title}</h2>
       {visibleItems.length > 0 ? (
         <ul className={styles.pillList}>
-          {visibleItems.map((item) => (
-            <li key={item}>{item}</li>
+          {visibleItems.map((item, index) => (
+            <li key={`${title}-${index}-${item}`}>{item}</li>
           ))}
         </ul>
       ) : (

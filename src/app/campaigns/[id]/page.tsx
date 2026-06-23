@@ -198,8 +198,8 @@ function Strategy({ title, items }: Readonly<{ title: string; items: string[] }>
       <h2 className={styles.primaryText}>{title}</h2>
       <ul className={styles.pillList}>
         {items.length === 0 ? <li>No values yet</li> : null}
-        {items.map((item) => (
-          <li key={item}>{item}</li>
+        {items.map((item, index) => (
+          <li key={`${title}-${index}-${item}`}>{item}</li>
         ))}
       </ul>
     </section>
@@ -217,8 +217,8 @@ function DiagnosticList({ title, items }: Readonly<{ title: string; items: strin
             <p>No entries recorded for this run.</p>
           </li>
         ) : null}
-        {items.slice(0, 12).map((item) => (
-          <li key={item}>
+        {items.slice(0, 12).map((item, index) => (
+          <li key={`${title}-${index}-${item}`}>
             <strong>{item}</strong>
           </li>
         ))}

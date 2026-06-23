@@ -7,6 +7,7 @@ import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
+import { ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -37,7 +38,12 @@ export default async function CampaignDetailPage({
         title={campaign.name}
         description={`${campaign.objective} for ${offer?.name ?? "selected offer"} in ${campaign.geography}.`}
         actions={
-          <Badge tone={statusTone(campaign.status)}>{statusLabel(campaign.status)}</Badge>
+          <div className={styles.filters}>
+            <ButtonLink href={`/campaigns/${campaign.id}/edit`}>Edit</ButtonLink>
+            <Badge tone={statusTone(campaign.status)}>
+              {statusLabel(campaign.status)}
+            </Badge>
+          </div>
         }
       />
 
@@ -69,6 +75,7 @@ export default async function CampaignDetailPage({
           <CardHeader title="Strategy summary" eyebrow="Reviewable plan" />
           <div className={styles.cardBody}>
             <Strategy title="Target segments" items={campaign.targetSegments} />
+            <Strategy title="Industries" items={campaign.industryTerms} />
             <Strategy title="Search terminology" items={campaign.strategy.terms} />
             <Strategy
               title="Local-language terminology"

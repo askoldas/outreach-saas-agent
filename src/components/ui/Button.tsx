@@ -18,13 +18,14 @@ type ButtonLinkProps = {
 export function Button({
   variant = "secondary",
   className,
+  type = "button",
   ...props
 }: Readonly<ButtonProps>) {
   return (
     <button
       className={[styles.button, styles[variant], className].filter(Boolean).join(" ")}
-      type={props.type ?? "button"}
       {...props}
+      type={type}
     />
   );
 }

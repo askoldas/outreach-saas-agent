@@ -131,7 +131,11 @@ export function LeadsTable({
                   </Link>
                   <span className={styles.secondaryText}>{lead.industry}</span>
                 </td>
-                <td>{lead.website.replace("https://", "")}</td>
+                <td>
+                  <a href={lead.website} rel="noreferrer" target="_blank">
+                    {lead.website.replace(/^https?:\/\//, "")}
+                  </a>
+                </td>
                 <td>
                   {lead.city}, {lead.country}
                 </td>

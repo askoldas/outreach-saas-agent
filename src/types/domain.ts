@@ -18,6 +18,12 @@ export type LeadStatus =
 export type Confidence = "high" | "medium" | "low";
 export type EvidenceKind = "fact" | "inference" | "unknown" | "conflict";
 export type DraftStatus = "needs_review" | "approved" | "edited" | "rejected";
+export type LeadQualificationStatus =
+  | "pending"
+  | "qualified"
+  | "failed"
+  | "needs_manual_review"
+  | "non_ai_manual_review";
 
 export type Offer = {
   id: string;
@@ -45,6 +51,7 @@ export type Campaign = {
   offerId: string;
   objective: string;
   geography: string;
+  industryTerms: string[];
   targetSegments: string[];
   progress: number;
   leadCount: number;
@@ -103,6 +110,8 @@ export type Lead = {
   fitScore: number;
   confidence: Confidence;
   contactability: Confidence;
+  qualificationError: string;
+  qualificationStatus: LeadQualificationStatus;
   status: LeadStatus;
   summary: string;
   qualification: QualificationDimension[];

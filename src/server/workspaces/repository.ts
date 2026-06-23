@@ -43,7 +43,13 @@ export async function listWorkspaces(): Promise<Workspace[]> {
 }
 
 export async function getWorkspaceContext(): Promise<WorkspaceContext> {
-  const workspaces = await listWorkspaces();
+  const workspaces = await listWorkspaces().catch((error: unknown) => {
+    if (isAuthenticationRequiredError(error)) {
+      return [];
+    }
+
+    throw error;
+  });
   const cookieStore = await cookies();
   const selectedId = cookieStore.get(currentWorkspaceCookieName)?.value;
   const selectedWorkspace = workspaces.find((workspace) => workspace.id === selectedId);
@@ -96,6 +102,28 @@ export async function updateWorkspace(input: {
   return mapWorkspace(data as WorkspaceRow);
 }
 
+export async function clearWorkspaceData(workspaceId: string): Promise<void> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const tables = ["outreach_drafts", "leads", "campaigns", "offers"] as const;
+
+  for (const table of tables) {
+    const { error } = await supabase.from(table).delete().eq("workspace_id", workspaceId);
+
+    if (error) {
+      throw new Error(`Could not clear ${table}: ${error.message}`);
+    }
+  }
+
+  const { error: activityError } = await supabase
+    .from("activity_events")
+    .delete()
+    .eq("workspace_id", workspaceId);
+
+  if (activityError && !isMissingActivityDeletePolicyError(activityError.message)) {
+    throw new Error(`Could not clear activity events: ${activityError.message}`);
+  }
+}
+
 export async function getCurrentProfile(): Promise<Profile> {
   const { supabase, user } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase
@@ -109,6 +137,18 @@ export async function getCurrentProfile(): Promise<Profile> {
   }
 
   return mapProfile(data as ProfileRow);
+}
+
+function isMissingActivityDeletePolicyError(message: string) {
+  return (
+    message.includes("row-level security") ||
+    message.includes("permission denied") ||
+    message.includes("violates row-level security policy")
+  );
+}
+
+function isAuthenticationRequiredError(error: unknown) {
+  return error instanceof Error && error.message === "Authentication required";
 }
 
 export async function updateCurrentProfile(input: {

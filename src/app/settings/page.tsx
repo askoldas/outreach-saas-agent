@@ -5,9 +5,11 @@ import {
   listWorkspaceMembers,
 } from "@/server/workspaces/repository";
 import {
+  clearWorkspaceDataAction,
   updateProfileSettingsAction,
   updateWorkspaceSettingsAction,
 } from "@/server/workspaces/actions";
+import { getCurrentUser } from "@/server/auth/user";
 import { getProviderStatus } from "@/lib/providers/config";
 import { statusLabel } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
@@ -32,6 +34,12 @@ const localeOptions = [
 export default async function SettingsPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<SearchParams> }>) {
+  const user = await getCurrentUser();
+
+  if (!user) {
+    redirect("/auth/sign-in?next=/settings");
+  }
+
   const { currentWorkspace, workspaces } = await getWorkspaceContext();
 
   if (!currentWorkspace) {
@@ -230,6 +238,30 @@ export default async function SettingsPage({
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card>
+        <CardHeader title="Danger zone" eyebrow="Workspace data" />
+        <form className={styles.cardBody} action={clearWorkspaceDataAction}>
+          <div className={styles.stack}>
+            <input name="workspaceId" type="hidden" value={currentWorkspace.id} />
+            <label className={form.field} htmlFor="clear-confirmation">
+              <span>
+                Type CLEAR to remove offers, campaigns, leads, drafts, and activity
+              </span>
+              <input
+                autoComplete="off"
+                className={form.input}
+                id="clear-confirmation"
+                name="confirmation"
+                placeholder="CLEAR"
+              />
+            </label>
+            <Button type="submit" variant="danger">
+              Clear workspace data
+            </Button>
+          </div>
+        </form>
       </Card>
     </div>
   );

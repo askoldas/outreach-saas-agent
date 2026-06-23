@@ -5,8 +5,10 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createActivityEvent } from "@/server/activity/repository";
 import {
+  clearWorkspaceData,
   createWorkspace,
   currentWorkspaceCookieName,
+  getWorkspaceContext,
   listWorkspaces,
   updateCurrentProfile,
   updateWorkspace,
@@ -82,6 +84,34 @@ export async function updateProfileSettingsAction(formData: FormData) {
 
   revalidatePath("/settings");
   redirect("/settings?message=profile-updated");
+}
+
+export async function clearWorkspaceDataAction(formData: FormData) {
+  const workspaceId = getString(formData, "workspaceId");
+  const confirmation = getString(formData, "confirmation");
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace || currentWorkspace.id !== workspaceId) {
+    redirect("/settings?error=workspace-not-found");
+  }
+
+  if (confirmation !== "CLEAR") {
+    redirect(
+      `/settings?error=${encodeURIComponent(
+        "Type CLEAR to confirm workspace data cleanup.",
+      )}`,
+    );
+  }
+
+  await clearWorkspaceData(currentWorkspace.id);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/offers");
+  revalidatePath("/campaigns");
+  revalidatePath("/leads");
+  revalidatePath("/drafts");
+  revalidatePath("/settings");
+  redirect("/settings?message=workspace-data-cleared");
 }
 
 async function setCurrentWorkspaceCookie(workspaceId: string) {

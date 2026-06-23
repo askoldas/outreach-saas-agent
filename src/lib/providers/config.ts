@@ -1,11 +1,18 @@
+import "server-only";
+
 type ProviderConfig = {
   openRouter: {
     apiKey: string | null;
-    model: string;
+    model: string | null;
   };
   tavily: {
     apiKey: string | null;
   };
+};
+
+type RequiredOpenRouterConfig = {
+  apiKey: string;
+  model: string;
 };
 
 export type ProviderStatus = {
@@ -15,13 +22,11 @@ export type ProviderStatus = {
   purpose: string;
 };
 
-const defaultOpenRouterModel = "openai/gpt-4.1-mini";
-
 export function getProviderConfig(): ProviderConfig {
   return {
     openRouter: {
       apiKey: process.env.OPENROUTER_API_KEY?.trim() || null,
-      model: process.env.OPENROUTER_MODEL?.trim() || defaultOpenRouterModel,
+      model: process.env.OPENROUTER_MODEL?.trim() || null,
     },
     tavily: {
       apiKey: process.env.TAVILY_API_KEY?.trim() || null,
@@ -40,10 +45,10 @@ export function getProviderStatus(): ProviderStatus[] {
       purpose: "Web search and source discovery",
     },
     {
-      configured: Boolean(config.openRouter.apiKey),
+      configured: Boolean(config.openRouter.apiKey && config.openRouter.model),
       label: "OpenRouter",
       name: "openrouter",
-      purpose: `AI reasoning and drafting (${config.openRouter.model})`,
+      purpose: `AI reasoning and drafting (${config.openRouter.model ?? "model not set"})`,
     },
   ];
 }
@@ -58,7 +63,7 @@ export function requireTavilyConfig() {
   return config.tavily;
 }
 
-export function requireOpenRouterConfig() {
+export function requireOpenRouterConfig(): RequiredOpenRouterConfig {
   const config = getProviderConfig();
 
   if (!config.openRouter.apiKey) {
@@ -67,5 +72,14 @@ export function requireOpenRouterConfig() {
     );
   }
 
-  return config.openRouter;
+  if (!config.openRouter.model) {
+    throw new Error(
+      "OpenRouter model is not configured. Add OPENROUTER_MODEL to .env.local.",
+    );
+  }
+
+  return {
+    apiKey: config.openRouter.apiKey,
+    model: config.openRouter.model,
+  };
 }

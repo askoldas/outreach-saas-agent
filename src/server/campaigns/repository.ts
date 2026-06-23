@@ -6,6 +6,7 @@ type CampaignRow = {
   awaiting_review: number;
   external_id: string;
   geography: string;
+  industry_terms?: string[];
   language: string;
   last_activity_label: string;
   lead_count: number;
@@ -40,6 +41,10 @@ type CreateCampaignInput = {
   terms: string[];
 };
 
+type UpdateCampaignInput = CreateCampaignInput & {
+  campaignId: string;
+};
+
 const campaignSelect = `
   external_id,
   name,
@@ -62,13 +67,22 @@ const campaignSelect = `
   strategy_limitations
 `;
 
+const campaignSelectWithIndustryTerms = `
+  ${campaignSelect},
+  industry_terms
+`;
+
 export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase
     .from("campaigns")
-    .select(campaignSelect)
+    .select(campaignSelectWithIndustryTerms)
     .eq("workspace_id", workspaceId)
     .order("name", { ascending: true });
+
+  if (isMissingIndustryTermsColumnError(error)) {
+    return listCampaignsWithoutIndustryTerms(workspaceId);
+  }
 
   if (error) {
     throw new Error(`Could not load campaigns: ${error.message}`);
@@ -84,10 +98,14 @@ export async function getCampaign(
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase
     .from("campaigns")
-    .select(campaignSelect)
+    .select(campaignSelectWithIndustryTerms)
     .eq("workspace_id", workspaceId)
     .eq("external_id", campaignId)
     .maybeSingle();
+
+  if (isMissingIndustryTermsColumnError(error)) {
+    return getCampaignWithoutIndustryTerms(workspaceId, campaignId);
+  }
 
   if (error) {
     throw new Error(`Could not load campaign: ${error.message}`);
@@ -110,8 +128,12 @@ export async function updateCampaignStatus(
     })
     .eq("workspace_id", workspaceId)
     .eq("external_id", campaignId)
-    .select(campaignSelect)
+    .select(campaignSelectWithIndustryTerms)
     .single();
+
+  if (isMissingIndustryTermsColumnError(error)) {
+    return updateCampaignStatusWithoutIndustryTerms(workspaceId, campaignId, status);
+  }
 
   if (error) {
     throw new Error(`Could not update campaign: ${error.message}`);
@@ -132,6 +154,7 @@ export async function createCampaign(
       awaiting_review: 0,
       external_id: externalId,
       geography: input.geography,
+      industry_terms: input.industryTerms,
       language: input.language,
       last_activity_label: "Just now",
       lead_count: input.desiredLeadCount,
@@ -148,16 +171,61 @@ export async function createCampaign(
       ],
       strategy_localized_terms: input.localizedTerms,
       strategy_sources: input.sourceCategories,
-      strategy_terms: [...input.terms, ...input.industryTerms],
+      strategy_terms: input.terms,
       target_segments: input.targetSegments,
       warnings: ["Review strategy before starting discovery."],
       workspace_id: workspaceId,
     })
-    .select(campaignSelect)
+    .select(campaignSelectWithIndustryTerms)
     .single();
+
+  if (isMissingIndustryTermsColumnError(error)) {
+    return createCampaignWithoutIndustryTerms(workspaceId, externalId, input);
+  }
 
   if (error) {
     throw new Error(`Could not create campaign: ${error.message}`);
+  }
+
+  return mapCampaign(data as CampaignRow);
+}
+
+export async function updateCampaign(
+  workspaceId: string,
+  input: UpdateCampaignInput,
+): Promise<Campaign> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update({
+      geography: input.geography,
+      industry_terms: input.industryTerms,
+      language: input.language,
+      last_activity_label: "Just now",
+      lead_count: input.desiredLeadCount,
+      name: input.name,
+      objective: input.objective,
+      offer_external_id: input.offerId,
+      strategy_criteria: input.qualificationCriteria,
+      strategy_exclusions: input.exclusions,
+      strategy_limitations: ["Campaign strategy was manually edited."],
+      strategy_localized_terms: input.localizedTerms,
+      strategy_sources: input.sourceCategories,
+      strategy_terms: input.terms,
+      target_segments: input.targetSegments,
+      warnings: ["Review edited strategy before starting discovery."],
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", input.campaignId)
+    .select(campaignSelectWithIndustryTerms)
+    .single();
+
+  if (isMissingIndustryTermsColumnError(error)) {
+    return updateCampaignWithoutIndustryTerms(workspaceId, input);
+  }
+
+  if (error) {
+    throw new Error(`Could not update campaign: ${error.message}`);
   }
 
   return mapCampaign(data as CampaignRow);
@@ -172,6 +240,7 @@ export async function importSampleCampaigns(workspaceId: string): Promise<number
         awaiting_review: campaign.awaitingReview,
         external_id: campaign.id,
         geography: campaign.geography,
+        industry_terms: campaign.industryTerms,
         language: campaign.language,
         last_activity_label: campaign.lastActivity,
         lead_count: campaign.leadCount,
@@ -194,6 +263,10 @@ export async function importSampleCampaigns(workspaceId: string): Promise<number
     )
     .select("id");
 
+  if (isMissingIndustryTermsColumnError(error)) {
+    return importSampleCampaignsWithoutIndustryTerms(workspaceId);
+  }
+
   if (error) {
     throw new Error(`Could not import sample campaigns: ${error.message}`);
   }
@@ -205,6 +278,7 @@ function mapCampaign(row: CampaignRow): Campaign {
   return {
     awaitingReview: row.awaiting_review,
     geography: row.geography,
+    industryTerms: row.industry_terms ?? [],
     id: row.external_id,
     language: row.language,
     lastActivity: row.last_activity_label,
@@ -252,6 +326,198 @@ async function createUniqueCampaignExternalId(workspaceId: string, name: string)
     suffix += 1;
     candidate = `${baseSlug}-${suffix}`;
   }
+}
+
+async function listCampaignsWithoutIndustryTerms(
+  workspaceId: string,
+): Promise<Campaign[]> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select(campaignSelect)
+    .eq("workspace_id", workspaceId)
+    .order("name", { ascending: true });
+
+  if (error) {
+    throw new Error(`Could not load campaigns: ${error.message}`);
+  }
+
+  return ((data ?? []) as CampaignRow[]).map(mapCampaign);
+}
+
+async function getCampaignWithoutIndustryTerms(
+  workspaceId: string,
+  campaignId: string,
+): Promise<Campaign | null> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select(campaignSelect)
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Could not load campaign: ${error.message}`);
+  }
+
+  return data ? mapCampaign(data as CampaignRow) : null;
+}
+
+async function updateCampaignStatusWithoutIndustryTerms(
+  workspaceId: string,
+  campaignId: string,
+  status: CampaignStatus,
+): Promise<Campaign> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update({
+      last_activity_label: "Just now",
+      status,
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignId)
+    .select(campaignSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not update campaign: ${error.message}`);
+  }
+
+  return mapCampaign(data as CampaignRow);
+}
+
+async function createCampaignWithoutIndustryTerms(
+  workspaceId: string,
+  externalId: string,
+  input: CreateCampaignInput,
+): Promise<Campaign> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .insert({
+      awaiting_review: 0,
+      external_id: externalId,
+      geography: input.geography,
+      language: input.language,
+      last_activity_label: "Just now",
+      lead_count: input.desiredLeadCount,
+      name: input.name,
+      objective: input.objective,
+      offer_external_id: input.offerId,
+      progress: 0,
+      status: "planning",
+      strategy_criteria: input.qualificationCriteria,
+      strategy_exclusions: input.exclusions,
+      strategy_limitations: [
+        "New campaign has not run discovery yet.",
+        "Industry terms require the campaign industry terms migration.",
+      ],
+      strategy_localized_terms: input.localizedTerms,
+      strategy_sources: input.sourceCategories,
+      strategy_terms: input.terms,
+      target_segments: input.targetSegments,
+      warnings: ["Apply the campaign industry terms migration to persist industries."],
+      workspace_id: workspaceId,
+    })
+    .select(campaignSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not create campaign: ${error.message}`);
+  }
+
+  return mapCampaign(data as CampaignRow);
+}
+
+async function updateCampaignWithoutIndustryTerms(
+  workspaceId: string,
+  input: UpdateCampaignInput,
+): Promise<Campaign> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .update({
+      geography: input.geography,
+      language: input.language,
+      last_activity_label: "Just now",
+      lead_count: input.desiredLeadCount,
+      name: input.name,
+      objective: input.objective,
+      offer_external_id: input.offerId,
+      strategy_criteria: input.qualificationCriteria,
+      strategy_exclusions: input.exclusions,
+      strategy_limitations: [
+        "Campaign strategy was manually edited.",
+        "Industry terms require the campaign industry terms migration.",
+      ],
+      strategy_localized_terms: input.localizedTerms,
+      strategy_sources: input.sourceCategories,
+      strategy_terms: input.terms,
+      target_segments: input.targetSegments,
+      warnings: ["Apply the campaign industry terms migration to persist industries."],
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", input.campaignId)
+    .select(campaignSelect)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not update campaign: ${error.message}`);
+  }
+
+  return mapCampaign(data as CampaignRow);
+}
+
+async function importSampleCampaignsWithoutIndustryTerms(
+  workspaceId: string,
+): Promise<number> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .upsert(
+      sampleCampaigns.map((campaign) => ({
+        awaiting_review: campaign.awaitingReview,
+        external_id: campaign.id,
+        geography: campaign.geography,
+        language: campaign.language,
+        last_activity_label: campaign.lastActivity,
+        lead_count: campaign.leadCount,
+        name: campaign.name,
+        objective: campaign.objective,
+        offer_external_id: campaign.offerId,
+        progress: campaign.progress,
+        status: campaign.status,
+        strategy_criteria: campaign.strategy.criteria,
+        strategy_exclusions: campaign.strategy.exclusions,
+        strategy_limitations: campaign.strategy.limitations,
+        strategy_localized_terms: campaign.strategy.localizedTerms,
+        strategy_sources: campaign.strategy.sources,
+        strategy_terms: campaign.strategy.terms,
+        target_segments: campaign.targetSegments,
+        warnings: campaign.warnings,
+        workspace_id: workspaceId,
+      })),
+      { onConflict: "workspace_id,external_id" },
+    )
+    .select("id");
+
+  if (error) {
+    throw new Error(`Could not import sample campaigns: ${error.message}`);
+  }
+
+  return data?.length ?? 0;
+}
+
+function isMissingIndustryTermsColumnError(error: { message?: string } | null) {
+  const message = error?.message ?? "";
+  return (
+    message.includes("industry_terms") &&
+    (message.includes("does not exist") ||
+      message.includes("Could not find") ||
+      message.includes("schema cache"))
+  );
 }
 
 function slugify(input: string) {

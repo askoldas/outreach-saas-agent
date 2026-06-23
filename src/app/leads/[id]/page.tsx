@@ -56,7 +56,7 @@ export default async function LeadDetailPage({
         <Card className={styles.metric}>
           <p>Contactability</p>
           <h2>{statusLabel(lead.contactability)}</h2>
-          <span>Mock public routes only</span>
+          <span>Discovered public routes</span>
         </Card>
       </section>
 
@@ -69,7 +69,10 @@ export default async function LeadDetailPage({
             />
             <div className={styles.cardBody}>
               <p>
-                <strong>Website:</strong> {lead.website}
+                <strong>Website:</strong>{" "}
+                <a href={lead.website} rel="noreferrer" target="_blank">
+                  {lead.website}
+                </a>
               </p>
               <p>
                 <strong>Industry:</strong> {lead.industry}
@@ -133,7 +136,18 @@ export default async function LeadDetailPage({
                         </Badge>
                       </td>
                       <td>
-                        <span className={styles.primaryText}>{claim.sourceLabel}</span>
+                        {claim.sourceUrl ? (
+                          <a
+                            className={styles.primaryText}
+                            href={claim.sourceUrl}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            {claim.sourceLabel}
+                          </a>
+                        ) : (
+                          <span className={styles.primaryText}>{claim.sourceLabel}</span>
+                        )}
                         <span className={styles.secondaryText}>{claim.sourceType}</span>
                       </td>
                       <td>{claim.retrievedAt}</td>
@@ -167,7 +181,18 @@ export default async function LeadDetailPage({
                 {lead.contacts.map((contact) => (
                   <li key={`${contact.type}-${contact.value}`}>
                     <strong>
-                      {contact.type}: {contact.value}
+                      {contact.type}:{" "}
+                      {getContactHref(contact.type, contact.value) ? (
+                        <a
+                          href={getContactHref(contact.type, contact.value)}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {contact.value}
+                        </a>
+                      ) : (
+                        contact.value
+                      )}
                     </strong>
                     <p>{contact.suggestedRole}</p>
                     <Badge
@@ -195,4 +220,16 @@ export default async function LeadDetailPage({
       </section>
     </div>
   );
+}
+
+function getContactHref(type: string, value: string) {
+  if (type === "Email") {
+    return `mailto:${value}`;
+  }
+
+  if (type === "Website" || value.startsWith("http")) {
+    return value;
+  }
+
+  return "";
 }

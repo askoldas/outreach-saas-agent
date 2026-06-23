@@ -20,12 +20,12 @@ export type SearchResult = {
   url: string;
 };
 
-export async function searchWeb(query: string): Promise<SearchResult[]> {
+export async function searchWeb(query: string, maxResults = 8): Promise<SearchResult[]> {
   const { apiKey } = requireTavilyConfig();
   const response = await fetch("https://api.tavily.com/search", {
     body: JSON.stringify({
       include_answer: false,
-      max_results: 5,
+      max_results: maxResults,
       query,
       search_depth: "basic",
     }),

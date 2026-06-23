@@ -11,6 +11,7 @@ import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
+
 type SearchParams = {
   message?: string;
 };
@@ -108,7 +109,9 @@ export default async function CampaignsPage({
                       <span style={{ width: `${campaign.progress}%` }} />
                     </div>
                   </td>
-                  <td>{campaign.leadCount}</td>
+                  <td>
+                    {campaign.leadCount} / {campaign.desiredLeadCount}
+                  </td>
                   <td>
                     <Badge tone={statusTone(campaign.status)}>
                       {statusLabel(campaign.status)}

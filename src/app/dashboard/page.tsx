@@ -109,7 +109,9 @@ export default async function DashboardPage() {
                         <span style={{ width: `${campaign.progress}%` }} />
                       </div>
                     </td>
-                    <td>{campaign.leadCount}</td>
+                    <td>
+                      {campaign.leadCount} / {campaign.desiredLeadCount}
+                    </td>
                     <td>
                       <Badge tone={statusTone(campaign.status)}>
                         {statusLabel(campaign.status)}

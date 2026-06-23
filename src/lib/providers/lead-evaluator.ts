@@ -32,60 +32,7 @@ export async function evaluateLeadCandidate(
   campaign: Campaign,
   result: SearchResult,
 ): Promise<EvaluatedLeadCandidate | null> {
-  const content = await generateText(
-    [
-      {
-        role: "system",
-        content: [
-          "You qualify B2B prospecting search results.",
-          "Return JSON only. Do not include markdown.",
-          "Keep only actual operating companies that plausibly match the campaign.",
-          "Reject blog posts, news articles, directories, marketplaces, social pages, PDFs, jobs pages, generic informational pages, unrelated companies, and weak/ambiguous matches.",
-          "Prefer official company websites over third-party pages.",
-        ].join(" "),
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          campaign: {
-            geography: campaign.geography,
-            industryTerms: campaign.industryTerms,
-            objective: campaign.objective,
-            qualificationCriteria: campaign.strategy.criteria,
-            searchTerms: campaign.strategy.terms,
-            targetSegments: campaign.targetSegments,
-          },
-          outputSchema: {
-            leads: [
-              {
-                companyName: "string",
-                companyType: "string",
-                confidence: "high | medium | low",
-                fitScore: "integer 0-100",
-                industry: "string",
-                reason: "short reason this is a real relevant lead",
-                summary: "short company summary based only on the search result",
-                url: "must exactly match one input result url",
-              },
-            ],
-          },
-          results: [
-            {
-              content: result.content,
-              score: result.score,
-              title: result.title,
-              url: result.url,
-            },
-          ],
-        }),
-      },
-    ],
-    {
-      taskName: "lead qualification",
-    },
-  );
-
-  const parsed = parseEvaluation(content);
+  const parsed = await generateAndParseEvaluation(campaign, result);
   const resultByUrl = new Map([[result.url, result]]);
 
   return (
@@ -94,6 +41,79 @@ export async function evaluateLeadCandidate(
       .filter((lead): lead is EvaluatedLeadCandidate => Boolean(lead))
       .sort((first, second) => second.fitScore - first.fitScore)[0] ?? null
   );
+}
+
+async function generateAndParseEvaluation(campaign: Campaign, result: SearchResult) {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= 2; attempt += 1) {
+    try {
+      const content = await generateText(buildEvaluationMessages(campaign, result, attempt), {
+        taskName: "lead qualification",
+      });
+
+      return parseEvaluation(content);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError instanceof Error
+    ? lastError
+    : new Error("AI lead qualification failed.");
+}
+
+function buildEvaluationMessages(campaign: Campaign, result: SearchResult, attempt: number) {
+  return [
+    {
+      role: "system" as const,
+      content: [
+        "You qualify B2B prospecting search results.",
+        "Return JSON only. Do not include markdown.",
+        "Keep actual operating companies that plausibly match the campaign.",
+        "Reject only when the result is clearly not a company candidate.",
+        "Prefer official company websites over third-party pages.",
+        attempt > 1
+          ? 'The previous response was not valid JSON. Return exactly {"leads":[...]} with no prose.'
+          : "",
+      ]
+        .filter(Boolean)
+        .join(" "),
+    },
+    {
+      role: "user" as const,
+      content: JSON.stringify({
+        campaign: {
+          geography: campaign.geography,
+          industryTerms: campaign.industryTerms,
+          objective: campaign.objective,
+          qualificationCriteria: campaign.strategy.criteria,
+          searchTerms: campaign.strategy.terms,
+          targetSegments: campaign.targetSegments,
+        },
+        outputSchema: {
+          leads: [
+            {
+              companyName: "string",
+              companyType: "string",
+              confidence: "high | medium | low",
+              fitScore: "integer 0-100",
+              industry: "string",
+              reason: "short reason this is a real relevant lead",
+              summary: "short company summary based only on the search result",
+              url: "must exactly match one input result url",
+            },
+          ],
+        },
+        result: {
+          content: result.content,
+          score: result.score,
+          title: result.title,
+          url: result.url,
+        },
+      }),
+    },
+  ];
 }
 
 function mapEvaluatedLead(
@@ -124,11 +144,24 @@ function mapEvaluatedLead(
 }
 
 function parseEvaluation(content: string): RawEvaluationResponse {
-  const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content;
+  const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content.match(/\[[\s\S]*\]/)?.[0] ?? content;
 
   try {
-    const parsed = JSON.parse(json) as RawEvaluationResponse;
-    return Array.isArray(parsed.leads) ? parsed : { leads: [] };
+    const parsed = JSON.parse(json) as RawEvaluationResponse | RawEvaluatedLead[];
+
+    if (Array.isArray(parsed)) {
+      return { leads: parsed };
+    }
+
+    if (Array.isArray(parsed.leads)) {
+      return parsed;
+    }
+
+    if ("companyName" in parsed || "summary" in parsed) {
+      return { leads: [parsed as RawEvaluatedLead] };
+    }
+
+    return { leads: [] };
   } catch {
     throw new Error(
       "OpenRouter did not return the required JSON lead evaluation. The selected model may not support reliable structured output for this prompt; choose another OPENROUTER_MODEL or retry with a stronger model.",

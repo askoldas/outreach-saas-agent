@@ -8,7 +8,52 @@ Medical sales is the first validation scenario, not a product limitation. The do
 
 ## Current status
 
-The repository is in the product and architecture definition phase. Implementation should not begin until the foundation documents are reviewed.
+The repository contains a single-root Next.js app with Supabase-backed authentication, workspaces, offers, campaigns, leads, outreach drafts, activity events, and admin settings.
+
+Tavily and OpenRouter provider configuration is scaffolded behind internal modules, but search and AI workflows are not active yet.
+
+## Prerequisites
+
+- Node.js 22.18 or newer
+- Corepack-enabled pnpm 10.13.1
+
+## Local development
+
+Install dependencies:
+
+```bash
+corepack pnpm install
+```
+
+Create `.env.local` from `.env.example` and set the Supabase values:
+
+```bash
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
+```
+
+Optional provider values for the next integration stage:
+
+```bash
+TAVILY_API_KEY=
+OPENROUTER_API_KEY=
+OPENROUTER_MODEL=openai/gpt-4.1-mini
+```
+
+Start the development server:
+
+```bash
+corepack pnpm dev
+```
+
+Run quality checks:
+
+```bash
+corepack pnpm format:check
+corepack pnpm lint
+corepack pnpm typecheck
+corepack pnpm build
+```
 
 ## Documentation
 
@@ -35,6 +80,17 @@ The repository is in the product and architecture definition phase. Implementati
 7. Multi-tenant data isolation is mandatory from the first database migration.
 8. Codex work must be small, testable, and documented.
 
-## Planned stack
+## Current implementation
 
-The current working direction is a TypeScript monorepo with a Next.js dashboard, PostgreSQL through Supabase, durable background jobs, provider adapters for search and language models, and explicit human approval boundaries. Exact provider choices remain replaceable unless recorded as accepted decisions in `docs/DECISIONS.md`.
+The current implementation is a single root Next.js application using:
+
+- App Router;
+- TypeScript with strict checking;
+- CSS Modules and global design tokens;
+- Supabase Auth and Postgres with RLS;
+- workspace-scoped repositories and server actions;
+- persisted offer, campaign, lead, draft, activity, and settings flows;
+- dev sample import actions backed by local seed data;
+- provider config wrappers for Tavily and OpenRouter.
+
+External provider workflows, background jobs, lead discovery, and AI draft generation are the next runtime milestones.

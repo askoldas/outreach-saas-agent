@@ -1,0 +1,180 @@
+.grid {
+  display: grid;
+  gap: var(--space-5);
+}
+
+.metricGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.twoColumn {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.75fr);
+  gap: var(--space-5);
+}
+
+.cardBody {
+  padding: var(--space-5);
+}
+
+.metric {
+  padding: var(--space-5);
+}
+
+.metric p,
+.metric h2 {
+  margin: 0;
+}
+
+.metric p {
+  color: var(--color-muted);
+  font-weight: 750;
+}
+
+.metric h2 {
+  margin-top: var(--space-2);
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.metric span {
+  display: block;
+  margin-top: var(--space-3);
+  color: var(--color-subtle);
+  font-size: 0.85rem;
+}
+
+.tableWrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 760px;
+  border-collapse: collapse;
+}
+
+.table th,
+.table td {
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--color-line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table th {
+  color: var(--color-muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.primaryText {
+  display: block;
+  color: var(--color-ink);
+  font-weight: 800;
+}
+
+.secondaryText {
+  display: block;
+  color: var(--color-muted);
+  font-size: 0.88rem;
+}
+
+.progress {
+  width: 140px;
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf2f1;
+}
+
+.progress span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-accent);
+}
+
+.feed {
+  display: grid;
+  gap: var(--space-4);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.feed li {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--color-accent-soft);
+}
+
+.feed strong {
+  color: var(--color-ink);
+}
+
+.feed span,
+.feed p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.filters > * {
+  flex: 1 1 180px;
+}
+
+.stack {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.pillList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pillList li {
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-line);
+  border-radius: 999px;
+  background: var(--color-bg-soft);
+  color: var(--color-muted);
+  font-weight: 650;
+}
+
+@media (max-width: 1180px) {
+  .metricGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .twoColumn {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 640px) {
+  .metricGrid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -371,13 +371,19 @@ export async function applyLeadQualification(
     throw new Error(`Could not update lead qualification: ${error.message}`);
   }
 
+  const leadId = (data as { id: string }).id;
+  await replaceLeadQualificationDimensions(
+    leadId,
+    buildQualifiedDimensions(candidate),
+  );
+
   const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
     [
       {
         confidence: candidate.confidence,
         external_id: "ai-qualification",
         kind: "inference",
-        lead_id: (data as { id: string }).id,
+        lead_id: leadId,
         retrieved_at: new Date().toISOString().slice(0, 10),
         sort_order: 1,
         source_label: "OpenRouter lead qualification",
@@ -451,13 +457,19 @@ export async function applyManualReviewQualification(
     throw new Error(`Could not update manual lead qualification: ${error.message}`);
   }
 
+  const leadId = (data as { id: string }).id;
+  await replaceLeadQualificationDimensions(
+    leadId,
+    buildManualReviewDimensions(input.fitScore, input.reason),
+  );
+
   const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
     [
       {
         confidence: "low",
         external_id: "manual-review-qualification",
         kind: "inference",
-        lead_id: (data as { id: string }).id,
+        lead_id: leadId,
         retrieved_at: new Date().toISOString().slice(0, 10),
         sort_order: 1,
         source_label: "Deterministic local fallback",
@@ -517,13 +529,19 @@ export async function markLeadQualificationForManualReview(
     throw new Error(`Could not mark lead for manual review: ${error.message}`);
   }
 
+  const leadId = (data as { id: string }).id;
+  await replaceLeadQualificationDimensions(
+    leadId,
+    buildFailedQualificationDimensions(errorMessage),
+  );
+
   const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
     [
       {
         confidence: "low",
         external_id: "qualification-error",
         kind: "unknown",
-        lead_id: (data as { id: string }).id,
+        lead_id: leadId,
         retrieved_at: new Date().toISOString().slice(0, 10),
         sort_order: 2,
         source_label: "OpenRouter lead qualification",
@@ -795,6 +813,86 @@ function getSearchScore(result: SearchResult) {
 
 function sanitizeQualificationError(errorMessage: string) {
   return errorMessage.replace(/\s+/g, " ").trim().slice(0, 1000);
+}
+
+function buildQualifiedDimensions(candidate: EvaluatedLeadCandidate) {
+  return [
+    {
+      confidence: candidate.confidence,
+      explanation: candidate.reason,
+      label: "Campaign fit",
+      score: candidate.fitScore,
+    },
+    {
+      confidence: "medium" as const,
+      explanation:
+        "Search result and saved source evidence support manual review, but full website research is still limited.",
+      label: "Evidence quality",
+      score: Math.max(45, Math.min(75, candidate.fitScore - 10)),
+    },
+    {
+      confidence: "low" as const,
+      explanation:
+        "Contact discovery runs separately and may only find a website or general route.",
+      label: "Contactability",
+      score: 45,
+    },
+  ];
+}
+
+function buildManualReviewDimensions(fitScore: number, reason: string) {
+  return [
+    {
+      confidence: "low" as const,
+      explanation: reason,
+      label: "Campaign fit",
+      score: fitScore,
+    },
+    {
+      confidence: "medium" as const,
+      explanation:
+        "The lead was saved from Tavily before AI qualification and should be manually reviewed.",
+      label: "Evidence quality",
+      score: 45,
+    },
+    {
+      confidence: "low" as const,
+      explanation:
+        "Contact discovery may still provide a public website route even when no email is found.",
+      label: "Contactability",
+      score: 35,
+    },
+  ];
+}
+
+function buildFailedQualificationDimensions(errorMessage: string) {
+  return buildManualReviewDimensions(
+    35,
+    `AI qualification failed: ${sanitizeQualificationError(errorMessage)}`,
+  );
+}
+
+async function replaceLeadQualificationDimensions(
+  leadId: string,
+  dimensions: Array<{
+    confidence: Confidence;
+    explanation: string;
+    label: string;
+    score: number;
+  }>,
+) {
+  await replaceLeadChildren(
+    "lead_qualification_dimensions",
+    [leadId],
+    dimensions.map((dimension, index) => ({
+      confidence: dimension.confidence,
+      explanation: dimension.explanation,
+      label: dimension.label,
+      lead_id: leadId,
+      score: dimension.score,
+      sort_order: index,
+    })),
+  );
 }
 
 function isMissingQualificationColumnError(error: { message?: string } | null) {

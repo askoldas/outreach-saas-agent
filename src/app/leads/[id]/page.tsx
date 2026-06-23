@@ -28,6 +28,18 @@ export default async function LeadDetailPage({
   const campaign = lead.campaignId
     ? await getCampaign(currentWorkspace.id, lead.campaignId)
     : null;
+  const contactRoutes =
+    lead.contacts.length > 0
+      ? lead.contacts
+      : [
+          {
+            source: "Saved lead website",
+            suggestedRole: "Review public website for the correct business route",
+            type: "Website",
+            value: lead.website,
+            verification: "unverified" as const,
+          },
+        ];
 
   return (
     <div className={styles.grid}>
@@ -94,6 +106,13 @@ export default async function LeadDetailPage({
                   </tr>
                 </thead>
                 <tbody>
+                  {lead.qualification.length === 0 ? (
+                    <tr>
+                      <td colSpan={4}>
+                        No qualification dimensions were stored for this lead yet.
+                      </td>
+                    </tr>
+                  ) : null}
                   {lead.qualification.map((item) => (
                     <tr key={item.label}>
                       <td>{item.label}</td>
@@ -178,7 +197,7 @@ export default async function LeadDetailPage({
             <CardHeader title="Contacts" eyebrow="Not presented as verified delivery" />
             <div className={styles.cardBody}>
               <ul className={styles.feed}>
-                {lead.contacts.map((contact) => (
+                {contactRoutes.map((contact) => (
                   <li key={`${contact.type}-${contact.value}`}>
                     <strong>
                       {contact.type}:{" "}

@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   discoverCampaignLeadsAction,
+  getCampaignDiscoveryProgressAction,
   updateCampaignStatusAction,
 } from "@/server/campaigns/actions";
-import type { CampaignStatus, DiscoveryReport } from "@/types/domain";
+import type { CampaignStatus, DiscoveryProgress, DiscoveryReport } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
@@ -21,7 +22,41 @@ export function CampaignControls({
   const [message, setMessage] = useState("");
   const [currentStatus, setCurrentStatus] = useState(status);
   const [runReport, setRunReport] = useState<DiscoveryReport | null>(null);
+  const [progress, setProgress] = useState<DiscoveryProgress | null>(null);
   const isBusy = isPending || isDiscovering;
+  const finalReviewedCount = runReport
+    ? runReport.aiQualificationSuccesses.length + runReport.aiQualificationFailures.length
+    : 0;
+
+  useEffect(() => {
+    if (!isDiscovering) {
+      return;
+    }
+
+    let cancelled = false;
+
+    async function refreshProgress() {
+      try {
+        const nextProgress = await getCampaignDiscoveryProgressAction(campaignId);
+
+        if (!cancelled) {
+          setProgress(nextProgress);
+        }
+      } catch {
+        // Keep the visible running state even if one polling request fails.
+      }
+    }
+
+    void refreshProgress();
+    const intervalId = window.setInterval(() => {
+      void refreshProgress();
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [campaignId, isDiscovering]);
 
   function updateStatus(
     nextStatus: Extract<CampaignStatus, "completed" | "paused" | "running">,
@@ -45,12 +80,15 @@ export function CampaignControls({
   async function discoverLeads() {
     setIsDiscovering(true);
     setRunReport(null);
+    setProgress(null);
     setMessage("Discovery running. Searching, saving, qualifying, and checking contacts...");
 
     try {
       const result = await discoverCampaignLeadsAction(campaignId);
+      const finalProgress = await getCampaignDiscoveryProgressAction(campaignId);
 
       setRunReport(result.report);
+      setProgress(finalProgress);
       setMessage(result.message);
       startTransition(() => {
         router.refresh();
@@ -85,30 +123,42 @@ export function CampaignControls({
         <div className={styles.stack}>
           <ProgressRow
             label="Leads saved"
-            value={runReport?.leadsSavedBeforeAiQualification.length ?? 0}
-            total={runReport?.rawTavilyResults.length ?? 1}
+            value={
+              progress?.leadCount ??
+              runReport?.leadsSavedBeforeAiQualification.length ??
+              0
+            }
+            total={
+              progress?.desiredLeadCount ??
+              runReport?.leadsSavedBeforeAiQualification.length ??
+              1
+            }
             pending={isDiscovering}
           />
           <ProgressRow
-            label="AI qualified"
-            value={runReport?.aiQualificationSuccesses.length ?? 0}
+            label="AI reviewed"
+            value={
+              progress?.qualificationAttemptedCount ??
+              finalReviewedCount
+            }
             total={
-              runReport
-                ? Math.max(runReport.leadsSavedBeforeAiQualification.length, 1)
-                : 1
+              progress?.leadCount ??
+              runReport?.leadsSavedBeforeAiQualification.length ??
+              1
             }
             pending={isDiscovering}
           />
           <ProgressRow
             label="Contact enrichment"
             value={
+              progress?.contactEnrichedCount ??
               runReport?.contactDiscovery.filter((item) => item.routesFound > 0).length ??
               0
             }
             total={
-              runReport
-                ? Math.max(runReport.leadsSavedBeforeAiQualification.length, 1)
-                : 1
+              progress?.leadCount ??
+              runReport?.leadsSavedBeforeAiQualification.length ??
+              1
             }
             pending={isDiscovering}
           />
@@ -124,12 +174,14 @@ function ProgressRow({
   total,
   value,
 }: Readonly<{ label: string; pending: boolean; total: number; value: number }>) {
-  const percent = pending ? 35 : Math.min(100, Math.round((value / total) * 100));
+  const safeTotal = Math.max(total, 1);
+  const percent = Math.min(100, Math.round((value / safeTotal) * 100));
 
   return (
     <div className={styles.stack}>
       <span className={styles.secondaryText}>
-        {label}: {pending ? "running" : `${value} / ${total}`}
+        {label}: {value} / {total}
+        {pending ? " running" : ""}
       </span>
       <div className={styles.progress} aria-label={`${label} ${percent}%`}>
         <span style={{ width: `${percent}%` }} />

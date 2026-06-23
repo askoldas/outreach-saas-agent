@@ -2,7 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import type { Campaign, CampaignStatus, ContactDiscoveryReport } from "@/types/domain";
+import type {
+  Campaign,
+  CampaignStatus,
+  ContactDiscoveryReport,
+  DiscoveryProgress,
+} from "@/types/domain";
 import { discoverContactRoutes } from "@/lib/discovery/contact-extractor";
 import { buildCampaignSearchQueries } from "@/lib/discovery/query-builder";
 import {
@@ -18,6 +23,7 @@ import {
   applyManualReviewQualification,
   applyLeadQualification,
   getCampaignLeadCounts,
+  getCampaignDiscoveryProgress,
   importRawDiscoveredLeads,
   markLeadQualificationForManualReview,
   replaceLeadContactRoutes,
@@ -115,6 +121,28 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
     report,
     message: `${savedLeads.length} discovered lead source${savedLeads.length === 1 ? "" : "s"} saved. ${qualification.successes.length} AI-qualified, ${qualification.failures.length} need manual review. ${contacts.routeCount} contact route${contacts.routeCount === 1 ? "" : "s"} found.`,
   };
+}
+
+export async function getCampaignDiscoveryProgressAction(
+  campaignId: string,
+): Promise<DiscoveryProgress> {
+  const { currentWorkspace } = await getWorkspaceContext();
+
+  if (!currentWorkspace) {
+    throw new Error("Authentication required");
+  }
+
+  const campaign = await getCampaign(currentWorkspace.id, campaignId);
+
+  if (!campaign) {
+    throw new Error("Campaign not found.");
+  }
+
+  return getCampaignDiscoveryProgress(
+    currentWorkspace.id,
+    campaign.id,
+    campaign.desiredLeadCount,
+  );
 }
 
 export async function updateCampaignStatusAction(input: UpdateCampaignStatusInput) {
@@ -334,15 +362,29 @@ async function qualifySavedLeads(
 async function discoverContactsForSavedLeads(savedLeads: SavedDiscoveredLead[]) {
   let routeCount = 0;
   const reports: ContactDiscoveryReport[] = [];
+  const batchSize = 6;
 
-  for (const lead of savedLeads) {
-    const discovery = await discoverContactRoutes(lead.result);
-    await replaceLeadContactRoutes(lead.databaseId, discovery.routes);
-    routeCount += discovery.routes.length;
-    reports.push({
-      ...discovery.report,
-      leadId: lead.externalId,
-    });
+  for (let index = 0; index < savedLeads.length; index += batchSize) {
+    const batch = savedLeads.slice(index, index + batchSize);
+    const batchResults = await Promise.all(
+      batch.map(async (lead) => {
+        const discovery = await discoverContactRoutes(lead.result);
+        await replaceLeadContactRoutes(lead.databaseId, discovery.routes);
+
+        return {
+          discovery,
+          lead,
+        };
+      }),
+    );
+
+    for (const { discovery, lead } of batchResults) {
+      routeCount += discovery.routes.length;
+      reports.push({
+        ...discovery.report,
+        leadId: lead.externalId,
+      });
+    }
   }
 
   return { reports, routeCount };

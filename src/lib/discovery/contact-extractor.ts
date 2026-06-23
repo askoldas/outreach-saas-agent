@@ -1,8 +1,4 @@
-import type {
-  ContactDiscoveryAttempt,
-  ContactDiscoveryReport,
-  ContactRoute,
-} from "@/types/domain";
+import type { ContactDiscoveryReport, ContactRoute } from "@/types/domain";
 import type { SearchResult } from "@/lib/providers/tavily";
 
 type ContactDiscoveryResult = {
@@ -24,18 +20,16 @@ export async function discoverContactRoutes(
 ): Promise<ContactDiscoveryResult> {
   const snippets = [result.content];
   const origin = getOrigin(result.url);
-  const attempts: ContactDiscoveryAttempt[] = [];
+  const pageResults = await Promise.all(
+    contactPaths.map((path) => fetchContactPageText(`${origin}${path}`)),
+  );
+  const attempts = pageResults.map((pageResult) => pageResult.attempt);
 
-  for (const path of contactPaths) {
-    const url = `${origin}${path}`;
-    const pageResult = await fetchContactPageText(url);
-
-    attempts.push(pageResult.attempt);
-
-    if (pageResult.text) {
-      snippets.push(pageResult.text);
-    }
-  }
+  snippets.push(
+    ...pageResults
+      .map((pageResult) => pageResult.text)
+      .filter((text) => text.length > 0),
+  );
 
   const routes = extractContactRoutes(snippets.join("\n"), origin);
 
@@ -54,7 +48,7 @@ async function fetchContactPageText(url: string) {
       headers: {
         "User-Agent": "OutreachSaaSAgent/0.1 contact discovery",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(1800),
     });
 
     if (!response.ok) {

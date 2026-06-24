@@ -67,7 +67,8 @@ export async function processEvaluateLeadTask(
     });
 
     if (result.evaluation.qualificationStatus !== "disqualified") {
-      await saveEvaluatedLead(supabase, task, payload.source, result.evaluation);
+      const lead = await saveEvaluatedLead(supabase, task, payload.source, result.evaluation);
+      await enqueueContactEnrichmentTask(supabase, task, payload.source, lead);
     } else if (payload.source.sourceId) {
       await updateLeadSourceEvaluation(supabase, payload.source.sourceId, result.evaluation);
     }
@@ -87,7 +88,15 @@ export async function processEvaluateLeadTask(
       promptVersion: "lead-evaluator-v1",
       status: "failed",
     });
-    throw error;
+    const lead = await saveLeadForAiFailure(supabase, task, payload.source, error);
+    await enqueueContactEnrichmentTask(supabase, task, payload.source, lead);
+
+    return {
+      companyName: lead.companyName,
+      error: error instanceof Error ? error.message : "Lead evaluation failed",
+      qualificationStatus: "failed",
+      relevanceScore: lead.fitScore,
+    };
   }
 }
 
@@ -239,6 +248,7 @@ async function saveEvaluatedLead(
   evaluation: LeadEvaluation,
 ) {
   const externalId = createDiscoveredLeadId(evaluation.website ?? source.url, evaluation.companyName ?? source.title);
+  const website = evaluation.website ?? getOrigin(source.url);
   const { data, error } = await supabase
     .from("leads")
     .upsert(
@@ -265,7 +275,7 @@ async function saveEvaluatedLead(
             : "needs_manual_review",
         status: "needs_review",
         summary: evaluation.summary,
-        website: evaluation.website ?? getOrigin(source.url),
+        website,
         workspace_id: task.workspace_id,
       },
       { onConflict: "workspace_id,external_id" },
@@ -282,6 +292,111 @@ async function saveEvaluatedLead(
 
   if (source.sourceId) {
     await updateLeadSourceEvaluation(supabase, source.sourceId, evaluation);
+  }
+
+  return {
+    companyName: evaluation.companyName ?? source.title,
+    fitScore: evaluation.relevanceScore,
+    leadDatabaseId: leadId,
+    leadExternalId: externalId,
+    website,
+  };
+}
+
+async function saveLeadForAiFailure(
+  supabase: SupabaseClient,
+  task: ResearchTaskRow,
+  source: EvaluationPayload["source"],
+  error: unknown,
+) {
+  const externalId = createDiscoveredLeadId(source.url, source.title);
+  const website = getOrigin(source.url);
+  const fitScore = scoreToFit(source.score);
+  const errorMessage = sanitizeError(error);
+  const { data, error: upsertError } = await supabase
+    .from("leads")
+    .upsert(
+      {
+        campaign_id: task.campaign_id,
+        city: "Unknown",
+        company: normalizeCompanyName(source.title),
+        company_type: "Discovered company",
+        confidence: "low",
+        contactability: "low",
+        country: "Unknown",
+        description: source.content || source.title,
+        estimated_size: "Unknown",
+        external_id: externalId,
+        fit_score: fitScore,
+        industry: "Unqualified web discovery",
+        qualification_error: errorMessage,
+        qualification_status: "failed",
+        status: "needs_review",
+        summary:
+          source.content ||
+          "Discovered from Tavily search. AI qualification failed, so this needs manual review.",
+        website,
+        workspace_id: task.workspace_id,
+      },
+      { onConflict: "workspace_id,external_id" },
+    )
+    .select("id")
+    .single();
+
+  if (upsertError) {
+    throw new Error(`Could not save lead after AI evaluation failure: ${upsertError.message}`);
+  }
+
+  const leadId = (data as { id: string }).id;
+  await replaceFailedLeadEvidenceAndQualification(supabase, leadId, source, errorMessage, fitScore);
+
+  if (source.sourceId) {
+    await updateLeadSourceEvaluationFailure(supabase, source.sourceId, errorMessage);
+  }
+
+  return {
+    companyName: source.title,
+    fitScore,
+    leadDatabaseId: leadId,
+    leadExternalId: externalId,
+    website,
+  };
+}
+
+async function enqueueContactEnrichmentTask(
+  supabase: SupabaseClient,
+  task: ResearchTaskRow,
+  source: EvaluationPayload["source"],
+  lead: {
+    leadDatabaseId: string;
+    leadExternalId: string;
+    website: string;
+  },
+) {
+  const { error } = await supabase.from("research_tasks").insert({
+    campaign_id: task.campaign_id,
+    max_attempts: 2,
+    payload_json: {
+      leadDatabaseId: lead.leadDatabaseId,
+      leadExternalId: lead.leadExternalId,
+      source: {
+        content: source.content,
+        query: source.query,
+        score: source.score,
+        sourceId: source.sourceId,
+        title: source.title,
+        url: source.url,
+      },
+      website: lead.website,
+    },
+    run_id: task.run_id,
+    status: "pending",
+    task_type: "enrich_contacts",
+    workspace_id: task.workspace_id,
+  });
+
+  if (error) {
+    throw new Error(`Could not enqueue contact enrichment task: ${error.message}`);
   }
 }
 
@@ -399,6 +514,112 @@ async function updateLeadSourceEvaluation(
   }
 }
 
+async function updateLeadSourceEvaluationFailure(
+  supabase: SupabaseClient,
+  sourceId: string,
+  errorMessage: string,
+) {
+  const { error } = await supabase
+    .from("lead_sources")
+    .update({
+      classification: "needs_review",
+      rejection_reason: null,
+      result_json: {
+        evaluationError: errorMessage,
+      },
+    })
+    .eq("id", sourceId);
+
+  if (error) {
+    throw new Error(`Could not update lead source evaluation failure: ${error.message}`);
+  }
+}
+
+async function replaceFailedLeadEvidenceAndQualification(
+  supabase: SupabaseClient,
+  leadId: string,
+  source: EvaluationPayload["source"],
+  errorMessage: string,
+  fitScore: number,
+) {
+  const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
+    [
+      {
+        confidence: "medium",
+        external_id: "source-evidence",
+        kind: "fact",
+        lead_id: leadId,
+        retrieved_at: new Date().toISOString().slice(0, 10),
+        sort_order: 0,
+        source_label: source.title,
+        source_type: "Tavily search result",
+        source_url: source.url,
+        text: source.content || source.title,
+      },
+      {
+        confidence: "low",
+        external_id: "ai-lead-evaluation-failure",
+        kind: "unknown",
+        lead_id: leadId,
+        retrieved_at: new Date().toISOString().slice(0, 10),
+        sort_order: 1,
+        source_label: "OpenRouter lead evaluation",
+        source_type: "AI lead evaluation failure",
+        source_url: source.url,
+        text: `AI qualification failed: ${errorMessage}`,
+      },
+    ],
+    { onConflict: "lead_id,external_id" },
+  );
+
+  if (evidenceError) {
+    throw new Error(`Could not save failed lead evidence: ${evidenceError.message}`);
+  }
+
+  const { error: deleteError } = await supabase
+    .from("lead_qualification_dimensions")
+    .delete()
+    .eq("lead_id", leadId);
+
+  if (deleteError) {
+    throw new Error(`Could not clear failed lead qualification dimensions: ${deleteError.message}`);
+  }
+
+  const { error: dimensionError } = await supabase
+    .from("lead_qualification_dimensions")
+    .insert([
+      {
+        confidence: "low",
+        explanation:
+          "AI qualification failed. The lead was preserved from source evidence for manual review.",
+        label: "Campaign fit",
+        lead_id: leadId,
+        score: fitScore,
+        sort_order: 0,
+      },
+      {
+        confidence: "medium",
+        explanation: "Tavily source evidence was saved before AI qualification.",
+        label: "Evidence quality",
+        lead_id: leadId,
+        score: source.content ? 55 : 40,
+        sort_order: 1,
+      },
+      {
+        confidence: "low",
+        explanation: "Contact discovery is queued separately from AI qualification.",
+        label: "Contactability",
+        lead_id: leadId,
+        score: 30,
+        sort_order: 2,
+      },
+    ]);
+
+  if (dimensionError) {
+    throw new Error(`Could not save failed lead qualification dimensions: ${dimensionError.message}`);
+  }
+}
+
 function parsePayload(task: ResearchTaskRow): EvaluationPayload {
   const source = task.payload_json.source;
 
@@ -424,6 +645,21 @@ function getOrigin(url: string) {
 
 function normalizeCompanyName(companyName: string) {
   return companyName.trim().slice(0, 180) || "Unknown company";
+}
+
+function scoreToFit(score: number | null | undefined) {
+  if (typeof score !== "number") {
+    return 40;
+  }
+
+  return Math.max(30, Math.min(70, Math.round(score * 100)));
+}
+
+function sanitizeError(error: unknown) {
+  return (error instanceof Error ? error.message : "Lead evaluation failed")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 1000);
 }
 
 function slugify(input: string) {

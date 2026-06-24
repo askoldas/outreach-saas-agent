@@ -45,6 +45,22 @@ type SavedLeadSource = {
   url: string;
 };
 
+type ExistingLeadForContactTask = {
+  external_id: string;
+  id: string;
+  lead_contact_routes: Array<{
+    value: string;
+    verification: string;
+  }> | null;
+  lead_evidence_claims: Array<{
+    source_label: string;
+    source_type: string;
+    source_url: string;
+    text: string;
+  }> | null;
+  website: string;
+};
+
 export async function processSearchWebTask(
   supabase: SupabaseClient,
   task: ResearchTaskRow,
@@ -55,6 +71,11 @@ export async function processSearchWebTask(
   const existingCount = await countCampaignLeads(supabase, task);
   const desiredLeadCount = campaign.desired_lead_count ?? getPayloadDesiredLeadCount(task);
   const remainingLeadSlots = Math.max(desiredLeadCount - existingCount.total, 0);
+  const existingContactTaskCount = await enqueueExistingLeadContactTasks(
+    supabase,
+    task,
+    desiredLeadCount,
+  );
 
   if (remainingLeadSlots === 0) {
     await finishCampaignRun(supabase, task, campaign, {
@@ -77,6 +98,7 @@ export async function processSearchWebTask(
 
     return {
       existingLeadCount: existingCount.total,
+      existingContactTaskCount,
       savedLeadCount: 0,
       skippedReason: "Campaign target already reached",
     };
@@ -156,6 +178,7 @@ export async function processSearchWebTask(
     acceptedResultCount: searchReport.acceptedResults.length,
     duplicateResultCount: searchReport.duplicateResults.length,
     evaluationTaskCount,
+    existingContactTaskCount,
     queryCount: queries.length,
     rejectedResultCount: searchReport.rejectedResults.length,
     targetSkippedCount: targetSkippedResults.length,
@@ -372,6 +395,95 @@ async function enqueueLeadEvaluationTasks(
   }
 
   return taskRows.length;
+}
+
+async function enqueueExistingLeadContactTasks(
+  supabase: SupabaseClient,
+  task: ResearchTaskRow,
+  desiredLeadCount: number,
+) {
+  const { data, error } = await supabase
+    .from("leads")
+    .select(
+      `
+        id,
+        external_id,
+        website,
+        lead_contact_routes (
+          value,
+          verification
+        ),
+        lead_evidence_claims (
+          source_label,
+          source_type,
+          source_url,
+          text
+        )
+      `,
+    )
+    .eq("workspace_id", task.workspace_id)
+    .eq("campaign_id", task.campaign_id)
+    .limit(Math.max(desiredLeadCount, 1));
+
+  if (error) {
+    throw new Error(`Could not load existing leads for contact enrichment: ${error.message}`);
+  }
+
+  const taskRows = ((data ?? []) as ExistingLeadForContactTask[])
+    .filter((lead) => (lead.lead_contact_routes ?? []).length === 0)
+    .map((lead) => {
+      const evidence = pickSourceEvidence(lead);
+
+      return {
+        campaign_id: task.campaign_id,
+        max_attempts: 2,
+        payload_json: {
+          leadDatabaseId: lead.id,
+          leadExternalId: lead.external_id,
+          source: {
+            content: evidence.text,
+            query: "existing lead evidence",
+            title: evidence.source_label,
+            url: evidence.source_url || lead.website,
+          },
+          website: lead.website,
+        },
+        run_id: task.run_id,
+        status: "pending",
+        task_type: "enrich_contacts",
+        workspace_id: task.workspace_id,
+      };
+    });
+
+  if (taskRows.length === 0) {
+    return 0;
+  }
+
+  const { error: insertError } = await supabase.from("research_tasks").insert(taskRows);
+
+  if (insertError) {
+    throw new Error(
+      `Could not enqueue existing lead contact enrichment tasks: ${insertError.message}`,
+    );
+  }
+
+  return taskRows.length;
+}
+
+function pickSourceEvidence(lead: ExistingLeadForContactTask) {
+  const evidence = (lead.lead_evidence_claims ?? []).find((claim) =>
+    /tavily|search|source/i.test(`${claim.source_type} ${claim.source_label}`),
+  );
+
+  return (
+    evidence ??
+    lead.lead_evidence_claims?.[0] ?? {
+      source_label: lead.external_id,
+      source_type: "Saved lead website",
+      source_url: lead.website,
+      text: lead.website,
+    }
+  );
 }
 
 async function finishCampaignRun(

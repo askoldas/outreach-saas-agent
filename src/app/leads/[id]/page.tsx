@@ -28,18 +28,12 @@ export default async function LeadDetailPage({
   const campaign = lead.campaignId
     ? await getCampaign(currentWorkspace.id, lead.campaignId)
     : null;
-  const contactRoutes =
+  const contactMessage =
     lead.contacts.length > 0
-      ? lead.contacts
-      : [
-          {
-            source: "Saved lead website",
-            suggestedRole: "Review public website for the correct business route",
-            type: "Website",
-            value: lead.website,
-            verification: "unverified" as const,
-          },
-        ];
+      ? ""
+      : lead.qualificationStatus === "pending"
+        ? "Contact discovery pending or not run yet."
+        : "No public contacts found by contact discovery yet.";
 
   return (
     <div className={styles.grid}>
@@ -53,7 +47,9 @@ export default async function LeadDetailPage({
         <Card className={styles.metric}>
           <p>Fit score</p>
           <h2>{lead.fitScore}</h2>
-          <span>{statusLabel(lead.confidence)} evidence confidence</span>
+          <span>
+            {statusLabel(lead.qualificationStatus)} · {statusLabel(lead.confidence)} confidence
+          </span>
         </Card>
         <Card className={styles.metric}>
           <p>Location</p>
@@ -95,6 +91,12 @@ export default async function LeadDetailPage({
 
           <Card>
             <CardHeader title="Qualification" eyebrow="Reusable score dimensions" />
+            {lead.qualificationError ? (
+              <div className={styles.cardBody}>
+                <Badge tone="warning">{statusLabel(lead.qualificationStatus)}</Badge>
+                <p>{lead.qualificationError}</p>
+              </div>
+            ) : null}
             <div className={styles.tableWrap}>
               <table className={styles.table}>
                 <thead>
@@ -196,8 +198,9 @@ export default async function LeadDetailPage({
           <Card>
             <CardHeader title="Contacts" eyebrow="Not presented as verified delivery" />
             <div className={styles.cardBody}>
+              {contactMessage ? <p>{contactMessage}</p> : null}
               <ul className={styles.feed}>
-                {contactRoutes.map((contact) => (
+                {lead.contacts.map((contact) => (
                   <li key={`${contact.type}-${contact.value}`}>
                     <strong>
                       {contact.type}:{" "}
@@ -214,6 +217,9 @@ export default async function LeadDetailPage({
                       )}
                     </strong>
                     <p>{contact.suggestedRole}</p>
+                    <Badge tone={confidenceTone(contactConfidence(contact.verification))}>
+                      {statusLabel(contactConfidence(contact.verification))} confidence
+                    </Badge>
                     <Badge
                       tone={
                         contact.verification === "source_confirmed"
@@ -246,9 +252,17 @@ function getContactHref(type: string, value: string) {
     return `mailto:${value}`;
   }
 
-  if (type === "Website" || value.startsWith("http")) {
+  if (type === "Phone") {
+    return `tel:${value.replace(/[^\d+]/g, "")}`;
+  }
+
+  if (type === "Website" || type === "Contact page" || value.startsWith("http")) {
     return value;
   }
 
   return "";
+}
+
+function contactConfidence(verification: string) {
+  return verification === "source_confirmed" ? "high" : "low";
 }

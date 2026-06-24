@@ -15,8 +15,8 @@ separate process claims and completes tasks from Supabase.
 `research_runs` is the user-visible unit of background work for a campaign. It
 stores status, progress, the current step, and any last error.
 
-`research_tasks` stores retryable units of work. Initial task types are
-`search_web` and `evaluate_lead`.
+`research_tasks` stores retryable units of work. Current task types are
+`search_web`, `evaluate_lead`, and `enrich_contacts`.
 
 `lead_sources` stores raw Tavily results and deterministic source classification
 before or alongside lead creation.
@@ -74,13 +74,18 @@ to browser code.
 5. The worker claims the task, runs Tavily, and stores `lead_sources`.
 6. Candidate sources receive `evaluate_lead` tasks.
 7. `evaluate_lead` calls OpenRouter, validates strict JSON, logs
-   `ai_generations`, and creates or updates qualified/needs-review leads.
+   `ai_generations`, and creates or updates qualified/needs-review leads. If AI
+   fails, the lead is still saved for manual review.
+8. Saved leads receive `enrich_contacts` tasks.
+9. `enrich_contacts` extracts public emails, phone numbers, contact page URLs,
+   and website routes from saved source evidence, then performs a small safe
+   public website/contact-page check.
 
 ## Current Limitations
 
-- `search_web` and `evaluate_lead` are implemented as worker tasks.
-- Contact enrichment is not yet a separate worker task.
+- `search_web`, `evaluate_lead`, and `enrich_contacts` are implemented as worker
+  tasks.
 - Query generation uses campaign and offer context with small optional geography
   hints. It is not intended to be a full country database.
-- Deep website crawling is not yet implemented; lead evaluation uses Tavily
-  snippets and stored source metadata.
+- Deep website crawling is not yet implemented. Contact enrichment only uses
+  stored source evidence and shallow public website/contact-page checks.

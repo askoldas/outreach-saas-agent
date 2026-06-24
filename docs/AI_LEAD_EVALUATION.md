@@ -18,7 +18,10 @@ outreach, send email, invent private contacts, or bypass human review.
 4. Plausible candidate sources get `evaluate_lead` tasks.
 5. `evaluate_lead` calls OpenRouter and requires strict JSON.
 6. Valid `qualified` or `needs_review` evaluations create or update leads.
-7. `disqualified` evaluations remain in `lead_sources` and `ai_generations`.
+7. Failed AI evaluations still create a needs-review lead with
+   `qualification_status = failed` so discovery is not blocked by OpenRouter.
+8. `disqualified` evaluations remain in `lead_sources` and `ai_generations`.
+9. Saved leads receive a deterministic `enrich_contacts` task.
 
 ## Prompt Version
 
@@ -68,9 +71,29 @@ can handle it.
 - Irrelevant sources should be `disqualified`.
 - Human review remains required before outreach.
 
+## Contact Enrichment
+
+Contact enrichment is deterministic, evidence-based, and separate from AI
+qualification. The worker parses saved Tavily title, URL, query, and content
+before any website request. It extracts only public routes that appear in source
+evidence or shallow public website/contact-page checks.
+
+Manual check strings:
+
+```txt
+e-mail: direzione@farmaciaassistita.it
+Tel: 06.596.33.107
+Numero Verde 800.171.651
+```
+
+Expected result: the email is saved as an `Email` contact, both numbers are
+saved as `Phone` contacts, and lead contactability increases from `low` to
+`medium` or `high` depending on the number of source-confirmed routes.
+
 ## Current Limitations
 
 - Evaluation depends on Tavily result snippets and source URLs.
 - Deep website crawling is not yet a worker task.
-- Contact enrichment is separate and not yet part of this AI task.
+- Contact enrichment is a separate worker task and does not invent emails or
+  people.
 - Outreach drafting remains deferred.

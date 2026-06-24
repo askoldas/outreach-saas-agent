@@ -5,6 +5,7 @@ import { claimNextResearchTask } from "./lib/claim-task.ts";
 import { getWorkerConfig } from "./lib/worker-config.ts";
 import { sleep } from "./lib/sleep.ts";
 import { completeTask, failOrRetryTask } from "./lib/task-status.ts";
+import { processEnrichContactsTask } from "./tasks/enrich-contacts.ts";
 import { processEvaluateLeadTask } from "./tasks/evaluate-lead.ts";
 import { processSearchWebTask } from "./tasks/search-web.ts";
 
@@ -64,6 +65,10 @@ async function processTask(task: Awaited<ReturnType<typeof claimNextResearchTask
 
   if (task.task_type === "evaluate_lead") {
     return processEvaluateLeadTask(supabase, task);
+  }
+
+  if (task.task_type === "enrich_contacts") {
+    return processEnrichContactsTask(supabase, task);
   }
 
   throw new Error(`Unsupported research task type: ${task.task_type}`);

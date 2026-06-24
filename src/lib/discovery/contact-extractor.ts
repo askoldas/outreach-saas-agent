@@ -1,8 +1,4 @@
-import type {
-  ContactDiscoveryAttempt,
-  ContactDiscoveryReport,
-  ContactRoute,
-} from "@/types/domain";
+import type { ContactDiscoveryReport, ContactRoute } from "@/types/domain";
 import type { SearchResult } from "@/lib/providers/tavily";
 
 type ContactDiscoveryResult = {
@@ -24,25 +20,26 @@ export async function discoverContactRoutes(
 ): Promise<ContactDiscoveryResult> {
   const snippets = [result.content];
   const origin = getOrigin(result.url);
-  const attempts: ContactDiscoveryAttempt[] = [];
+  const pageResults = await Promise.all(
+    contactPaths.map((path) => fetchContactPageText(`${origin}${path}`)),
+  );
+  const attempts = pageResults.map((pageResult) => pageResult.attempt);
 
-  for (const path of contactPaths) {
-    const url = `${origin}${path}`;
-    const pageResult = await fetchContactPageText(url);
-
-    attempts.push(pageResult.attempt);
-
-    if (pageResult.text) {
-      snippets.push(pageResult.text);
-    }
-  }
+  snippets.push(
+    ...pageResults
+      .map((pageResult) => pageResult.text)
+      .filter((text) => text.length > 0),
+  );
 
   const routes = extractContactRoutes(snippets.join("\n"), origin);
+  const confirmedRouteCount = routes.filter(
+    (route) => route.verification === "source_confirmed",
+  ).length;
 
   return {
     report: {
       attempts,
-      routesFound: routes.length,
+      routesFound: confirmedRouteCount,
     },
     routes,
   };
@@ -54,7 +51,7 @@ async function fetchContactPageText(url: string) {
       headers: {
         "User-Agent": "OutreachSaaSAgent/0.1 contact discovery",
       },
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(1800),
     });
 
     if (!response.ok) {
@@ -113,13 +110,17 @@ function extractContactRoutes(text: string, source: string): ContactRoute[] {
     });
   }
 
-  routes.set(`website:${source}`, {
-    source,
-    suggestedRole: "Contact page review",
-    type: "Website",
-    value: `${source}/contatti`,
-    verification: "unverified",
-  });
+  const hasFetchedContactPage = text.length > 0;
+
+  if (hasFetchedContactPage) {
+    routes.set(`website:${source}`, {
+      source,
+      suggestedRole: "Public website contact page to review",
+      type: "Website",
+      value: `${source}/contatti`,
+      verification: "unverified",
+    });
+  }
 
   return [...routes.values()];
 }

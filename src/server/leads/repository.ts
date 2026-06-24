@@ -5,6 +5,7 @@ import type { SearchResult } from "@/lib/providers/tavily";
 import type {
   Confidence,
   ContactRoute,
+  DiscoveryProgress,
   EvidenceClaim,
   EvidenceKind,
   Lead,
@@ -199,6 +200,77 @@ export async function getCampaignLeadCounts(
   return {
     awaitingReview: rows.filter((row) => row.status === "needs_review").length,
     total: rows.length,
+  };
+}
+
+export async function getCampaignDiscoveryProgress(
+  workspaceId: string,
+  campaignId: string,
+  desiredLeadCount: number,
+): Promise<DiscoveryProgress> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select(
+      `
+        qualification_status,
+        lead_contact_routes (
+          value,
+          verification
+        )
+      `,
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_id", campaignId);
+
+  if (isMissingQualificationColumnError(error)) {
+    const fallback = await supabase
+      .from("leads")
+      .select(
+        `
+          lead_contact_routes (
+            value,
+            verification
+          )
+        `,
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("campaign_id", campaignId);
+
+    if (fallback.error) {
+      throw new Error(`Could not load discovery progress: ${fallback.error.message}`);
+    }
+
+    const fallbackRows = (fallback.data ?? []) as Array<{
+      lead_contact_routes: Array<{ value: string; verification: string }> | null;
+    }>;
+
+    return {
+      contactEnrichedCount: countRowsWithContactRoutes(fallbackRows),
+      desiredLeadCount,
+      leadCount: fallbackRows.length,
+      qualificationAttemptedCount: 0,
+      qualifiedCount: 0,
+    };
+  }
+
+  if (error) {
+    throw new Error(`Could not load discovery progress: ${error.message}`);
+  }
+
+  const rows = (data ?? []) as Array<{
+    lead_contact_routes: Array<{ value: string; verification: string }> | null;
+    qualification_status?: LeadQualificationStatus | null;
+  }>;
+
+  return {
+    contactEnrichedCount: countRowsWithContactRoutes(rows),
+    desiredLeadCount,
+    leadCount: rows.length,
+    qualificationAttemptedCount: rows.filter(
+      (row) => row.qualification_status && row.qualification_status !== "pending",
+    ).length,
+    qualifiedCount: rows.filter((row) => row.qualification_status === "qualified").length,
   };
 }
 
@@ -905,6 +977,18 @@ function isMissingQualificationColumnError(error: { message?: string } | null) {
     message.includes("schema cache");
 
   return mentionsQualificationColumn && isMissingColumn;
+}
+
+function countRowsWithContactRoutes(
+  rows: Array<{
+    lead_contact_routes: Array<{ value: string; verification: string }> | null;
+  }>,
+) {
+  return rows.filter((row) =>
+    (row.lead_contact_routes ?? []).some(
+      (route) => Boolean(route.value) && route.verification === "source_confirmed",
+    ),
+  ).length;
 }
 
 function getOrigin(url: string) {

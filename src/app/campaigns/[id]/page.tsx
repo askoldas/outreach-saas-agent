@@ -154,6 +154,12 @@ export default async function CampaignDetailPage({
                     )}
                   />
                   <DiagnosticList
+                    title="Skipped after target reached"
+                    items={(latestReport.targetSkippedResults ?? []).map(
+                      (result) => `${result.title}: ${result.reason}`,
+                    )}
+                  />
+                  <DiagnosticList
                     title="Saved before AI"
                     items={latestReport.leadsSavedBeforeAiQualification}
                   />
@@ -183,7 +189,12 @@ export default async function CampaignDetailPage({
           <Card>
             <CardHeader title="Controls" eyebrow="Workspace status" />
             <div className={styles.cardBody}>
-              <CampaignControls campaignId={campaign.id} status={campaign.status} />
+              <CampaignControls
+                campaignId={campaign.id}
+                desiredLeadCount={campaign.desiredLeadCount}
+                initialLeadCount={campaign.leadCount}
+                status={campaign.status}
+              />
             </div>
           </Card>
         </div>

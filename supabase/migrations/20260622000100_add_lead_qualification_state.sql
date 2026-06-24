@@ -1,5 +1,5 @@
 alter table public.leads
-add column qualification_status text not null default 'needs_manual_review' check (
+add column if not exists qualification_status text not null default 'needs_manual_review' check (
   qualification_status in (
     'pending',
     'qualified',
@@ -8,7 +8,7 @@ add column qualification_status text not null default 'needs_manual_review' chec
     'non_ai_manual_review'
   )
 ),
-add column qualification_error text;
+add column if not exists qualification_error text;
 
-create index leads_workspace_qualification_status_idx
+create index if not exists leads_workspace_qualification_status_idx
 on public.leads(workspace_id, qualification_status);

@@ -28,6 +28,7 @@ export function buildDiscoveryReport(input: {
   queriesExecuted: string[];
   rawTavilyResults: DiscoveryReportResult[];
   rejectedResults: DiscoveryReportRejectedResult[];
+  targetSkippedResults: DiscoveryReportRejectedResult[];
 }): DiscoveryReport {
   return {
     ...input,

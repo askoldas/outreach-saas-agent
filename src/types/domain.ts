@@ -64,6 +64,15 @@ export type DiscoveryReport = {
   queriesExecuted: string[];
   rawTavilyResults: DiscoveryReportResult[];
   rejectedResults: DiscoveryReportRejectedResult[];
+  targetSkippedResults: DiscoveryReportRejectedResult[];
+};
+
+export type DiscoveryProgress = {
+  contactEnrichedCount: number;
+  desiredLeadCount: number;
+  leadCount: number;
+  qualificationAttemptedCount: number;
+  qualifiedCount: number;
 };
 
 export type Offer = {

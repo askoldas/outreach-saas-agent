@@ -1,5 +1,3 @@
-import "server-only";
-
 type ProviderConfig = {
   openRouter: {
     apiKey: string | null;

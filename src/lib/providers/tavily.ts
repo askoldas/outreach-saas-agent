@@ -1,4 +1,4 @@
-import { requireTavilyConfig } from "./config";
+import { requireTavilyConfig } from "./config.ts";
 
 type TavilySearchResult = {
   content?: string;

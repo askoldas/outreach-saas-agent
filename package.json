@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "worker": "node --experimental-strip-types src/workers/research-worker.ts",
     "build": "next build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

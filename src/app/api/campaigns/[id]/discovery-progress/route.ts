@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCampaign } from "@/server/campaigns/repository";
-import { getCampaignDiscoveryProgress } from "@/server/leads/repository";
+import { getCampaignResearchProgress } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 export async function GET(
@@ -24,11 +24,20 @@ export async function GET(
       return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
     }
 
-    const progress = await getCampaignDiscoveryProgress(
-      currentWorkspace.id,
-      campaign.id,
-      campaign.desiredLeadCount,
-    );
+    const progress =
+      (await getCampaignResearchProgress({
+        campaignId: campaign.id,
+        workspaceId: currentWorkspace.id,
+      })) ?? {
+        completedTasks: 0,
+        currentStep: "No discovery run queued",
+        failedTasks: 0,
+        lastError: "",
+        progress: campaign.progress,
+        runId: "",
+        status: campaign.status === "completed" ? "completed" : "pending",
+        totalTasks: 0,
+      };
 
     return NextResponse.json(progress, {
       headers: {

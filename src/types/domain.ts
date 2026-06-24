@@ -75,6 +75,17 @@ export type DiscoveryProgress = {
   qualifiedCount: number;
 };
 
+export type ResearchProgress = {
+  completedTasks: number;
+  currentStep: string;
+  failedTasks: number;
+  lastError: string;
+  progress: number;
+  runId: string;
+  status: "cancelled" | "completed" | "failed" | "pending" | "running";
+  totalTasks: number;
+};
+
 export type Offer = {
   id: string;
   name: string;

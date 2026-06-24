@@ -6,7 +6,7 @@ import {
   discoverCampaignLeadsAction,
   updateCampaignStatusAction,
 } from "@/server/campaigns/actions";
-import type { CampaignStatus, DiscoveryProgress, DiscoveryReport } from "@/types/domain";
+import type { CampaignStatus, ResearchProgress } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
@@ -27,19 +27,9 @@ export function CampaignControls({
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [message, setMessage] = useState("");
   const [currentStatus, setCurrentStatus] = useState(status);
-  const [runReport, setRunReport] = useState<DiscoveryReport | null>(null);
-  const [progress, setProgress] = useState<DiscoveryProgress | null>({
-    contactEnrichedCount: 0,
-    desiredLeadCount,
-    leadCount: initialLeadCount,
-    qualificationAttemptedCount: 0,
-    qualifiedCount: 0,
-  });
+  const [progress, setProgress] = useState<ResearchProgress | null>(null);
   const [progressError, setProgressError] = useState("");
   const isBusy = isPending || isDiscovering;
-  const finalReviewedCount = runReport
-    ? runReport.aiQualificationSuccesses.length + runReport.aiQualificationFailures.length
-    : 0;
 
   async function refreshProgress() {
     const response = await fetch(
@@ -54,9 +44,17 @@ export function CampaignControls({
       );
     }
 
-    const nextProgress = (await response.json()) as DiscoveryProgress;
+    const nextProgress = (await response.json()) as ResearchProgress;
     setProgress(nextProgress);
     setProgressError("");
+
+    if (
+      nextProgress.status === "completed" ||
+      nextProgress.status === "failed" ||
+      nextProgress.status === "cancelled"
+    ) {
+      setIsDiscovering(false);
+    }
 
     return nextProgress;
   }
@@ -86,8 +84,17 @@ export function CampaignControls({
             );
           }
 
-          setProgress((await nextProgress.json()) as DiscoveryProgress);
+          const payload = (await nextProgress.json()) as ResearchProgress;
+          setProgress(payload);
           setProgressError("");
+
+          if (
+            payload.status === "completed" ||
+            payload.status === "failed" ||
+            payload.status === "cancelled"
+          ) {
+            setIsDiscovering(false);
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -130,18 +137,14 @@ export function CampaignControls({
 
   async function discoverLeads() {
     setIsDiscovering(true);
-    setRunReport(null);
-    setProgress({
-      contactEnrichedCount: 0,
-      desiredLeadCount,
-      leadCount: initialLeadCount,
-      qualificationAttemptedCount: 0,
-      qualifiedCount: 0,
-    });
+    setProgress(null);
     setProgressError("");
-    setMessage("Discovery running. Searching, saving, qualifying, and checking contacts...");
+    setMessage("Discovery queued. Waiting for the worker...");
 
     try {
+      const result = await discoverCampaignLeadsAction(campaignId);
+      setMessage(result.message);
+
       try {
         await refreshProgress();
       } catch (error) {
@@ -150,28 +153,11 @@ export function CampaignControls({
         );
       }
 
-      const result = await discoverCampaignLeadsAction(campaignId);
-      let finalProgress: DiscoveryProgress | null = null;
-
-      try {
-        finalProgress = await refreshProgress();
-      } catch (error) {
-        setProgressError(
-          error instanceof Error ? error.message : "Could not refresh progress",
-        );
-      }
-
-      setRunReport(result.report);
-      if (finalProgress) {
-        setProgress(finalProgress);
-      }
-      setMessage(result.message);
       startTransition(() => {
         router.refresh();
       });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not discover leads");
-    } finally {
       setIsDiscovering(false);
     }
   }
@@ -196,49 +182,34 @@ export function CampaignControls({
         {isBusy ? message || "Working..." : message || `Status: ${currentStatus}`}
       </Badge>
       {progressError ? <Badge tone="warning">Progress polling: {progressError}</Badge> : null}
-      {isDiscovering || runReport ? (
+      {isDiscovering || progress ? (
         <div className={styles.stack}>
           <ProgressRow
-            label="Leads saved"
-            value={
-              progress?.leadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              0
-            }
-            total={
-              progress?.desiredLeadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              desiredLeadCount
-            }
+            label="Run progress"
+            value={progress?.progress ?? 0}
+            total={100}
             pending={isDiscovering}
           />
           <ProgressRow
-            label="AI reviewed"
-            value={
-              progress?.qualificationAttemptedCount ??
-              finalReviewedCount
-            }
-            total={
-              progress?.leadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              initialLeadCount
-            }
+            label="Tasks completed"
+            value={progress?.completedTasks ?? 0}
+            total={progress?.totalTasks ?? 1}
             pending={isDiscovering}
           />
           <ProgressRow
-            label="Contact enrichment"
-            value={
-              progress?.contactEnrichedCount ??
-              runReport?.contactDiscovery.filter((item) => item.routesFound > 0).length ??
-              0
-            }
-            total={
-              progress?.leadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              initialLeadCount
-            }
+            label="Tasks failed"
+            value={progress?.failedTasks ?? 0}
+            total={progress?.totalTasks ?? 1}
             pending={isDiscovering}
           />
+          <span className={styles.secondaryText}>
+            {progress?.currentStep ?? "Queued"}{" "}
+            {progress?.runId ? `(${progress.runId.slice(0, 8)})` : ""}
+            {progress?.lastError ? ` - ${progress.lastError}` : ""}
+          </span>
+          <span className={styles.secondaryText}>
+            Lead target: {initialLeadCount} / {desiredLeadCount} before this run
+          </span>
         </div>
       ) : null}
     </div>

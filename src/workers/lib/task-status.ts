@@ -6,6 +6,8 @@ export async function completeTask(
   task: ResearchTaskRow,
   result: Record<string, unknown>,
 ) {
+  assertClaimedTask(task);
+
   const { error } = await supabase
     .from("research_tasks")
     .update({
@@ -30,6 +32,8 @@ export async function failOrRetryTask(
   task: ResearchTaskRow,
   error: unknown,
 ) {
+  assertClaimedTask(task);
+
   const message = error instanceof Error ? error.message : "Task failed";
   const willRetry = task.attempt_count < task.max_attempts;
   const { error: updateError } = await supabase
@@ -56,6 +60,10 @@ export async function updateRunStep(
   currentStep: string,
   progress: number,
 ) {
+  if (!runId) {
+    throw new Error("Cannot update research run without a run id.");
+  }
+
   const { error } = await supabase
     .from("research_runs")
     .update({
@@ -72,6 +80,10 @@ export async function updateRunStep(
 }
 
 async function refreshRunProgress(supabase: SupabaseClient, runId: string) {
+  if (!runId) {
+    throw new Error("Cannot refresh research run progress without a run id.");
+  }
+
   const { data, error } = await supabase
     .from("research_tasks")
     .select("status,error_message")
@@ -112,5 +124,11 @@ async function refreshRunProgress(supabase: SupabaseClient, runId: string) {
 
   if (runError) {
     throw new Error(`Could not update run progress ${runId}: ${runError.message}`);
+  }
+}
+
+function assertClaimedTask(task: ResearchTaskRow) {
+  if (!task.id || !task.run_id) {
+    throw new Error("Cannot update research task status without task and run ids.");
   }
 }

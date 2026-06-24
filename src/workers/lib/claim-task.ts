@@ -23,5 +23,22 @@ export async function claimNextResearchTask(
     throw new Error(`Could not claim research task: ${error.message}`);
   }
 
-  return data ? (data as ResearchTaskRow) : null;
+  if (!data || !isClaimedTask(data)) {
+    return null;
+  }
+
+  return data;
+}
+
+function isClaimedTask(data: unknown): data is ResearchTaskRow {
+  return (
+    typeof data === "object" &&
+    data !== null &&
+    "id" in data &&
+    typeof data.id === "string" &&
+    data.id.length > 0 &&
+    "task_type" in data &&
+    typeof data.task_type === "string" &&
+    data.task_type.length > 0
+  );
 }

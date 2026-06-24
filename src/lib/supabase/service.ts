@@ -6,7 +6,12 @@ export function createServiceRoleClient() {
 
   if (!url || !serviceRoleKey) {
     throw new Error(
-      "Supabase worker access is not configured. Add SUPABASE_URL or NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+      [
+        "Supabase worker access is not configured.",
+        `Supabase URL: ${url ? "found" : "missing"}.`,
+        `SUPABASE_SERVICE_ROLE_KEY: ${serviceRoleKey ? "found" : "missing"}.`,
+        "The worker cannot use NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY because task claiming and cross-user background writes require the Supabase service_role key.",
+      ].join(" "),
     );
   }
 

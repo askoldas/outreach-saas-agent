@@ -218,6 +218,16 @@ async function saveLeadContactRoutes(
     throw new Error(`Could not update lead contactability: ${updateError.message}`);
   }
 
+  const { error: statusError } = await supabase
+    .from("leads")
+    .update({ status: "needs_review" })
+    .eq("id", leadDatabaseId)
+    .eq("status", "researching");
+
+  if (statusError) {
+    throw new Error(`Could not return researched lead to review: ${statusError.message}`);
+  }
+
   const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
     {
       confidence: confirmedRouteCount > 0 ? "medium" : "low",

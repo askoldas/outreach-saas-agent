@@ -1,4 +1,4 @@
-import { requireOpenRouterConfig } from "./config";
+import { requireOpenRouterConfig } from "./config.ts";
 
 const openRouterChatCompletionsEndpoint = "https://openrouter.ai/api/v1/chat/completions";
 const openRouterEndpointPath = "/api/v1/chat/completions";

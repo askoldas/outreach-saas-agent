@@ -1,4 +1,5 @@
 import type {
+  Confidence,
   DiscoveryReportRejectedResult,
   DiscoveryReportResult,
 } from "@/types/domain";
@@ -8,36 +9,80 @@ export type SearchResultWithQuery = SearchResult & {
   query: string;
 };
 
-type LeadSourceType =
-  | "article"
-  | "company_site"
+export type SourceType =
+  | "article_or_news"
+  | "association"
+  | "company_contact_page"
+  | "company_website"
   | "directory"
-  | "government"
+  | "irrelevant"
+  | "job_posting"
   | "marketplace"
-  | "social"
-  | "unsupported";
+  | "registry"
+  | "social_profile"
+  | "unknown";
+
+export type SourceClassification = {
+  confidence: Confidence;
+  reasons: string[];
+  riskFlags: string[];
+  sourceType: SourceType;
+};
+
+export type ClassifiedSearchResult = SearchResultWithQuery & {
+  classification: SourceClassification;
+};
 
 export type ClassifiedSearchResults = {
-  acceptedResults: SearchResultWithQuery[];
+  acceptedResults: ClassifiedSearchResult[];
   duplicateResults: DiscoveryReportRejectedResult[];
   rawResults: DiscoveryReportResult[];
   rejectedResults: DiscoveryReportRejectedResult[];
 };
 
+const directoryHosts = [
+  "clutch.co",
+  "crunchbase.com",
+  "dnb.com",
+  "europages.",
+  "kompass.",
+  "paginebianche.it",
+  "paginegialle.it",
+  "sortlist.",
+  "themanifest.com",
+  "yell.com",
+];
+
+const registryHosts = [
+  "aifa.gov.it",
+  "beta.companieshouse.gov.uk",
+  "business-sweden.com",
+  "companieshouse.gov.uk",
+  "gov.uk",
+  "registroimprese.it",
+  "ufficiocamerale.it",
+];
+
 export function classifySearchResults(
   results: SearchResultWithQuery[],
 ): ClassifiedSearchResults {
-  const acceptedResults: SearchResultWithQuery[] = [];
+  const acceptedResults: ClassifiedSearchResult[] = [];
   const duplicateResults: DiscoveryReportRejectedResult[] = [];
   const rejectedResults: DiscoveryReportRejectedResult[] = [];
   const seenDomains = new Set<string>();
   const seenUrls = new Set<string>();
 
   for (const result of results) {
-    const rejectionReason = getDeterministicRejectionReason(result);
+    const classification = classifySearchResult(result);
+    const classifiedResult = { ...result, classification };
 
-    if (rejectionReason) {
-      rejectedResults.push(toRejectedResult(result, rejectionReason));
+    if (!isPotentialLeadSource(classification)) {
+      rejectedResults.push(
+        toRejectedResult(
+          result,
+          [...classification.reasons, ...classification.riskFlags].join("; "),
+        ),
+      );
       continue;
     }
 
@@ -60,7 +105,7 @@ export function classifySearchResults(
       seenDomains.add(domainKey);
     }
 
-    acceptedResults.push(result);
+    acceptedResults.push(classifiedResult);
   }
 
   return {
@@ -75,85 +120,127 @@ export function classifySearchResults(
   };
 }
 
-function getDeterministicRejectionReason(result: SearchResultWithQuery) {
-  const haystack = `${result.title} ${result.url}`.toLowerCase();
-  const sourceType = classifyLeadSource(result);
+export function classifySearchResult(result: SearchResultWithQuery): SourceClassification {
+  const hostname = getHostname(result.url);
+  const path = getPathname(result.url);
+  const haystack = `${result.title} ${result.url} ${result.content}`.toLowerCase();
+  const reasons: string[] = [];
+  const riskFlags: string[] = [];
 
   if (!isHttpUrl(result.url)) {
-    return "Unsupported URL";
-  }
-
-  if (sourceType !== "company_site") {
-    return `Not a company website (${sourceType})`;
+    return {
+      confidence: "high",
+      reasons: ["URL is not an HTTP website"],
+      riskFlags: ["unsupported_url"],
+      sourceType: "irrelevant",
+    };
   }
 
   if (haystack.includes(".pdf")) {
-    return "PDF result, not a company page";
+    return {
+      confidence: "high",
+      reasons: ["PDF result rather than a company web page"],
+      riskFlags: ["pdf"],
+      sourceType: "irrelevant",
+    };
   }
 
-  if (/\/(blog|news|press|careers|jobs?|lavora-con-noi)\b/.test(haystack)) {
-    return "Editorial or jobs page";
+  if (isSocialHost(hostname)) {
+    return {
+      confidence: "high",
+      reasons: ["Social profile, not a company website"],
+      riskFlags: ["social_profile"],
+      sourceType: "social_profile",
+    };
   }
 
-  if (/(facebook|instagram|linkedin|youtube|x\.com|twitter)\.com/.test(haystack)) {
-    return "Social media page";
+  if (isJobPage(haystack, path)) {
+    return {
+      confidence: "high",
+      reasons: ["Job or career page"],
+      riskFlags: ["job_posting"],
+      sourceType: "job_posting",
+    };
   }
 
-  return "";
+  if (isMarketplace(hostname, haystack)) {
+    reasons.push("Marketplace or ecommerce platform");
+    return { confidence: "medium", reasons, riskFlags, sourceType: "marketplace" };
+  }
+
+  if (matchesHost(hostname, registryHosts) || hostname.endsWith(".gov")) {
+    reasons.push("Registry or government source");
+    return { confidence: "medium", reasons, riskFlags, sourceType: "registry" };
+  }
+
+  if (matchesHost(hostname, directoryHosts)) {
+    reasons.push("Business directory source");
+    return { confidence: "medium", reasons, riskFlags, sourceType: "directory" };
+  }
+
+  if (isAssociation(haystack, hostname)) {
+    reasons.push("Association or member-list source");
+    return { confidence: "medium", reasons, riskFlags, sourceType: "association" };
+  }
+
+  if (isArticleOrNews(haystack, hostname, path)) {
+    reasons.push("Editorial or news source");
+    return { confidence: "medium", reasons, riskFlags, sourceType: "article_or_news" };
+  }
+
+  if (isContactPage(path, haystack)) {
+    reasons.push("Company contact page");
+    return {
+      confidence: "medium",
+      reasons,
+      riskFlags,
+      sourceType: "company_contact_page",
+    };
+  }
+
+  if (hostname) {
+    reasons.push("Likely company website");
+    return { confidence: "medium", reasons, riskFlags, sourceType: "company_website" };
+  }
+
+  reasons.push("Could not confidently classify source");
+  riskFlags.push("unknown_source_type");
+  return { confidence: "low", reasons, riskFlags, sourceType: "unknown" };
 }
 
-function classifyLeadSource(result: SearchResultWithQuery): LeadSourceType {
-  const hostname = getHostname(result.url);
-  const haystack = `${result.title} ${result.url}`.toLowerCase();
+function isPotentialLeadSource(classification: SourceClassification) {
+  return (
+    classification.sourceType === "company_website" ||
+    classification.sourceType === "company_contact_page" ||
+    classification.sourceType === "association" ||
+    classification.sourceType === "directory"
+  );
+}
 
-  if (!hostname) {
-    return "unsupported";
-  }
-
-  if (/(facebook|instagram|linkedin|youtube|x\.com|twitter)\.com$/.test(hostname)) {
-    return "social";
-  }
-
-  if (
-    hostname.endsWith(".gov.it") ||
-    hostname.endsWith(".gouv.fr") ||
-    hostname.endsWith(".gov") ||
-    hostname.includes("aifa.gov.it") ||
-    hostname.includes("agenziafarmaco.gov.it")
-  ) {
-    return "government";
-  }
-
-  if (
-    [
-      "paginebianche.it",
-      "paginegialle.it",
-      "ufficiocamerale.it",
-      "bancomail.it",
-      "europages.",
-      "kompass.",
-      "registroimprese.it",
-      "informazione-aziende.it",
-      "reportaziende.it",
-    ].some((domain) => hostname.includes(domain))
-  ) {
-    return "directory";
-  }
-
-  if (
-    /(pharmaretail|pharmacy-scanner|farmakom|unife|quotidianosanita|healthdesk|news|blog|magazine)/.test(
+function isArticleOrNews(haystack: string, hostname: string, path: string) {
+  return (
+    /(news|notizie|article|artikel|press|blog|magazine|journal|insight|report)/.test(
       hostname,
     ) ||
-    /\b(news|notizie|articolo|trattative|intervista|report|studio)\b/.test(haystack)
-  ) {
-    return "article";
-  }
+    /\/(news|notizie|article|press|blog|magazine|insights?|reports?)\b/.test(path) ||
+    /\b(article|interview|press release|market report|case study)\b/.test(haystack)
+  );
+}
 
-  if (/(amazon|ebay|alibaba|subito|marketplace)/.test(hostname)) {
-    return "marketplace";
-  }
+function isAssociation(haystack: string, hostname: string) {
+  return (
+    /(association|assoc|alliance|federation|chamber|members|member-list)/.test(
+      haystack,
+    ) || /(association|federation|chamber|alliance)/.test(hostname)
+  );
+}
 
-  return "company_site";
+function isContactPage(path: string, haystack: string) {
+  return (
+    /\/(contact|contacts|contact-us|contatti|kontakt|kontakt-os|about|about-us)\b/.test(
+      path,
+    ) || /\b(contact us|contatti|kontakt|company profile)\b/.test(haystack)
+  );
 }
 
 function isHttpUrl(url: string) {
@@ -163,6 +250,30 @@ function isHttpUrl(url: string) {
   } catch {
     return false;
   }
+}
+
+function isJobPage(haystack: string, path: string) {
+  return (
+    /\/(careers|jobs?|vacancies|recruitment|lavora-con-noi|karriere)\b/.test(path) ||
+    /\b(job opening|career|vacancy|hiring|recruitment)\b/.test(haystack)
+  );
+}
+
+function isMarketplace(hostname: string, haystack: string) {
+  return (
+    /(amazon|ebay|alibaba|etsy|subito|marketplace|shopify|appsource)/.test(hostname) ||
+    /\b(add to cart|marketplace seller|online marketplace)\b/.test(haystack)
+  );
+}
+
+function isSocialHost(hostname: string) {
+  return /(facebook|instagram|linkedin|youtube|x\.com|twitter|tiktok)\.com$/.test(
+    hostname,
+  );
+}
+
+function matchesHost(hostname: string, patterns: string[]) {
+  return patterns.some((pattern) => hostname.includes(pattern));
 }
 
 function normalizeUrlKey(url: string) {
@@ -187,6 +298,14 @@ function normalizeDomainKey(url: string) {
 function getHostname(url: string) {
   try {
     return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function getPathname(url: string) {
+  try {
+    return new URL(url).pathname.toLowerCase();
   } catch {
     return "";
   }

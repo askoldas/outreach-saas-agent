@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { OfferType } from "../../types/domain.ts";
 import { buildCampaignSearchQueries } from "../../lib/discovery/query-builder.ts";
 import { classifySearchResults } from "../../lib/discovery/result-classifier.ts";
+import type { ClassifiedSearchResult } from "../../lib/discovery/result-classifier.ts";
 import { calculateDiscoveryProgress, buildDiscoveryReport } from "../../lib/discovery/report.ts";
-import { searchWeb, type SearchResult } from "../../lib/providers/tavily.ts";
+import { searchWeb } from "../../lib/providers/tavily.ts";
 import { updateRunStep } from "../lib/task-status.ts";
 import type { ResearchTaskRow } from "../lib/claim-task.ts";
 
@@ -15,6 +17,7 @@ type CampaignRow = {
   language: string;
   name: string;
   objective: string;
+  offer_external_id: string;
   strategy_criteria: string[];
   strategy_exclusions: string[];
   strategy_limitations: string[];
@@ -24,10 +27,22 @@ type CampaignRow = {
   target_segments: string[];
 };
 
-type SavedLead = {
-  databaseId: string;
-  externalId: string;
-  result: SearchResult & { query: string };
+type OfferRow = {
+  buyer_types: string[];
+  capabilities: string[];
+  differentiators: string[];
+  external_id: string;
+  keywords: string[];
+  limitations: string[];
+  name: string;
+  problems: string[];
+  summary: string;
+  type: string;
+};
+
+type SavedLeadSource = {
+  id: string;
+  url: string;
 };
 
 export async function processSearchWebTask(
@@ -36,6 +51,7 @@ export async function processSearchWebTask(
 ) {
   await updateRunStep(supabase, task.run_id, "Loading campaign", 5);
   const campaign = await loadCampaign(supabase, task);
+  const offer = await loadOffer(supabase, task.workspace_id, campaign.offer_external_id);
   const existingCount = await countCampaignLeads(supabase, task);
   const desiredLeadCount = campaign.desired_lead_count ?? getPayloadDesiredLeadCount(task);
   const remainingLeadSlots = Math.max(desiredLeadCount - existingCount.total, 0);
@@ -67,7 +83,7 @@ export async function processSearchWebTask(
   }
 
   await updateRunStep(supabase, task.run_id, "Searching Tavily", 15);
-  const queries = buildCampaignSearchQueries(toCampaignLike(campaign, desiredLeadCount));
+  const queries = buildCampaignSearchQueries(toCampaignLike(campaign, offer, desiredLeadCount));
   const resultsByQuery = await Promise.all(
     queries.map(async (query) =>
       (await searchWeb(query)).map((result) => ({
@@ -79,7 +95,7 @@ export async function processSearchWebTask(
   const searchReport = classifySearchResults(resultsByQuery.flat());
 
   await updateRunStep(supabase, task.run_id, "Saving lead sources", 45);
-  await saveLeadSources(supabase, task, [
+  const savedSources = await saveLeadSources(supabase, task, [
     ...searchReport.acceptedResults.map((result) => ({
       classification: "accepted",
       rejectionReason: "",
@@ -107,20 +123,22 @@ export async function processSearchWebTask(
       url: result.url,
     }));
 
-  await updateRunStep(supabase, task.run_id, "Saving leads", 70);
-  const savedLeads = await saveDiscoveredLeads(supabase, task, campaign, acceptedResults);
+  await updateRunStep(supabase, task.run_id, "Queueing lead evaluation", 70);
+  const evaluationTaskCount = await enqueueLeadEvaluationTasks(
+    supabase,
+    task,
+    acceptedResults,
+    savedSources,
+  );
   const latestCounts = await countCampaignLeads(supabase, task);
   const report = buildDiscoveryReport({
-    aiQualificationFailures: savedLeads.map((lead) => ({
-      error: "AI qualification is queued for a future worker task. Baseline qualification was saved.",
-      leadId: lead.externalId,
-    })),
+    aiQualificationFailures: [],
     aiQualificationSuccesses: [],
     contactDiscovery: [],
     contactRoutesFound: 0,
     duplicateResults: searchReport.duplicateResults,
-    finalReviewableLeads: savedLeads.map((lead) => lead.externalId),
-    leadsSavedBeforeAiQualification: savedLeads.map((lead) => lead.externalId),
+    finalReviewableLeads: [],
+    leadsSavedBeforeAiQualification: [],
     queriesExecuted: queries,
     rawTavilyResults: searchReport.rawResults,
     rejectedResults: searchReport.rejectedResults,
@@ -137,9 +155,9 @@ export async function processSearchWebTask(
   return {
     acceptedResultCount: searchReport.acceptedResults.length,
     duplicateResultCount: searchReport.duplicateResults.length,
+    evaluationTaskCount,
     queryCount: queries.length,
     rejectedResultCount: searchReport.rejectedResults.length,
-    savedLeadCount: savedLeads.length,
     targetSkippedCount: targetSkippedResults.length,
   };
 }
@@ -163,6 +181,7 @@ async function loadCampaign(supabase: SupabaseClient, task: ResearchTaskRow) {
         strategy_limitations,
         desired_lead_count,
         industry_terms,
+        offer_external_id,
         awaiting_review
       `,
     )
@@ -175,6 +194,38 @@ async function loadCampaign(supabase: SupabaseClient, task: ResearchTaskRow) {
   }
 
   return data as CampaignRow;
+}
+
+async function loadOffer(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  offerExternalId: string,
+) {
+  const { data, error } = await supabase
+    .from("offers")
+    .select(
+      `
+        external_id,
+        name,
+        type,
+        summary,
+        problems,
+        capabilities,
+        buyer_types,
+        differentiators,
+        limitations,
+        keywords
+      `,
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", offerExternalId)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Could not load offer for search context: ${error.message}`);
+  }
+
+  return data ? (data as OfferRow) : null;
 }
 
 async function countCampaignLeads(supabase: SupabaseClient, task: ResearchTaskRow) {
@@ -210,13 +261,13 @@ async function saveLeadSources(
       url: string;
     };
   }>,
-) {
+): Promise<SavedLeadSource[]> {
   if (sources.length === 0) {
-    return;
+    return [];
   }
 
   const uniqueSources = dedupeLeadSources(sources);
-  const { error } = await supabase.from("lead_sources").upsert(
+  const { data, error } = await supabase.from("lead_sources").upsert(
     uniqueSources.map((source) => ({
       campaign_id: task.campaign_id,
       classification: source.classification,
@@ -232,11 +283,13 @@ async function saveLeadSources(
       workspace_id: task.workspace_id,
     })),
     { onConflict: "workspace_id,campaign_id,url" },
-  );
+  ).select("id,url");
 
   if (error) {
     throw new Error(`Could not save lead sources: ${error.message}`);
   }
+
+  return (data ?? []) as SavedLeadSource[];
 }
 
 function dedupeLeadSources(
@@ -280,140 +333,45 @@ function dedupeLeadSources(
   return [...byUrl.values()];
 }
 
-async function saveDiscoveredLeads(
+async function enqueueLeadEvaluationTasks(
   supabase: SupabaseClient,
   task: ResearchTaskRow,
-  campaign: CampaignRow,
-  results: Array<SearchResult & { query: string }>,
-): Promise<SavedLead[]> {
+  results: ClassifiedSearchResult[],
+  savedSources: SavedLeadSource[],
+) {
   if (results.length === 0) {
-    return [];
+    return 0;
   }
 
-  const uniqueResults = dedupeResults(results);
-  const leadRows = uniqueResults.map((result) => ({
+  const sourceIdByUrl = new Map(
+    savedSources.map((source) => [normalizeUrlKey(source.url), source.id]),
+  );
+  const taskRows = dedupeResults(results).map((result) => ({
     campaign_id: task.campaign_id,
-    city: "Unknown",
-    company: normalizeCompanyName(result.title),
-    company_type: "Discovered company",
-    confidence: "low",
-    contactability: "low",
-    country: campaign.geography,
-    description: result.content || result.title,
-    estimated_size: "Unknown",
-    external_id: createDiscoveredLeadId(result.url, result.title),
-    fit_score: scoreToFit(result.score),
-    industry: "Baseline web discovery",
-    qualification_error: "AI qualification is queued for a future worker task.",
-    qualification_status: "non_ai_manual_review",
-    status: "needs_review",
-    summary:
-      result.content ||
-      `Discovered from Tavily result "${result.title}". Review the website before outreach.`,
-    website: getOrigin(result.url),
+    max_attempts: 3,
+    payload_json: {
+      source: {
+        classification: result.classification ?? null,
+        content: result.content,
+        query: result.query,
+        score: result.score,
+        sourceId: sourceIdByUrl.get(normalizeUrlKey(result.url)),
+        title: result.title,
+        url: result.url,
+      },
+    },
+    run_id: task.run_id,
+    status: "pending",
+    task_type: "evaluate_lead",
     workspace_id: task.workspace_id,
   }));
-
-  const { data, error } = await supabase
-    .from("leads")
-    .upsert(leadRows, { onConflict: "workspace_id,external_id" })
-    .select("id,external_id");
+  const { error } = await supabase.from("research_tasks").insert(taskRows);
 
   if (error) {
-    throw new Error(`Could not save discovered leads: ${error.message}`);
+    throw new Error(`Could not enqueue lead evaluation tasks: ${error.message}`);
   }
 
-  const persisted = (data ?? []) as Array<{ external_id: string; id: string }>;
-  const idByExternalId = new Map(persisted.map((lead) => [lead.external_id, lead.id]));
-  const savedLeads = uniqueResults.flatMap((result) => {
-    const externalId = createDiscoveredLeadId(result.url, result.title);
-    const databaseId = idByExternalId.get(externalId);
-
-    return databaseId ? [{ databaseId, externalId, result }] : [];
-  });
-
-  await saveEvidenceAndQualification(supabase, savedLeads);
-
-  return savedLeads;
-}
-
-async function saveEvidenceAndQualification(
-  supabase: SupabaseClient,
-  savedLeads: SavedLead[],
-) {
-  if (savedLeads.length === 0) {
-    return;
-  }
-
-  const evidenceRows = savedLeads.map((lead, index) => ({
-    confidence: "medium",
-    external_id: "search-web-worker",
-    kind: "fact",
-    lead_id: lead.databaseId,
-    retrieved_at: new Date().toISOString().slice(0, 10),
-    sort_order: index,
-    source_label: lead.result.title,
-    source_type: "Tavily search result",
-    source_url: lead.result.url,
-    text:
-      lead.result.content ||
-      `Tavily returned ${lead.result.title} for campaign query ${lead.result.query}.`,
-  }));
-  const dimensionRows = savedLeads.flatMap((lead) =>
-    [
-      {
-        confidence: "low",
-        explanation:
-          "Saved from deterministic Tavily discovery. AI qualification is handled by a later worker task.",
-        label: "Campaign fit",
-        score: scoreToFit(lead.result.score),
-      },
-      {
-        confidence: "medium",
-        explanation: "The lead has a stored public search-result source.",
-        label: "Evidence quality",
-        score: 45,
-      },
-      {
-        confidence: "low",
-        explanation: "Contact discovery has not run yet.",
-        label: "Contactability",
-        score: 20,
-      },
-    ].map((dimension, index) => ({
-      ...dimension,
-      lead_id: lead.databaseId,
-      sort_order: index,
-    })),
-  );
-
-  const { error: evidenceError } = await supabase
-    .from("lead_evidence_claims")
-    .upsert(evidenceRows, { onConflict: "lead_id,external_id" });
-
-  if (evidenceError) {
-    throw new Error(`Could not save lead evidence: ${evidenceError.message}`);
-  }
-
-  const { error: deleteError } = await supabase
-    .from("lead_qualification_dimensions")
-    .delete()
-    .in(
-      "lead_id",
-      savedLeads.map((lead) => lead.databaseId),
-    );
-
-  if (deleteError) {
-    throw new Error(`Could not refresh lead qualification: ${deleteError.message}`);
-  }
-
-  const { error: dimensionError } = await supabase
-    .from("lead_qualification_dimensions")
-    .insert(dimensionRows);
-
-  if (dimensionError) {
-    throw new Error(`Could not save lead qualification: ${dimensionError.message}`);
-  }
+  return taskRows.length;
 }
 
 async function finishCampaignRun(
@@ -448,7 +406,11 @@ async function finishCampaignRun(
   }
 }
 
-function toCampaignLike(campaign: CampaignRow, desiredLeadCount: number) {
+function toCampaignLike(
+  campaign: CampaignRow,
+  offer: OfferRow | null,
+  desiredLeadCount: number,
+) {
   return {
     awaitingReview: campaign.awaiting_review,
     desiredLeadCount,
@@ -461,6 +423,19 @@ function toCampaignLike(campaign: CampaignRow, desiredLeadCount: number) {
     leadCount: 0,
     name: campaign.name,
     objective: campaign.objective,
+    offer: offer
+      ? {
+          buyerTypes: offer.buyer_types,
+          capabilities: offer.capabilities,
+          differentiators: offer.differentiators,
+          keywords: offer.keywords,
+          limitations: offer.limitations,
+          name: offer.name,
+          problems: offer.problems,
+          summary: offer.summary,
+          type: toOfferType(offer.type),
+        }
+      : null,
     offerId: "",
     progress: 0,
     status: "running" as const,
@@ -477,24 +452,19 @@ function toCampaignLike(campaign: CampaignRow, desiredLeadCount: number) {
   };
 }
 
-function dedupeResults(results: Array<SearchResult & { query: string }>) {
-  const byExternalId = new Map<string, SearchResult & { query: string }>();
+function dedupeResults(results: ClassifiedSearchResult[]) {
+  const byUrl = new Map<string, ClassifiedSearchResult>();
 
   for (const result of results) {
-    const externalId = createDiscoveredLeadId(result.url, result.title);
-    const existing = byExternalId.get(externalId);
+    const urlKey = normalizeUrlKey(result.url);
+    const existing = byUrl.get(urlKey);
 
     if (!existing || (result.score ?? 0) > (existing.score ?? 0)) {
-      byExternalId.set(externalId, result);
+      byUrl.set(urlKey, result);
     }
   }
 
-  return [...byExternalId.values()];
-}
-
-function createDiscoveredLeadId(url: string, title: string) {
-  const source = getOrigin(url).replace(/^https?:\/\//, "") || title;
-  return `web-${slugify(source)}`.slice(0, 80).replace(/-+$/g, "");
+  return [...byUrl.values()];
 }
 
 function getPayloadDesiredLeadCount(task: ResearchTaskRow) {
@@ -503,16 +473,17 @@ function getPayloadDesiredLeadCount(task: ResearchTaskRow) {
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 25;
 }
 
-function getOrigin(url: string) {
-  try {
-    return new URL(url).origin;
-  } catch {
-    return url;
-  }
-}
-
-function normalizeCompanyName(companyName: string) {
-  return companyName.trim().slice(0, 180) || "Unknown company";
+function toOfferType(type: string): OfferType {
+  return (
+    type === "product" ||
+    type === "service" ||
+    type === "software" ||
+    type === "distribution" ||
+    type === "manufacturing" ||
+    type === "partnership"
+      ? type
+      : "service"
+  );
 }
 
 function normalizeUrlKey(url: string) {
@@ -524,19 +495,4 @@ function normalizeUrlKey(url: string) {
   } catch {
     return url.trim().toLowerCase();
   }
-}
-
-function scoreToFit(score: number | null | undefined) {
-  if (typeof score !== "number") {
-    return 45;
-  }
-
-  return Math.max(35, Math.min(70, Math.round(score * 100)));
-}
-
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }

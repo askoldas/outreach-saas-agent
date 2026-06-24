@@ -5,6 +5,7 @@ import { claimNextResearchTask } from "./lib/claim-task.ts";
 import { getWorkerConfig } from "./lib/worker-config.ts";
 import { sleep } from "./lib/sleep.ts";
 import { completeTask, failOrRetryTask } from "./lib/task-status.ts";
+import { processEvaluateLeadTask } from "./tasks/evaluate-lead.ts";
 import { processSearchWebTask } from "./tasks/search-web.ts";
 
 loadLocalEnv();
@@ -59,6 +60,10 @@ async function processTask(task: Awaited<ReturnType<typeof claimNextResearchTask
 
   if (task.task_type === "search_web") {
     return processSearchWebTask(supabase, task);
+  }
+
+  if (task.task_type === "evaluate_lead") {
+    return processEvaluateLeadTask(supabase, task);
   }
 
   throw new Error(`Unsupported research task type: ${task.task_type}`);

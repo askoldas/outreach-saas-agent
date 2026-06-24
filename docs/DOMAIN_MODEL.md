@@ -307,6 +307,15 @@ Task statuses:
 
 The actual durable-job platform may keep its own execution records, but application-level checkpoints remain in the product database.
 
+Current implementation note:
+
+- `search_web` generates campaign/offer-aware queries, saves `lead_sources`, and
+  enqueues lead evaluation tasks;
+- `evaluate_lead` calls OpenRouter with a versioned prompt, validates strict
+  JSON, logs `ai_generations`, and creates or updates leads for qualified or
+  needs-review candidates;
+- disqualified candidates may remain only as sources and AI generation logs.
+
 ## 8. Lead and company identity
 
 ### Lead

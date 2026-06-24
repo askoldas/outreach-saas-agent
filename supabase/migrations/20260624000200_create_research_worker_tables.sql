@@ -83,6 +83,7 @@ create table if not exists public.ai_generations (
   provider text not null,
   model text not null,
   task_name text not null,
+  prompt_version text not null default 'unversioned',
   prompt_json jsonb not null default '{}'::jsonb,
   output_text text,
   output_json jsonb,

@@ -280,28 +280,76 @@ The project currently needs a credible product interface and workflow prototype 
 
 ## D-013: Durable job platform
 
-**Status:** proposed  
-**Date:** 2026-06-17
+**Status:** accepted  
+**Date:** 2026-06-24
 
-### Proposal
+### Decision
 
-Evaluate Trigger.dev and Inngest for the first durable research worker. A direct queue and worker implementation remains an alternative.
+Use a direct Supabase/PostgreSQL-backed queue for the first durable research worker.
 
-### Required capabilities
+The web application creates `research_runs` and `research_tasks` inside Supabase.
+Campaign discovery returns quickly after enqueueing work. A separate worker process
+deployed from the same repository claims tasks through a Postgres RPC using row
+locking and `FOR UPDATE SKIP LOCKED`.
 
-- long-running step execution;
-- retries and backoff;
-- idempotency support;
-- cancellation;
-- concurrency controls;
-- observability;
-- local development;
-- separate worker deployment or equivalent durable execution;
-- acceptable cost and vendor terms.
+The first worker deployment target is Railway using the same repo and the start
+command `npm run worker`. The dashboard/frontend remains deployable on Vercel.
 
-### Acceptance condition
+The first production task type is `search_web`, which runs Tavily discovery
+outside the HTTP/server-action path and records raw sources, accepted leads,
+diagnostics, and baseline non-AI qualification. AI qualification, contact
+enrichment, and outreach drafting become later worker task types.
 
-Create a focused decision before Milestone 5 implementation. Do not select only because a provider has a convenient demo.
+### Rationale
+
+The project now has real long-running discovery work and provider failure modes.
+Keeping Tavily, future AI qualification, and future enrichment inside a server
+action creates fragile request lifetimes and poor retry behavior.
+
+A direct Supabase queue is the smallest durable implementation that fits the
+current stack:
+
+- Supabase is already the system of record;
+- no extra orchestration vendor is required before product validation;
+- row-level security can remain the user-facing access boundary;
+- service-role access stays isolated to trusted worker/server code;
+- Railway can run the same repository as a separate worker service;
+- the schema is inspectable and debuggable during early product iteration.
+
+Trigger.dev, Inngest, or another job platform may be reconsidered later if the
+direct queue becomes too costly to operate or lacks required observability,
+scheduling, fan-out, cancellation, or workflow-versioning features.
+
+### Implementation shape
+
+- `research_runs` stores user-visible run status, progress, current step, and
+  final error state.
+- `research_tasks` stores retryable task units, attempts, locks, payloads,
+  results, and errors.
+- `lead_sources` stores raw and classified Tavily results before or alongside
+  lead creation.
+- `ai_generations` stores future prompt/model/output logs.
+- `claim_next_research_task(worker_id text)` is the claim boundary for workers.
+- `SUPABASE_SERVICE_ROLE_KEY` is required only in server/worker environments and
+  must never be exposed as a `NEXT_PUBLIC_*` variable.
+
+### Consequences
+
+- discovery must not perform Tavily work inside normal request-response handlers;
+- server actions enqueue work and return a run id;
+- worker tasks must be retry-safe and tolerate duplicate provider results;
+- progress endpoints read `research_runs` and `research_tasks`;
+- local development uses two terminals: `npm run dev` and `npm run worker`;
+- Railway worker deployment uses the same repository with `npm run worker`;
+- introducing another queue/job provider now requires a superseding decision.
+
+### Relationship to D-017
+
+D-017 remains correct for the MVP interface: the repository is still a single
+root Next.js app, not a monorepo. This decision activates the later extraction
+path allowed by D-017 by adding a separately deployable worker command inside
+the same repo, because persistence, provider adapters, and durable execution now
+create real runtime pressure.
 
 ---
 

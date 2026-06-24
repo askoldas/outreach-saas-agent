@@ -4,7 +4,6 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   discoverCampaignLeadsAction,
-  getCampaignDiscoveryProgressAction,
   updateCampaignStatusAction,
 } from "@/server/campaigns/actions";
 import type { CampaignStatus, DiscoveryProgress, DiscoveryReport } from "@/types/domain";
@@ -14,19 +13,53 @@ import styles from "@/features/shared/Feature.module.css";
 
 export function CampaignControls({
   campaignId,
+  desiredLeadCount,
+  initialLeadCount,
   status,
-}: Readonly<{ campaignId: string; status: CampaignStatus }>) {
+}: Readonly<{
+  campaignId: string;
+  desiredLeadCount: number;
+  initialLeadCount: number;
+  status: CampaignStatus;
+}>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [isDiscovering, setIsDiscovering] = useState(false);
   const [message, setMessage] = useState("");
   const [currentStatus, setCurrentStatus] = useState(status);
   const [runReport, setRunReport] = useState<DiscoveryReport | null>(null);
-  const [progress, setProgress] = useState<DiscoveryProgress | null>(null);
+  const [progress, setProgress] = useState<DiscoveryProgress | null>({
+    contactEnrichedCount: 0,
+    desiredLeadCount,
+    leadCount: initialLeadCount,
+    qualificationAttemptedCount: 0,
+    qualifiedCount: 0,
+  });
+  const [progressError, setProgressError] = useState("");
   const isBusy = isPending || isDiscovering;
   const finalReviewedCount = runReport
     ? runReport.aiQualificationSuccesses.length + runReport.aiQualificationFailures.length
     : 0;
+
+  async function refreshProgress() {
+    const response = await fetch(
+      `/api/campaigns/${encodeURIComponent(campaignId)}/discovery-progress`,
+      { cache: "no-store" },
+    );
+
+    if (!response.ok) {
+      const payload = (await response.json().catch(() => ({}))) as { error?: string };
+      throw new Error(
+        payload.error ?? `Progress request failed with ${response.status}`,
+      );
+    }
+
+    const nextProgress = (await response.json()) as DiscoveryProgress;
+    setProgress(nextProgress);
+    setProgressError("");
+
+    return nextProgress;
+  }
 
   useEffect(() => {
     if (!isDiscovering) {
@@ -37,13 +70,31 @@ export function CampaignControls({
 
     async function refreshProgress() {
       try {
-        const nextProgress = await getCampaignDiscoveryProgressAction(campaignId);
+        const nextProgress = await fetch(
+          `/api/campaigns/${encodeURIComponent(campaignId)}/discovery-progress`,
+          { cache: "no-store" },
+        );
 
         if (!cancelled) {
-          setProgress(nextProgress);
+          if (!nextProgress.ok) {
+            const payload = (await nextProgress.json().catch(() => ({}))) as {
+              error?: string;
+            };
+
+            throw new Error(
+              payload.error ?? `Progress request failed with ${nextProgress.status}`,
+            );
+          }
+
+          setProgress((await nextProgress.json()) as DiscoveryProgress);
+          setProgressError("");
         }
-      } catch {
-        // Keep the visible running state even if one polling request fails.
+      } catch (error) {
+        if (!cancelled) {
+          setProgressError(
+            error instanceof Error ? error.message : "Could not refresh progress",
+          );
+        }
       }
     }
 
@@ -80,15 +131,40 @@ export function CampaignControls({
   async function discoverLeads() {
     setIsDiscovering(true);
     setRunReport(null);
-    setProgress(null);
+    setProgress({
+      contactEnrichedCount: 0,
+      desiredLeadCount,
+      leadCount: initialLeadCount,
+      qualificationAttemptedCount: 0,
+      qualifiedCount: 0,
+    });
+    setProgressError("");
     setMessage("Discovery running. Searching, saving, qualifying, and checking contacts...");
 
     try {
+      try {
+        await refreshProgress();
+      } catch (error) {
+        setProgressError(
+          error instanceof Error ? error.message : "Could not refresh progress",
+        );
+      }
+
       const result = await discoverCampaignLeadsAction(campaignId);
-      const finalProgress = await getCampaignDiscoveryProgressAction(campaignId);
+      let finalProgress: DiscoveryProgress | null = null;
+
+      try {
+        finalProgress = await refreshProgress();
+      } catch (error) {
+        setProgressError(
+          error instanceof Error ? error.message : "Could not refresh progress",
+        );
+      }
 
       setRunReport(result.report);
-      setProgress(finalProgress);
+      if (finalProgress) {
+        setProgress(finalProgress);
+      }
       setMessage(result.message);
       startTransition(() => {
         router.refresh();
@@ -119,6 +195,7 @@ export function CampaignControls({
       <Badge tone="accent">
         {isBusy ? message || "Working..." : message || `Status: ${currentStatus}`}
       </Badge>
+      {progressError ? <Badge tone="warning">Progress polling: {progressError}</Badge> : null}
       {isDiscovering || runReport ? (
         <div className={styles.stack}>
           <ProgressRow
@@ -131,7 +208,7 @@ export function CampaignControls({
             total={
               progress?.desiredLeadCount ??
               runReport?.leadsSavedBeforeAiQualification.length ??
-              1
+              desiredLeadCount
             }
             pending={isDiscovering}
           />
@@ -144,7 +221,7 @@ export function CampaignControls({
             total={
               progress?.leadCount ??
               runReport?.leadsSavedBeforeAiQualification.length ??
-              1
+              initialLeadCount
             }
             pending={isDiscovering}
           />
@@ -158,7 +235,7 @@ export function CampaignControls({
             total={
               progress?.leadCount ??
               runReport?.leadsSavedBeforeAiQualification.length ??
-              1
+              initialLeadCount
             }
             pending={isDiscovering}
           />

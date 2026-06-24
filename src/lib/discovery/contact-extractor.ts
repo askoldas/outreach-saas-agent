@@ -32,11 +32,14 @@ export async function discoverContactRoutes(
   );
 
   const routes = extractContactRoutes(snippets.join("\n"), origin);
+  const confirmedRouteCount = routes.filter(
+    (route) => route.verification === "source_confirmed",
+  ).length;
 
   return {
     report: {
       attempts,
-      routesFound: routes.length,
+      routesFound: confirmedRouteCount,
     },
     routes,
   };
@@ -107,13 +110,17 @@ function extractContactRoutes(text: string, source: string): ContactRoute[] {
     });
   }
 
-  routes.set(`website:${source}`, {
-    source,
-    suggestedRole: "Contact page review",
-    type: "Website",
-    value: `${source}/contatti`,
-    verification: "unverified",
-  });
+  const hasFetchedContactPage = text.length > 0;
+
+  if (hasFetchedContactPage) {
+    routes.set(`website:${source}`, {
+      source,
+      suggestedRole: "Public website contact page to review",
+      type: "Website",
+      value: `${source}/contatti`,
+      verification: "unverified",
+    });
+  }
 
   return [...routes.values()];
 }

@@ -35,20 +35,38 @@ export async function generateText(
 ): Promise<string> {
   const { apiKey, model } = requireOpenRouterConfig();
   const taskName = options.taskName ?? "text generation";
-  const response = await fetch(openRouterChatCompletionsEndpoint, {
-    body: JSON.stringify({
-      messages,
+  let response: Response;
+
+  try {
+    response = await fetch(openRouterChatCompletionsEndpoint, {
+      body: JSON.stringify({
+        messages,
+        model,
+        temperature: 0.2,
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "Outreach SaaS Agent",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    const message = normalizeOpenRouterNetworkError(error);
+
+    logOpenRouterDiagnostics({
+      body: "",
+      message,
       model,
-      temperature: 0.2,
-    }),
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "http://localhost:3000",
-      "X-Title": "Outreach SaaS Agent",
-    },
-    method: "POST",
-  });
+      status: 0,
+      taskName,
+    });
+
+    throw new Error(message);
+  }
 
   if (!response.ok) {
     const errorBody = await readOpenRouterErrorBody(response);
@@ -80,7 +98,22 @@ export async function generateText(
     throw new Error(`OpenRouter returned an empty response for ${taskName}.`);
   }
 
-  const payload = JSON.parse(rawBody) as OpenRouterResponse;
+  let payload: OpenRouterResponse;
+
+  try {
+    payload = JSON.parse(rawBody) as OpenRouterResponse;
+  } catch {
+    logOpenRouterDiagnostics({
+      body: rawBody,
+      message: "OpenRouter returned a non-JSON response body.",
+      model,
+      status: response.status,
+      taskName,
+    });
+
+    throw new Error(`OpenRouter returned a non-JSON response for ${taskName}.`);
+  }
+
   const content = payload.choices?.[0]?.message?.content?.trim();
 
   if (!content) {
@@ -96,6 +129,35 @@ export async function generateText(
   }
 
   return content;
+}
+
+function normalizeOpenRouterNetworkError(error: unknown) {
+  if (error instanceof DOMException && error.name === "TimeoutError") {
+    return "OpenRouter request timed out before returning a response.";
+  }
+
+  if (error instanceof Error) {
+    const cause = getErrorCause(error);
+    const code = getErrorCode(cause) || getErrorCode(error);
+    const detail = code ? ` (${code})` : "";
+
+    return `OpenRouter network request failed before a response was received${detail}: ${error.message}`;
+  }
+
+  return "OpenRouter network request failed before a response was received.";
+}
+
+function getErrorCause(error: Error) {
+  return "cause" in error ? error.cause : undefined;
+}
+
+function getErrorCode(error: unknown) {
+  return typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+    ? error.code
+    : "";
 }
 
 async function readOpenRouterErrorBody(response: Response) {

@@ -8,6 +8,15 @@ export type SearchResultWithQuery = SearchResult & {
   query: string;
 };
 
+type LeadSourceType =
+  | "article"
+  | "company_site"
+  | "directory"
+  | "government"
+  | "marketplace"
+  | "social"
+  | "unsupported";
+
 export type ClassifiedSearchResults = {
   acceptedResults: SearchResultWithQuery[];
   duplicateResults: DiscoveryReportRejectedResult[];
@@ -68,9 +77,14 @@ export function classifySearchResults(
 
 function getDeterministicRejectionReason(result: SearchResultWithQuery) {
   const haystack = `${result.title} ${result.url}`.toLowerCase();
+  const sourceType = classifyLeadSource(result);
 
   if (!isHttpUrl(result.url)) {
     return "Unsupported URL";
+  }
+
+  if (sourceType !== "company_site") {
+    return `Not a company website (${sourceType})`;
   }
 
   if (haystack.includes(".pdf")) {
@@ -86,6 +100,60 @@ function getDeterministicRejectionReason(result: SearchResultWithQuery) {
   }
 
   return "";
+}
+
+function classifyLeadSource(result: SearchResultWithQuery): LeadSourceType {
+  const hostname = getHostname(result.url);
+  const haystack = `${result.title} ${result.url}`.toLowerCase();
+
+  if (!hostname) {
+    return "unsupported";
+  }
+
+  if (/(facebook|instagram|linkedin|youtube|x\.com|twitter)\.com$/.test(hostname)) {
+    return "social";
+  }
+
+  if (
+    hostname.endsWith(".gov.it") ||
+    hostname.endsWith(".gouv.fr") ||
+    hostname.endsWith(".gov") ||
+    hostname.includes("aifa.gov.it") ||
+    hostname.includes("agenziafarmaco.gov.it")
+  ) {
+    return "government";
+  }
+
+  if (
+    [
+      "paginebianche.it",
+      "paginegialle.it",
+      "ufficiocamerale.it",
+      "bancomail.it",
+      "europages.",
+      "kompass.",
+      "registroimprese.it",
+      "informazione-aziende.it",
+      "reportaziende.it",
+    ].some((domain) => hostname.includes(domain))
+  ) {
+    return "directory";
+  }
+
+  if (
+    /(pharmaretail|pharmacy-scanner|farmakom|unife|quotidianosanita|healthdesk|news|blog|magazine)/.test(
+      hostname,
+    ) ||
+    /\b(news|notizie|articolo|trattative|intervista|report|studio)\b/.test(haystack)
+  ) {
+    return "article";
+  }
+
+  if (/(amazon|ebay|alibaba|subito|marketplace)/.test(hostname)) {
+    return "marketplace";
+  }
+
+  return "company_site";
 }
 
 function isHttpUrl(url: string) {
@@ -109,6 +177,14 @@ function normalizeUrlKey(url: string) {
 }
 
 function normalizeDomainKey(url: string) {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function getHostname(url: string) {
   try {
     return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
   } catch {

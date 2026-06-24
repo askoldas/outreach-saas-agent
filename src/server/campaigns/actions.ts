@@ -6,7 +6,6 @@ import type {
   Campaign,
   CampaignStatus,
   ContactDiscoveryReport,
-  DiscoveryProgress,
 } from "@/types/domain";
 import { discoverContactRoutes } from "@/lib/discovery/contact-extractor";
 import { buildCampaignSearchQueries } from "@/lib/discovery/query-builder";
@@ -23,7 +22,6 @@ import {
   applyManualReviewQualification,
   applyLeadQualification,
   getCampaignLeadCounts,
-  getCampaignDiscoveryProgress,
   importRawDiscoveredLeads,
   markLeadQualificationForManualReview,
   replaceLeadContactRoutes,
@@ -60,11 +58,70 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
     throw new Error("Campaign not found.");
   }
 
+  const existingLeadCounts = await getCampaignLeadCounts(currentWorkspace.id, campaign.id);
+  const remainingLeadSlots = Math.max(
+    campaign.desiredLeadCount - existingLeadCounts.total,
+    0,
+  );
+
+  if (remainingLeadSlots === 0) {
+    const report = buildDiscoveryReport({
+      aiQualificationFailures: [],
+      aiQualificationSuccesses: [],
+      contactDiscovery: [],
+      contactRoutesFound: 0,
+      duplicateResults: [],
+      finalReviewableLeads: [],
+      leadsSavedBeforeAiQualification: [],
+      queriesExecuted: [],
+      rawTavilyResults: [],
+      rejectedResults: [],
+      targetSkippedResults: [],
+    });
+
+    await updateCampaignDiscoveryState(currentWorkspace.id, campaign.id, {
+      awaitingReview: existingLeadCounts.awaitingReview,
+      latestDiscoveryReport: report,
+      leadCount: existingLeadCounts.total,
+      progress: calculateDiscoveryProgress(
+        existingLeadCounts.total,
+        campaign.desiredLeadCount,
+      ),
+      status: "completed",
+    });
+
+    await createActivityEvent(currentWorkspace.id, {
+      description: `${campaign.name} already has ${existingLeadCounts.total} lead source${existingLeadCounts.total === 1 ? "" : "s"}, meeting the target of ${campaign.desiredLeadCount}. Discovery did not save additional leads.`,
+      entityExternalId: campaign.id,
+      entityType: "campaign",
+      label: "Campaign discovery skipped",
+    });
+
+    revalidatePath("/dashboard");
+    revalidatePath("/leads");
+    revalidatePath("/campaigns");
+    revalidatePath(`/campaigns/${campaign.id}`);
+
+    return {
+      report,
+      message: `Target already reached: ${existingLeadCounts.total} / ${campaign.desiredLeadCount} leads saved. Increase desired leads to discover more.`,
+    };
+  }
+
   const queries = buildCampaignSearchQueries(campaign);
   const searchReport = await searchCampaignWeb(queries);
+  const acceptedResults = searchReport.acceptedResults.slice(0, remainingLeadSlots);
+  const targetSkippedResults = searchReport.acceptedResults
+    .slice(remainingLeadSlots)
+    .map((result) => ({
+      query: result.query,
+      reason: `Campaign target reached after ${remainingLeadSlots} additional lead source${remainingLeadSlots === 1 ? "" : "s"}`,
+      title: result.title,
+      url: result.url,
+    }));
   const savedLeads = await importRawDiscoveredLeads(
     currentWorkspace.id,
-    searchReport.acceptedResults.map((result) => ({
+    acceptedResults.map((result) => ({
       campaignId: campaign.id,
       country: campaign.geography,
       result,
@@ -92,6 +149,7 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
     queriesExecuted: queries,
     rawTavilyResults: searchReport.rawResults,
     rejectedResults: searchReport.rejectedResults,
+    targetSkippedResults,
   });
 
   await updateCampaignDiscoveryState(currentWorkspace.id, campaign.id, {
@@ -106,7 +164,7 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
   });
 
   await createActivityEvent(currentWorkspace.id, {
-    description: `${savedLeads.length} Tavily lead source${savedLeads.length === 1 ? "" : "s"} saved for ${campaign.name}. ${qualification.successes.length} AI-qualified, ${qualification.failures.length} need manual review. ${contacts.routeCount} contact route${contacts.routeCount === 1 ? "" : "s"} found. ${searchReport.duplicateResults.length} duplicate and ${searchReport.rejectedResults.length} rejected result${searchReport.rejectedResults.length === 1 ? "" : "s"} recorded.`,
+    description: `${savedLeads.length} Tavily lead source${savedLeads.length === 1 ? "" : "s"} saved for ${campaign.name}. ${qualification.successes.length} AI-qualified, ${qualification.failures.length} need manual review. ${contacts.routeCount} contact route${contacts.routeCount === 1 ? "" : "s"} found. ${searchReport.duplicateResults.length} duplicate, ${searchReport.rejectedResults.length} rejected, and ${targetSkippedResults.length} target-capped result${targetSkippedResults.length === 1 ? "" : "s"} recorded.`,
     entityExternalId: campaign.id,
     entityType: "campaign",
     label: "Campaign discovery run",
@@ -119,30 +177,8 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
 
   return {
     report,
-    message: `${savedLeads.length} discovered lead source${savedLeads.length === 1 ? "" : "s"} saved. ${qualification.successes.length} AI-qualified, ${qualification.failures.length} need manual review. ${contacts.routeCount} contact route${contacts.routeCount === 1 ? "" : "s"} found.`,
+    message: `${savedLeads.length} discovered lead source${savedLeads.length === 1 ? "" : "s"} saved toward the ${campaign.desiredLeadCount}-lead target. ${qualification.successes.length} AI-qualified, ${qualification.failures.length} need manual review. ${contacts.routeCount} contact route${contacts.routeCount === 1 ? "" : "s"} found.`,
   };
-}
-
-export async function getCampaignDiscoveryProgressAction(
-  campaignId: string,
-): Promise<DiscoveryProgress> {
-  const { currentWorkspace } = await getWorkspaceContext();
-
-  if (!currentWorkspace) {
-    throw new Error("Authentication required");
-  }
-
-  const campaign = await getCampaign(currentWorkspace.id, campaignId);
-
-  if (!campaign) {
-    throw new Error("Campaign not found.");
-  }
-
-  return getCampaignDiscoveryProgress(
-    currentWorkspace.id,
-    campaign.id,
-    campaign.desiredLeadCount,
-  );
 }
 
 export async function updateCampaignStatusAction(input: UpdateCampaignStatusInput) {
@@ -326,6 +362,15 @@ async function qualifySavedLeads(
   const failures: Array<{ error: string; leadId: string }> = [];
 
   for (const lead of savedLeads) {
+    await applyManualReviewQualification(
+      workspaceId,
+      lead.externalId,
+      buildManualReviewQualification(
+        lead.result,
+        "Deterministic baseline qualification was created before AI enrichment.",
+      ),
+    );
+
     try {
       const candidate = await evaluateLeadCandidate(campaign, lead.result);
 
@@ -379,7 +424,7 @@ async function discoverContactsForSavedLeads(savedLeads: SavedDiscoveredLead[]) 
     );
 
     for (const { discovery, lead } of batchResults) {
-      routeCount += discovery.routes.length;
+      routeCount += discovery.report.routesFound;
       reports.push({
         ...discovery.report,
         leadId: lead.externalId,

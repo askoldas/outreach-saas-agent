@@ -55,6 +55,76 @@ export async function enqueueCampaignDiscoveryRun(input: {
   return { runId };
 }
 
+export async function enqueueLeadContactEnrichmentRun(input: {
+  leadId: string;
+  workspaceId: string;
+}): Promise<{ runId: string }> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data: lead, error: leadError } = await supabase
+    .from("leads")
+    .select("id,external_id,campaign_id,company,website,description,summary")
+    .eq("workspace_id", input.workspaceId)
+    .eq("external_id", input.leadId)
+    .single();
+
+  if (leadError) {
+    throw new Error(`Could not load lead for contact research: ${leadError.message}`);
+  }
+
+  const leadRow = lead as {
+    campaign_id: string | null;
+    company: string;
+    description: string;
+    external_id: string;
+    id: string;
+    summary: string;
+    website: string;
+  };
+  const campaignId = leadRow.campaign_id || "manual-lead-research";
+  const { data: run, error: runError } = await supabase
+    .from("research_runs")
+    .insert({
+      campaign_id: campaignId,
+      current_step: "Queued contact enrichment",
+      progress: 0,
+      status: "pending",
+      workspace_id: input.workspaceId,
+    })
+    .select("id")
+    .single();
+
+  if (runError) {
+    throw new Error(`Could not create contact enrichment run: ${runError.message}`);
+  }
+
+  const runId = (run as { id: string }).id;
+  const { error: taskError } = await supabase.from("research_tasks").insert({
+    campaign_id: campaignId,
+    max_attempts: 2,
+    payload_json: {
+      leadDatabaseId: leadRow.id,
+      leadExternalId: leadRow.external_id,
+      source: {
+        content: [leadRow.description, leadRow.summary].filter(Boolean).join("\n"),
+        query: "manual lead contact enrichment",
+        title: leadRow.company,
+        url: leadRow.website,
+      },
+      website: leadRow.website,
+    },
+    run_id: runId,
+    status: "pending",
+    task_type: "enrich_contacts",
+    workspace_id: input.workspaceId,
+  });
+
+  if (taskError) {
+    throw new Error(`Could not enqueue contact enrichment task: ${taskError.message}`);
+  }
+
+  return { runId };
+}
+
 export async function getCampaignResearchProgress(input: {
   campaignId: string;
   workspaceId: string;

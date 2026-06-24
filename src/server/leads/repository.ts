@@ -5,6 +5,7 @@ import type { SearchResult } from "@/lib/providers/tavily";
 import type {
   Confidence,
   ContactRoute,
+  ContactDiscoveryStatus,
   DiscoveryProgress,
   EvidenceClaim,
   EvidenceKind,
@@ -792,6 +793,7 @@ function mapLead(row: LeadRow): Lead {
     companyType: row.company_type,
     confidence: row.confidence,
     contactability: row.contactability,
+    contactDiscoveryStatus: getContactDiscoveryStatus(row),
     contacts: mapContacts(row.lead_contact_routes),
     country: row.country,
     description: row.description,
@@ -807,6 +809,22 @@ function mapLead(row: LeadRow): Lead {
     summary: row.summary,
     website: row.website,
   };
+}
+
+function getContactDiscoveryStatus(row: LeadRow): ContactDiscoveryStatus {
+  if ((row.lead_contact_routes ?? []).length > 0) {
+    return "completed";
+  }
+
+  if (
+    (row.lead_evidence_claims ?? []).some(
+      (claim) => claim.external_id === "contact-enrichment",
+    )
+  ) {
+    return "completed";
+  }
+
+  return row.qualification_status === "pending" ? "pending" : "not_run";
 }
 
 function mapQualification(

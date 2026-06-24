@@ -12,6 +12,7 @@
     "worker": "node --experimental-strip-types src/workers/research-worker.ts",
     "build": "next build",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."

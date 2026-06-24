@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import type { LeadStatus } from "@/types/domain";
 import { importSampleLeads, updateLeadStatus } from "./repository";
 import { createActivityEvent } from "@/server/activity/repository";
+import { enqueueLeadContactEnrichmentRun } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 type UpdateLeadReviewInput = {
@@ -32,11 +33,20 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
   }
 
   await updateLeadStatus(currentWorkspace.id, input.leadId, input.status);
+  const contactRun =
+    input.status === "researching"
+      ? await enqueueLeadContactEnrichmentRun({
+          leadId: input.leadId,
+          workspaceId: currentWorkspace.id,
+        })
+      : null;
   await createActivityEvent(currentWorkspace.id, {
-    description: `Lead ${input.leadId} moved to ${input.status}.`,
+    description: contactRun
+      ? `Lead ${input.leadId} moved to researching and contact enrichment run ${contactRun.runId} was queued.`
+      : `Lead ${input.leadId} moved to ${input.status}.`,
     entityExternalId: input.leadId,
     entityType: "lead",
-    label: "Lead review updated",
+    label: contactRun ? "Lead contact research queued" : "Lead review updated",
   });
 
   revalidatePath("/dashboard");
@@ -50,7 +60,7 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
         : input.status === "rejected"
           ? "Lead rejected"
           : input.status === "researching"
-            ? "More research requested"
+            ? `More research requested${contactRun ? ` (${contactRun.runId.slice(0, 8)})` : ""}`
             : input.status === "archived"
               ? "Lead archived"
               : "Lead sent back to review",

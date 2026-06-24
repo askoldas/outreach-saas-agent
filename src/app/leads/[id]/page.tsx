@@ -31,9 +31,11 @@ export default async function LeadDetailPage({
   const contactMessage =
     lead.contacts.length > 0
       ? ""
-      : lead.qualificationStatus === "pending"
+      : lead.contactDiscoveryStatus === "pending"
         ? "Contact discovery pending or not run yet."
-        : "No public contacts found by contact discovery yet.";
+        : lead.contactDiscoveryStatus === "completed"
+          ? "Contact discovery ran and found no public email or phone."
+          : "Contact discovery has not run yet.";
 
   return (
     <div className={styles.grid}>
@@ -48,7 +50,7 @@ export default async function LeadDetailPage({
           <p>Fit score</p>
           <h2>{lead.fitScore}</h2>
           <span>
-            {statusLabel(lead.qualificationStatus)} · {statusLabel(lead.confidence)} confidence
+            {statusLabel(lead.qualificationStatus)} / {statusLabel(lead.confidence)} confidence
           </span>
         </Card>
         <Card className={styles.metric}>

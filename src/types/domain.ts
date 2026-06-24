@@ -24,6 +24,7 @@ export type LeadQualificationStatus =
   | "failed"
   | "needs_manual_review"
   | "non_ai_manual_review";
+export type ContactDiscoveryStatus = "not_run" | "pending" | "completed";
 
 export type DiscoveryReportResult = {
   query: string;
@@ -173,6 +174,7 @@ export type Lead = {
   fitScore: number;
   confidence: Confidence;
   contactability: Confidence;
+  contactDiscoveryStatus: ContactDiscoveryStatus;
   qualificationError: string;
   qualificationStatus: LeadQualificationStatus;
   status: LeadStatus;

@@ -19,29 +19,55 @@ type EnrichContactsPayload = {
   website?: string;
 };
 
+type LeadContactContext = {
+  campaign_id: string | null;
+  company: string;
+  description: string;
+  external_id: string;
+  industry: string;
+  qualification_error: string | null;
+  summary: string;
+  website: string;
+  lead_evidence_claims: Array<{
+    external_id: string;
+    source_label: string;
+    source_type: string;
+    source_url: string;
+    text: string;
+  }> | null;
+  lead_qualification_dimensions: Array<{
+    explanation: string;
+    label: string;
+  }> | null;
+};
+
+type LeadSourceRow = {
+  content: string;
+  query: string;
+  result_json: Record<string, unknown> | null;
+  source_type: string;
+  title: string;
+  url: string;
+};
+
 export async function processEnrichContactsTask(
   supabase: SupabaseClient,
   task: ResearchTaskRow,
 ) {
   await updateRunStep(supabase, task.run_id, "Discovering contacts", 75);
   const payload = parsePayload(task);
-  const sourceText = [
-    payload.source.title,
-    payload.source.url,
-    payload.source.query,
-    payload.source.content,
-  ]
-    .filter(Boolean)
-    .join("\n");
+  const context = await loadLeadContactContext(supabase, payload.leadDatabaseId);
+  const leadSources = await loadLeadSources(supabase, task, payload, context);
+  const sourceText = buildSearchableContactText(payload, context, leadSources);
   const evidenceRoutes = extractContactRoutesFromEvidence({
     sourceUrl: payload.source.url,
     text: sourceText,
-    website: payload.website,
+    website: context.website || payload.website,
   });
   const websiteRoutes = await tryDiscoverWebsiteContactRoutes(payload);
   const routes = dedupeRoutes([...evidenceRoutes, ...websiteRoutes]);
 
-  await saveLeadContactRoutes(supabase, payload.leadDatabaseId, routes);
+  await saveLeadContactRoutes(supabase, payload.leadDatabaseId, routes, sourceText);
 
   return {
     confirmedRouteCount: routes.filter((route) => route.verification === "source_confirmed")
@@ -49,6 +75,85 @@ export async function processEnrichContactsTask(
     leadId: payload.leadExternalId,
     routeCount: routes.length,
   };
+}
+
+async function loadLeadContactContext(
+  supabase: SupabaseClient,
+  leadDatabaseId: string,
+) {
+  const { data, error } = await supabase
+    .from("leads")
+    .select(
+      `
+        external_id,
+        campaign_id,
+        company,
+        website,
+        industry,
+        description,
+        summary,
+        qualification_error,
+        lead_evidence_claims (
+          external_id,
+          text,
+          source_type,
+          source_label,
+          source_url
+        ),
+        lead_qualification_dimensions (
+          label,
+          explanation
+        )
+      `,
+    )
+    .eq("id", leadDatabaseId)
+    .single();
+
+  if (error) {
+    throw new Error(`Could not load lead for contact enrichment: ${error.message}`);
+  }
+
+  return data as LeadContactContext;
+}
+
+async function loadLeadSources(
+  supabase: SupabaseClient,
+  task: ResearchTaskRow,
+  payload: EnrichContactsPayload,
+  context: LeadContactContext,
+) {
+  const urls = new Set<string>();
+
+  if (payload.source.url) {
+    urls.add(payload.source.url);
+  }
+
+  if (context.website) {
+    urls.add(context.website);
+  }
+
+  for (const claim of context.lead_evidence_claims ?? []) {
+    if (claim.source_url) {
+      urls.add(claim.source_url);
+    }
+  }
+
+  if (urls.size === 0) {
+    return [];
+  }
+
+  const { data, error } = await supabase
+    .from("lead_sources")
+    .select("title,url,content,query,source_type,result_json")
+    .eq("workspace_id", task.workspace_id)
+    .eq("campaign_id", task.campaign_id)
+    .in("url", [...urls]);
+
+  if (error) {
+    throw new Error(`Could not load lead sources for contact enrichment: ${error.message}`);
+  }
+
+  return (data ?? []) as LeadSourceRow[];
 }
 
 async function tryDiscoverWebsiteContactRoutes(payload: EnrichContactsPayload) {
@@ -70,6 +175,7 @@ async function saveLeadContactRoutes(
   supabase: SupabaseClient,
   leadDatabaseId: string,
   routes: ContactRoute[],
+  sourceText: string,
 ) {
   const { error: deleteError } = await supabase
     .from("lead_contact_routes")
@@ -110,6 +216,29 @@ async function saveLeadContactRoutes(
 
   if (updateError) {
     throw new Error(`Could not update lead contactability: ${updateError.message}`);
+  }
+
+  const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
+    {
+      confidence: confirmedRouteCount > 0 ? "medium" : "low",
+      external_id: "contact-enrichment",
+      kind: confirmedRouteCount > 0 ? "fact" : "unknown",
+      lead_id: leadDatabaseId,
+      retrieved_at: new Date().toISOString().slice(0, 10),
+      sort_order: 3,
+      source_label: "Contact enrichment worker",
+      source_type: "Deterministic contact extraction",
+      source_url: "",
+      text:
+        confirmedRouteCount > 0
+          ? `Contact discovery completed and found ${confirmedRouteCount} source-confirmed public route${confirmedRouteCount === 1 ? "" : "s"}.`
+          : `Contact discovery completed but found no public email or phone in ${sourceText.length} characters of saved lead evidence.`,
+    },
+    { onConflict: "lead_id,external_id" },
+  );
+
+  if (evidenceError) {
+    throw new Error(`Could not save contact enrichment marker: ${evidenceError.message}`);
   }
 }
 
@@ -152,6 +281,44 @@ function dedupeRoutes(routes: ContactRoute[]) {
     const order = ["Email", "Phone", "Contact page", "Website"];
     return order.indexOf(first.type) - order.indexOf(second.type);
   });
+}
+
+function buildSearchableContactText(
+  payload: EnrichContactsPayload,
+  context: LeadContactContext,
+  leadSources: LeadSourceRow[],
+) {
+  return [
+    context.company,
+    context.website,
+    context.industry,
+    context.description,
+    context.summary,
+    context.qualification_error,
+    payload.source.title,
+    payload.source.url,
+    payload.source.query,
+    payload.source.content,
+    ...(context.lead_qualification_dimensions ?? []).flatMap((dimension) => [
+      dimension.label,
+      dimension.explanation,
+    ]),
+    ...(context.lead_evidence_claims ?? []).flatMap((claim) => [
+      claim.source_label,
+      claim.source_type,
+      claim.source_url,
+      claim.text,
+    ]),
+    ...leadSources.flatMap((source) => [
+      source.title,
+      source.url,
+      source.query,
+      source.content,
+      JSON.stringify(source.result_json ?? {}),
+    ]),
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function normalizeValue(value: string) {

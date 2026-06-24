@@ -215,8 +215,9 @@ async function saveLeadSources(
     return;
   }
 
+  const uniqueSources = dedupeLeadSources(sources);
   const { error } = await supabase.from("lead_sources").upsert(
-    sources.map((source) => ({
+    uniqueSources.map((source) => ({
       campaign_id: task.campaign_id,
       classification: source.classification,
       content: source.result.content ?? "",
@@ -236,6 +237,47 @@ async function saveLeadSources(
   if (error) {
     throw new Error(`Could not save lead sources: ${error.message}`);
   }
+}
+
+function dedupeLeadSources(
+  sources: Array<{
+    classification: string;
+    rejectionReason: string;
+    result: {
+      content?: string;
+      query: string;
+      score?: number | null;
+      title: string;
+      url: string;
+    };
+  }>,
+) {
+  const byUrl = new Map<string, (typeof sources)[number]>();
+  const rank = {
+    accepted: 3,
+    duplicate: 2,
+    rejected: 1,
+  } as const;
+
+  for (const source of sources) {
+    const key = normalizeUrlKey(source.result.url);
+    const existing = byUrl.get(key);
+    const sourceRank = rank[source.classification as keyof typeof rank] ?? 0;
+    const existingRank = existing
+      ? (rank[existing.classification as keyof typeof rank] ?? 0)
+      : 0;
+
+    if (
+      !existing ||
+      sourceRank > existingRank ||
+      (sourceRank === existingRank &&
+        (source.result.score ?? 0) > (existing.result.score ?? 0))
+    ) {
+      byUrl.set(key, source);
+    }
+  }
+
+  return [...byUrl.values()];
 }
 
 async function saveDiscoveredLeads(
@@ -471,6 +513,17 @@ function getOrigin(url: string) {
 
 function normalizeCompanyName(companyName: string) {
   return companyName.trim().slice(0, 180) || "Unknown company";
+}
+
+function normalizeUrlKey(url: string) {
+  try {
+    const parsed = new URL(url);
+    parsed.hash = "";
+    parsed.search = "";
+    return parsed.toString().replace(/\/$/g, "").toLowerCase();
+  } catch {
+    return url.trim().toLowerCase();
+  }
 }
 
 function scoreToFit(score: number | null | undefined) {

@@ -2,9 +2,9 @@
 
 The repository is one root Next.js application.
 
-- `src/app`: App Router pages and server endpoints. Campaign-local routes live under `campaigns/[id]`.
+- `src/app`: App Router pages and endpoints. `(marketing)`, `(auth)`, and `(app)` own separate layouts without changing URLs; `@modal` intercepts public auth navigation.
 - `src/components`: shared layout, UI, and feedback primitives.
-- `src/features`: interactive product surfaces including campaign shell/strategy, lead review, and outreach.
+- `src/features`: public marketing layout, authentication presentation, and interactive product surfaces including campaign shell/strategy, lead review, and outreach.
 - `src/server`: workspace-scoped repositories, actions, and persisted read models.
 - `src/lib`: deterministic domain helpers, provider adapters, discovery logic, and Supabase clients.
 - `src/workers`: durable research worker and task handlers.

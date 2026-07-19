@@ -13,7 +13,7 @@ import { getCampaignResearchProgress } from "@/server/research/repository";
 import { RunProgressPanel } from "@/features/progress/RunProgressPanel";
 
 export default async function CompanyProfilePage() {
-  if (!(await getCurrentUser())) redirect("/auth/sign-in?next=/company-profile");
+  if (!(await getCurrentUser())) redirect("/login?next=/company-profile");
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
   const profile = await getCurrentCompanyProfile(currentWorkspace.id);

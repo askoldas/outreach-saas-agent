@@ -1,7 +1,4 @@
 import type { Metadata } from "next";
-import { AppShell } from "@/components/layout/AppShell";
-import { getCurrentUser } from "@/server/auth/user";
-import { getWorkspaceContext } from "@/server/workspaces/repository";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -11,27 +8,16 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  modal: React.ReactNode;
 }>) {
-  const user = await getCurrentUser();
-  const workspaceContext = user
-    ? await getWorkspaceContext().catch(() => ({
-        currentWorkspace: null,
-        workspaces: [],
-      }))
-    : { currentWorkspace: null, workspaces: [] };
-
   return (
     <html lang="en">
       <body>
-        <AppShell
-          currentWorkspace={workspaceContext.currentWorkspace}
-          userEmail={user?.email ?? null}
-          workspaces={workspaceContext.workspaces}
-        >
-          {children}
-        </AppShell>
+        {children}
+        {modal}
       </body>
     </html>
   );

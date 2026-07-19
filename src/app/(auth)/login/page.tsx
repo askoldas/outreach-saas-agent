@@ -61,7 +61,7 @@ export default async function SignInPage({
           Sign in
         </Button>
         <p className={styles.footerText}>
-          Need an account? <Link href="/auth/sign-up">Create one</Link>
+          Need an account? <Link href="/signup">Create one</Link>
         </p>
       </form>
     </section>

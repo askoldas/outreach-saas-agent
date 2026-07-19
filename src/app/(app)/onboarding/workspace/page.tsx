@@ -13,7 +13,7 @@ export default async function WorkspaceOnboardingPage({
   searchParams,
 }: Readonly<{ searchParams: Promise<SearchParams> }>) {
   if (!(await getCurrentUser())) {
-    redirect("/auth/sign-in?next=/onboarding/workspace");
+    redirect("/login?next=/onboarding/workspace");
   }
 
   const { workspaces } = await getWorkspaceContext();

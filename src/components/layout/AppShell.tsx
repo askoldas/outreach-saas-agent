@@ -44,10 +44,6 @@ export function AppShell({
     [pathname],
   );
 
-  if (pathname.startsWith("/auth")) {
-    return <main className={styles.authPage}>{children}</main>;
-  }
-
   return (
     <div className={styles.shell}>
       <aside className={styles.sidebar} aria-label="Primary navigation">
@@ -130,7 +126,7 @@ export function AppShell({
             >
               N
             </button>
-            <form action="/auth/sign-out" method="post">
+            <form action="/logout" method="post">
               <button className={styles.avatarButton} type="submit" aria-label="Sign out">
                 {getInitials(userEmail)}
               </button>

@@ -2,8 +2,19 @@ import { expect, test } from "@playwright/test";
 import { createClient } from "@supabase/supabase-js";
 
 test("unauthenticated workspace routes require sign in", async ({ page }) => {
+  await page.goto("/");
+  await expect(
+    page.getByRole("heading", {
+      name: "Find and reach the B2B leads that actually fit your business.",
+    }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Log in" }).click();
+  await expect(page).toHaveURL(/\/login/);
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.getByRole("button", { name: "Close authentication" }).click();
+  await expect(page).toHaveURL("/");
   await page.goto("/dashboard");
-  await expect(page).toHaveURL(/\/auth\/sign-in/);
+  await expect(page).toHaveURL(/\/login/);
   await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 });
 
@@ -14,12 +25,12 @@ test("creates a workspace, profile version, and campaign strategy", async ({ pag
   const workspace = `Browser Workspace ${suffix}`;
   const campaign = `Industrial services ${suffix}`;
 
-  await page.goto("/auth/sign-up");
+  await page.goto("/signup");
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password", { exact: true }).fill(password);
   await page.getByLabel("Confirm password").fill(password);
   await page.getByRole("button", { name: "Create account" }).click();
-  await expect(page).toHaveURL(/\/auth\/sign-in/);
+  await expect(page).toHaveURL(/\/login/);
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(password);
   await page.getByRole("button", { name: "Sign in" }).click();

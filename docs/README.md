@@ -10,5 +10,6 @@
 - `TESTING.md`: required test layers.
 - `BACKGROUND_WORKERS.md` and `RAILWAY_WORKER_DEPLOYMENT.md`: worker operation.
 - `ROADMAP.md`: prioritized follow-up work.
+- `PUBLIC_WEBSITE_ROUTES.md`: public sitemap, route groups, auth modals, and claim boundaries.
 
 Documentation describes implemented behavior precisely. Excluded or deferred behavior must be labelled rather than presented as current functionality.

@@ -69,7 +69,7 @@ export default async function SignUpPage({
           Create account
         </Button>
         <p className={styles.footerText}>
-          Already have an account? <Link href="/auth/sign-in">Sign in</Link>
+          Already have an account? <Link href="/login">Sign in</Link>
         </p>
       </form>
     </section>

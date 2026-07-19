@@ -5,7 +5,7 @@ import { getCampaign } from "./repository";
 import type { Campaign } from "@/types/domain";
 
 export async function loadCampaignPage(id: string): Promise<Campaign> {
-  if (!(await getCurrentUser())) redirect(`/auth/sign-in?next=/campaigns/${id}`);
+  if (!(await getCurrentUser())) redirect(`/login?next=/campaigns/${id}`);
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
   const persisted = await getCampaign(currentWorkspace.id, id);

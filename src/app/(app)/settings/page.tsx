@@ -37,7 +37,7 @@ export default async function SettingsPage({
   const user = await getCurrentUser();
 
   if (!user) {
-    redirect("/auth/sign-in?next=/settings");
+    redirect("/login?next=/settings");
   }
 
   const { currentWorkspace, workspaces } = await getWorkspaceContext();

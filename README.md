@@ -14,6 +14,8 @@ The application uses Company Profiles and immutable Campaign Strategy versions e
 
 ## Routes
 
+- Public: `/`, `/product`, `/use-cases`, `/features/*`, `/pricing`, `/security`, `/resources`, `/about`, `/contact`, `/privacy`, `/terms`
+- Authentication: `/login`, `/signup`, `/logout`
 - `/dashboard`
 - `/campaigns`, `/campaigns/new`
 - `/campaigns/[id]`, `/strategy`, `/leads`, `/outreach`
@@ -21,6 +23,8 @@ The application uses Company Profiles and immutable Campaign Strategy versions e
 - `/usage`
 - `/settings`
 - `/help`
+
+Public, authentication, and application pages use separate route-group layouts. Public navigation opens login and signup as intercepted modals; direct visits retain full-page fallbacks.
 
 ## Development
 

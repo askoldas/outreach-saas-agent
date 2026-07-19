@@ -1,36 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { importSampleCampaignsAction } from "@/server/campaigns/actions";
 import { listCampaigns } from "@/server/campaigns/repository";
-import { listOffers } from "@/server/offers/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
 import { Badge } from "@/components/ui/Badge";
-import { Button, ButtonLink } from "@/components/ui/Button";
+import { ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
 
-
-type SearchParams = {
-  message?: string;
-};
-
-export default async function CampaignsPage({
-  searchParams,
-}: Readonly<{ searchParams: Promise<SearchParams> }>) {
+export default async function CampaignsPage() {
   const { currentWorkspace } = await getWorkspaceContext();
 
   if (!currentWorkspace) {
     redirect("/onboarding/workspace");
   }
 
-  const params = await searchParams;
-  const [campaigns, offers] = await Promise.all([
-    listCampaigns(currentWorkspace.id),
-    listOffers(currentWorkspace.id),
-  ]);
-  const offerNameById = new Map(offers.map((offer) => [offer.id, offer.name]));
+  const campaigns = await listCampaigns(currentWorkspace.id);
 
   return (
     <div className={styles.grid}>
@@ -44,32 +30,12 @@ export default async function CampaignsPage({
         }
       />
       <Card>
-        <CardHeader
-          title="Campaign list"
-          eyebrow="Market objectives"
-          action={
-            campaigns.length === 0 ? (
-              <form action={importSampleCampaignsAction}>
-                <Button type="submit" variant="primary">
-                  Load sample campaigns
-                </Button>
-              </form>
-            ) : null
-          }
-        />
-        {params.message === "sample-campaigns-imported" ? (
-          <div className={styles.cardBody}>
-            <p className={styles.secondaryText}>
-              Sample campaigns loaded for this workspace.
-            </p>
-          </div>
-        ) : null}
+        <CardHeader title="Campaign list" eyebrow="Market objectives" />
         <div className={styles.tableWrap}>
           <table className={styles.table}>
             <thead>
               <tr>
                 <th>Campaign</th>
-                <th>Offer</th>
                 <th>Objective</th>
                 <th>Geography</th>
                 <th>Segments</th>
@@ -82,7 +48,7 @@ export default async function CampaignsPage({
             <tbody>
               {campaigns.length === 0 ? (
                 <tr>
-                  <td colSpan={9}>
+                  <td colSpan={8}>
                     No campaigns have been saved for this workspace yet.
                   </td>
                 </tr>
@@ -97,7 +63,6 @@ export default async function CampaignsPage({
                       {campaign.name}
                     </Link>
                   </td>
-                  <td>{offerNameById.get(campaign.offerId) ?? "Unknown offer"}</td>
                   <td>{campaign.objective}</td>
                   <td>{campaign.geography}</td>
                   <td>{campaign.targetSegments.slice(0, 2).join(", ")}</td>

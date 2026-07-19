@@ -1,96 +1,54 @@
-# Outreach SaaS Agent
+# Opptium
 
-A horizontal AI-assisted B2B prospecting platform.
+Opptium is an AI-assisted B2B prospecting and outbound-preparation platform. A company maintains reusable seller knowledge, describes the companies it wants to find, reviews a structured research strategy, evaluates evidence-backed leads, enriches approved companies with contacts, prepares drafts, and exports the result. The current product does not send email or create mailbox drafts.
 
-The platform helps a business describe what it sells, define a market, discover suitable companies, research and qualify leads, prepare evidence-based outreach, and keep a human in control of approval and sending.
+## Current implementation
 
-Medical sales is the first validation scenario, not a product limitation. The domain model and implementation must remain suitable for products, services, software, manufacturing, distribution, consulting, and other B2B offers.
+This repository contains one Next.js 16 App Router application with strict TypeScript, CSS Modules, Supabase Auth/Postgres/RLS, workspace-scoped repositories, ordered migrations, provider-neutral Tavily/OpenRouter adapters, and a retry-safe research worker.
 
-## Current status
+Persisted today: authentication, workspaces, manually edited and website-analyzed Company Profile versions, immutable campaign profile snapshots, immutable Campaign Strategy versions tied to research runs, campaigns, leads, evidence/qualification/contact routes, drafts, activity, research runs, and tasks.
 
-The repository contains a single-root Next.js app with Supabase-backed authentication, workspaces, offers, campaigns, leads, outreach drafts, activity events, and admin settings.
+Company Profile analysis, Campaign Strategy refinement, lead qualification, and draft generation use schema-validated provider output with persisted provenance. Draft generation is a durable worker task grounded in frozen Company Profile and Campaign Strategy versions, saved lead evidence, and an accepted public recipient route. Tavily-backed contact enrichment retains route-level verification provenance. Enrichment state, accepted recipient selections, immutable export history, and operation-level usage events are persisted; CSV files are generated locally from frozen authorized records.
 
-Tavily and OpenRouter provider configuration is scaffolded behind internal modules, but search and AI workflows are not active yet.
+The application uses Company Profiles and immutable Campaign Strategy versions exclusively. Discovery and qualification consume immutable campaign profile snapshots and frozen strategy versions. Migration `20260719000600` completed the audited retirement of the former Offer schema and duplicated campaign strategy columns.
 
-## Prerequisites
+## Routes
 
-- Node.js 22.18 or newer
-- Corepack-enabled pnpm 10.13.1
+- `/dashboard`
+- `/campaigns`, `/campaigns/new`
+- `/campaigns/[id]`, `/strategy`, `/leads`, `/outreach`
+- `/company-profile`
+- `/usage`
+- `/settings`
+- `/help`
 
-## Local development
+## Development
 
-Install dependencies:
+Requires Node.js 22.18+ and pnpm 10.13.1.
 
 ```bash
 corepack pnpm install
-```
-
-Create `.env.local` from `.env.example` and set the Supabase values:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-```
-
-Optional provider values for the next integration stage:
-
-```bash
-TAVILY_API_KEY=
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=openai/gpt-4.1-mini
-```
-
-Start the development server:
-
-```bash
 corepack pnpm dev
 ```
 
-Run quality checks:
+Copy `.env.example` to `.env.local` and provide the public Supabase URL and publishable key. Provider keys are optional unless running provider-backed research.
 
 ```bash
 corepack pnpm format:check
 corepack pnpm lint
 corepack pnpm typecheck
+corepack pnpm test
 corepack pnpm build
 ```
 
-## Documentation
+Database integration tests require Docker and the Supabase CLI. They reset and test the local disposable Supabase database configured in `supabase/config.toml`; they must not be pointed at a shared or production database.
 
-- [Codex instructions](AGENTS.md)
-- [Product definition](docs/PRODUCT.md)
-- [Repository structure](docs/REPOSITORY_STRUCTURE.md)
-- [Architecture](docs/ARCHITECTURE.md)
-- [Domain model](docs/DOMAIN_MODEL.md)
-- [AI pipeline](docs/AI_PIPELINE.md)
-- [Security and compliance](docs/SECURITY_AND_COMPLIANCE.md)
-- [Testing strategy](docs/TESTING.md)
-- [Delivery roadmap](docs/ROADMAP.md)
-- [Architecture decisions](docs/DECISIONS.md)
-- [Codex workflow](docs/CODEX_WORKFLOW.md)
+```bash
+supabase start
+corepack pnpm test:db
+supabase stop --no-backup
+```
 
-## Core principles
+GitHub Actions runs application verification, disposable database tests, and the Playwright campaign workflow independently.
 
-1. The product is horizontal; campaigns adapt to the user's offer and target market.
-2. AI output must be traceable to evidence whenever it makes a factual claim about a prospect.
-3. Research, qualification, drafting, approval, and sending are separate stages.
-4. No automatic outreach is sent in the MVP.
-5. Long-running research runs outside normal web request lifecycles.
-6. Provider-specific integrations stay behind internal interfaces.
-7. Multi-tenant data isolation is mandatory from the first database migration.
-8. Codex work must be small, testable, and documented.
-
-## Current implementation
-
-The current implementation is a single root Next.js application using:
-
-- App Router;
-- TypeScript with strict checking;
-- CSS Modules and global design tokens;
-- Supabase Auth and Postgres with RLS;
-- workspace-scoped repositories and server actions;
-- persisted offer, campaign, lead, draft, activity, and settings flows;
-- dev sample import actions backed by local seed data;
-- provider config wrappers for Tavily and OpenRouter.
-
-External provider workflows, background jobs, lead discovery, and AI draft generation are the next runtime milestones.
+See [the refactor audit](docs/OPPTIUM_REFACTOR_PLAN.md), [product definition](docs/PRODUCT.md), [architecture](docs/ARCHITECTURE.md), and [decisions](docs/DECISIONS.md).

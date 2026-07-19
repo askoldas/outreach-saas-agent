@@ -1,7 +1,7 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { ActivityItem } from "@/types/domain";
 
-type ActivityEntityType = "campaign" | "draft" | "lead" | "offer" | "workspace";
+type ActivityEntityType = "campaign" | "draft" | "lead" | "workspace";
 
 type ActivityEventRow = {
   created_at: string;

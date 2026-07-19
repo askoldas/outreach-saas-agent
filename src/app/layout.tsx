@@ -5,8 +5,8 @@ import { getWorkspaceContext } from "@/server/workspaces/repository";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
-  title: "Outreach SaaS Agent",
-  description: "Mock dashboard prototype for AI-assisted B2B prospecting.",
+  title: { default: "Opptium", template: "%s | Opptium" },
+  description: "AI-assisted B2B prospecting and outbound preparation.",
 };
 
 export default async function RootLayout({

@@ -48,9 +48,12 @@ async function generateAndParseEvaluation(campaign: Campaign, result: SearchResu
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const content = await generateText(buildEvaluationMessages(campaign, result, attempt), {
-        taskName: "lead qualification",
-      });
+      const content = await generateText(
+        buildEvaluationMessages(campaign, result, attempt),
+        {
+          taskName: "lead qualification",
+        },
+      );
 
       return parseEvaluation(content);
     } catch (error) {
@@ -63,7 +66,11 @@ async function generateAndParseEvaluation(campaign: Campaign, result: SearchResu
     : new Error("AI lead qualification failed.");
 }
 
-function buildEvaluationMessages(campaign: Campaign, result: SearchResult, attempt: number) {
+function buildEvaluationMessages(
+  campaign: Campaign,
+  result: SearchResult,
+  attempt: number,
+) {
   return [
     {
       role: "system" as const,
@@ -144,7 +151,8 @@ function mapEvaluatedLead(
 }
 
 function parseEvaluation(content: string): RawEvaluationResponse {
-  const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content.match(/\[[\s\S]*\]/)?.[0] ?? content;
+  const json =
+    content.match(/\{[\s\S]*\}/)?.[0] ?? content.match(/\[[\s\S]*\]/)?.[0] ?? content;
 
   try {
     const parsed = JSON.parse(json) as RawEvaluationResponse | RawEvaluatedLead[];

@@ -24,7 +24,7 @@ export default async function SignUpPage({
   return (
     <section className={styles.card} aria-labelledby="sign-up-title">
       <div className={styles.header}>
-        <span className={styles.wordmark}>OSA</span>
+        <span className={styles.wordmark}>Opptium</span>
         <h1 id="sign-up-title">Create account</h1>
         <p>Email and password authentication is the first supported sign-in method.</p>
       </div>

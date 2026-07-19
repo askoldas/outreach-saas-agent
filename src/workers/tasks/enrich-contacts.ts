@@ -4,6 +4,10 @@ import {
   discoverContactRoutes,
   extractContactRoutesFromEvidence,
 } from "../../lib/discovery/contact-extractor.ts";
+import {
+  enrichCompanyContacts,
+  type EnrichedContactRoute,
+} from "../../lib/providers/contact-enrichment.ts";
 import { updateRunStep } from "../lib/task-status.ts";
 import type { ResearchTaskRow } from "../lib/claim-task.ts";
 
@@ -56,6 +60,16 @@ export async function processEnrichContactsTask(
 ) {
   await updateRunStep(supabase, task.run_id, "Discovering contacts", 75);
   const payload = parsePayload(task);
+  await supabase.from("lead_outreach_states").upsert(
+    {
+      workspace_id: task.workspace_id,
+      lead_id: payload.leadDatabaseId,
+      enrichment_status: "in_progress",
+      enrichment_run_id: task.run_id,
+      last_error: null,
+    },
+    { onConflict: "lead_id" },
+  );
   const context = await loadLeadContactContext(supabase, payload.leadDatabaseId);
   const leadSources = await loadLeadSources(supabase, task, payload, context);
   const sourceText = buildSearchableContactText(payload, context, leadSources);
@@ -64,23 +78,50 @@ export async function processEnrichContactsTask(
     text: sourceText,
     website: context.website || payload.website,
   });
+  const providerRoutes = await enrichCompanyContacts({
+    company: context.company,
+    website: context.website || payload.website || payload.source.url,
+  });
   const websiteRoutes = await tryDiscoverWebsiteContactRoutes(payload);
-  const routes = dedupeRoutes([...evidenceRoutes, ...websiteRoutes]);
+  const routes = dedupeRoutes([...evidenceRoutes, ...websiteRoutes, ...providerRoutes]);
 
   await saveLeadContactRoutes(supabase, payload.leadDatabaseId, routes, sourceText);
+  const { error: stateError } = await supabase.from("lead_outreach_states").upsert(
+    {
+      workspace_id: task.workspace_id,
+      lead_id: payload.leadDatabaseId,
+      enrichment_status: routes.length > 0 ? "contacts_ready" : "not_found",
+      enrichment_run_id: task.run_id,
+      selection_status: "automatic",
+      selected_contact_route_id: null,
+      last_error: null,
+    },
+    { onConflict: "lead_id" },
+  );
+  if (stateError)
+    throw new Error(`Could not complete enrichment state: ${stateError.message}`);
+  const { error: usageError } = await supabase.from("usage_events").insert({
+    workspace_id: task.workspace_id,
+    campaign_external_id: task.campaign_id,
+    operation: "contact_enrichment",
+    estimated_credits: 0,
+    actual_credits: 3,
+    reference_type: "research_run",
+    reference_id: task.run_id,
+  });
+  if (usageError)
+    throw new Error(`Could not record enrichment usage: ${usageError.message}`);
 
   return {
-    confirmedRouteCount: routes.filter((route) => route.verification === "source_confirmed")
-      .length,
+    confirmedRouteCount: routes.filter(
+      (route) => route.verification === "source_confirmed",
+    ).length,
     leadId: payload.leadExternalId,
     routeCount: routes.length,
   };
 }
 
-async function loadLeadContactContext(
-  supabase: SupabaseClient,
-  leadDatabaseId: string,
-) {
+async function loadLeadContactContext(supabase: SupabaseClient, leadDatabaseId: string) {
   const { data, error } = await supabase
     .from("leads")
     .select(
@@ -150,7 +191,9 @@ async function loadLeadSources(
     .in("url", [...urls]);
 
   if (error) {
-    throw new Error(`Could not load lead sources for contact enrichment: ${error.message}`);
+    throw new Error(
+      `Could not load lead sources for contact enrichment: ${error.message}`,
+    );
   }
 
   return (data ?? []) as LeadSourceRow[];
@@ -174,7 +217,7 @@ async function tryDiscoverWebsiteContactRoutes(payload: EnrichContactsPayload) {
 async function saveLeadContactRoutes(
   supabase: SupabaseClient,
   leadDatabaseId: string,
-  routes: ContactRoute[],
+  routes: Array<ContactRoute | EnrichedContactRoute>,
   sourceText: string,
 ) {
   const { error: deleteError } = await supabase
@@ -196,6 +239,13 @@ async function saveLeadContactRoutes(
         type: route.type,
         value: route.value,
         verification: route.verification,
+        verification_provider: "provenance" in route ? route.provenance.provider : null,
+        verification_query: "provenance" in route ? route.provenance.query : null,
+        verification_source_title:
+          "provenance" in route ? route.provenance.sourceTitle : null,
+        verification_source_url:
+          "provenance" in route ? route.provenance.sourceUrl : null,
+        verified_at: "provenance" in route ? route.provenance.verifiedAt : null,
       })),
     );
 
@@ -237,7 +287,7 @@ async function saveLeadContactRoutes(
       retrieved_at: new Date().toISOString().slice(0, 10),
       sort_order: 3,
       source_label: "Contact enrichment worker",
-      source_type: "Deterministic contact extraction",
+      source_type: "Provider-backed contact enrichment",
       source_url: "",
       text:
         confirmedRouteCount > 0
@@ -275,14 +325,19 @@ function parsePayload(task: ResearchTaskRow): EnrichContactsPayload {
   };
 }
 
-function dedupeRoutes(routes: ContactRoute[]) {
-  const byKey = new Map<string, ContactRoute>();
+function dedupeRoutes(routes: Array<ContactRoute | EnrichedContactRoute>) {
+  const byKey = new Map<string, ContactRoute | EnrichedContactRoute>();
 
   for (const route of routes) {
     const key = `${route.type.toLowerCase()}:${normalizeValue(route.value)}`;
     const existing = byKey.get(key);
 
-    if (!existing || route.verification === "source_confirmed") {
+    if (
+      !existing ||
+      ("provenance" in route && !("provenance" in existing)) ||
+      (route.verification === "source_confirmed" &&
+        existing.verification !== "source_confirmed")
+    ) {
       byKey.set(key, route);
     }
   }

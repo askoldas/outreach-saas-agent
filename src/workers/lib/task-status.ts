@@ -51,6 +51,23 @@ export async function failOrRetryTask(
     throw new Error(`Could not fail task ${task.id}: ${updateError.message}`);
   }
 
+  if (
+    !willRetry &&
+    task.task_type === "enrich_contacts" &&
+    typeof task.payload_json.leadDatabaseId === "string"
+  ) {
+    await supabase.from("lead_outreach_states").upsert(
+      {
+        workspace_id: task.workspace_id,
+        lead_id: task.payload_json.leadDatabaseId,
+        enrichment_status: "issue",
+        enrichment_run_id: task.run_id,
+        last_error: message,
+      },
+      { onConflict: "lead_id" },
+    );
+  }
+
   await refreshRunProgress(supabase, task.run_id);
 }
 
@@ -103,13 +120,16 @@ async function refreshRunProgress(supabase: SupabaseClient, runId: string) {
   const hasOpenTasks = tasks.some((task) =>
     ["pending", "retrying", "running"].includes(task.status),
   );
-  const status = failed > 0 && !hasOpenTasks ? "failed" : hasOpenTasks ? "running" : "completed";
-  const lastError = [...tasks].reverse().find((task) => task.error_message)?.error_message ?? null;
+  const status =
+    failed > 0 && !hasOpenTasks ? "failed" : hasOpenTasks ? "running" : "completed";
+  const lastError =
+    [...tasks].reverse().find((task) => task.error_message)?.error_message ?? null;
 
   const { error: runError } = await supabase
     .from("research_runs")
     .update({
-      completed_at: status === "completed" || status === "failed" ? new Date().toISOString() : null,
+      completed_at:
+        status === "completed" || status === "failed" ? new Date().toISOString() : null,
       current_step:
         status === "completed"
           ? "Discovery completed"

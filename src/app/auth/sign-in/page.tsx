@@ -26,7 +26,7 @@ export default async function SignInPage({
   return (
     <section className={styles.card} aria-labelledby="sign-in-title">
       <div className={styles.header}>
-        <span className={styles.wordmark}>OSA</span>
+        <span className={styles.wordmark}>Opptium</span>
         <h1 id="sign-in-title">Sign in</h1>
         <p>Use your workspace account to review campaigns, leads, and drafts.</p>
       </div>

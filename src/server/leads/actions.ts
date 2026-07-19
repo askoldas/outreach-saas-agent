@@ -1,14 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import type { LeadStatus } from "@/types/domain";
-import { importSampleLeads, updateLeadStatus } from "./repository";
+import { updateLeadStatus } from "./repository";
 import { createActivityEvent } from "@/server/activity/repository";
 import { enqueueLeadContactEnrichmentRun } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 type UpdateLeadReviewInput = {
+  campaignId?: string;
   leadId: string;
   status: LeadStatus;
 };
@@ -52,6 +52,11 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
   revalidatePath("/dashboard");
   revalidatePath("/leads");
   revalidatePath(`/leads/${input.leadId}`);
+  if (input.campaignId) {
+    revalidatePath(`/campaigns/${input.campaignId}`);
+    revalidatePath(`/campaigns/${input.campaignId}/leads`);
+    revalidatePath(`/campaigns/${input.campaignId}/outreach`);
+  }
 
   return {
     message:
@@ -65,18 +70,4 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
               ? "Lead archived"
               : "Lead sent back to review",
   };
-}
-
-export async function importSampleLeadsAction() {
-  const { currentWorkspace } = await getWorkspaceContext();
-
-  if (!currentWorkspace) {
-    redirect("/onboarding/workspace");
-  }
-
-  await importSampleLeads(currentWorkspace.id);
-
-  revalidatePath("/dashboard");
-  revalidatePath("/leads");
-  redirect("/leads?message=sample-leads-imported");
 }

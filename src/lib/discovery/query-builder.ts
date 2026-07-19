@@ -1,20 +1,19 @@
-import type { Campaign, Offer } from "@/types/domain";
+import type { Campaign, CompanyProfile } from "@/types/domain";
 
 const maxDiscoveryQueries = 12;
 const maxTermsPerFamily = 4;
 
 type CampaignSearchContext = Campaign & {
-  offer?: Pick<
-    Offer,
-    | "buyerTypes"
+  sellerProfile?: Pick<
+    CompanyProfile,
+    | "customerTypes"
     | "capabilities"
     | "differentiators"
-    | "keywords"
     | "limitations"
-    | "name"
-    | "problems"
+    | "companyName"
+    | "productsAndServices"
+    | "claims"
     | "summary"
-    | "type"
   > | null;
 };
 
@@ -62,23 +61,22 @@ export function buildCampaignSearchQueries(campaign: CampaignSearchContext): str
     ? locale.businessTerms
     : ["company", "provider", "supplier", "contact"];
   const siteFilter = locale.siteFilter;
-  const offer = campaign.offer ?? null;
+  const sellerProfile = campaign.sellerProfile ?? null;
   const buyerTerms = unique([
     ...campaign.targetSegments,
-    ...(offer?.buyerTypes ?? []),
+    ...(sellerProfile?.customerTypes ?? []),
   ]);
   const industryTerms = unique([
     ...campaign.industryTerms,
     ...campaign.strategy.terms,
     ...campaign.strategy.localizedTerms,
-    ...(offer?.keywords ?? []),
+    ...(sellerProfile?.productsAndServices ?? []),
   ]);
   const solutionTerms = unique([
-    offer?.name ?? "",
-    offer?.type ?? "",
-    ...(offer?.capabilities ?? []),
-    ...(offer?.problems ?? []),
-    ...(offer?.differentiators ?? []),
+    sellerProfile?.companyName ?? "",
+    ...(sellerProfile?.capabilities ?? []),
+    ...(sellerProfile?.claims ?? []),
+    ...(sellerProfile?.differentiators ?? []),
   ]);
   const queries: string[] = [];
 
@@ -102,26 +100,37 @@ export function buildCampaignSearchQueries(campaign: CampaignSearchContext): str
   for (const solution of solutionTerms.slice(0, maxTermsPerFamily)) {
     const buyer = buyerTerms[queries.length % Math.max(buyerTerms.length, 1)];
     queries.push(
-      joinQuery([siteFilter, solution, buyer, geographyTerms[0], getObjectiveIntent(campaign)]),
+      joinQuery([
+        siteFilter,
+        solution,
+        buyer,
+        geographyTerms[0],
+        getObjectiveIntent(campaign),
+      ]),
     );
   }
 
   const primaryIndustry = industryTerms[0] ?? solutionTerms[0] ?? campaign.objective;
   queries.push(joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "directory"]));
-  queries.push(joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "association members"]));
+  queries.push(
+    joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "association members"]),
+  );
 
   if (isPartnerObjective(campaign.objective)) {
-    queries.push(joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "distributor partner"]));
+    queries.push(
+      joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "distributor partner"]),
+    );
     queries.push(joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "reseller"]));
-  }
-
-  if (isServiceOffer(offer?.type)) {
-    queries.push(joinQuery([siteFilter, primaryIndustry, geographyTerms[0], "service provider"]));
   }
 
   if (queries.length === 0) {
     queries.push(
-      joinQuery([siteFilter, campaign.objective, campaign.geography, "B2B company contact"]),
+      joinQuery([
+        siteFilter,
+        campaign.objective,
+        campaign.geography,
+        "B2B company contact",
+      ]),
     );
   }
 
@@ -175,10 +184,6 @@ function getObjectiveIntent(campaign: CampaignSearchContext) {
 
 function isPartnerObjective(objective: string) {
   return /(distributor|reseller|partner|channel|agent)/i.test(objective);
-}
-
-function isServiceOffer(type: Offer["type"] | undefined) {
-  return type === "service" || type === "software";
 }
 
 function joinQuery(parts: Array<string | undefined>) {

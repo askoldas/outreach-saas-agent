@@ -1,4 +1,3 @@
-import { drafts as sampleDrafts } from "@/data/mock/prospecting";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { DraftStatus, OutreachDraft } from "@/types/domain";
 
@@ -18,6 +17,8 @@ type DraftRow = {
   subject: string;
   variant: DraftVariant;
   warnings: string[];
+  prompt_version: string | null;
+  generated_at: string | null;
 };
 
 type UpdateDraftInput = {
@@ -39,7 +40,9 @@ const draftSelect = `
   last_edited_label,
   seller_claims,
   evidence_used,
-  warnings
+  warnings,
+  prompt_version,
+  generated_at
 `;
 
 export async function listDrafts(workspaceId: string): Promise<OutreachDraft[]> {
@@ -54,6 +57,21 @@ export async function listDrafts(workspaceId: string): Promise<OutreachDraft[]> 
     throw new Error(`Could not load drafts: ${error.message}`);
   }
 
+  return ((data ?? []) as DraftRow[]).map(mapDraft);
+}
+
+export async function listCampaignDrafts(
+  workspaceId: string,
+  campaignId: string,
+): Promise<OutreachDraft[]> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("outreach_drafts")
+    .select(draftSelect)
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_external_id", campaignId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`Could not load campaign drafts: ${error.message}`);
   return ((data ?? []) as DraftRow[]).map(mapDraft);
 }
 
@@ -102,38 +120,6 @@ export async function updateDraft(
   return mapDraft(data as DraftRow);
 }
 
-export async function importSampleDrafts(workspaceId: string): Promise<number> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("outreach_drafts")
-    .upsert(
-      sampleDrafts.map((draft) => ({
-        body: draft.body,
-        campaign_external_id: draft.campaignId,
-        evidence_used: draft.evidenceUsed,
-        external_id: draft.id,
-        language: draft.language,
-        last_edited_label: draft.lastEdited,
-        lead_external_id: draft.leadId,
-        recipient_route: draft.recipientRoute,
-        seller_claims: draft.sellerClaims,
-        status: draft.status,
-        subject: draft.subject,
-        variant: draft.variant,
-        warnings: draft.warnings,
-        workspace_id: workspaceId,
-      })),
-      { onConflict: "workspace_id,external_id" },
-    )
-    .select("id");
-
-  if (error) {
-    throw new Error(`Could not import sample drafts: ${error.message}`);
-  }
-
-  return data?.length ?? 0;
-}
-
 function mapDraft(row: DraftRow): OutreachDraft {
   return {
     body: row.body,
@@ -149,5 +135,7 @@ function mapDraft(row: DraftRow): OutreachDraft {
     subject: row.subject,
     variant: row.variant,
     warnings: row.warnings,
+    promptVersion: row.prompt_version,
+    generatedAt: row.generated_at,
   };
 }

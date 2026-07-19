@@ -120,7 +120,9 @@ export function classifySearchResults(
   };
 }
 
-export function classifySearchResult(result: SearchResultWithQuery): SourceClassification {
+export function classifySearchResult(
+  result: SearchResultWithQuery,
+): SourceClassification {
   const hostname = getHostname(result.url);
   const path = getPathname(result.url);
   const haystack = `${result.title} ${result.url} ${result.content}`.toLowerCase();

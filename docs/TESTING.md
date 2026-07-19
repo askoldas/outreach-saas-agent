@@ -83,15 +83,28 @@ Cover:
 Keep the first suite small and focused on critical journeys:
 
 1. sign in and create a workspace;
-2. create and approve an offer;
-3. create and start a campaign with mocked providers;
+2. create and version a Company Profile;
+3. create a campaign and review its Strategy with provider adapters isolated;
 4. inspect a lead, evidence, and qualification;
 5. approve a lead and generate a draft;
 6. edit and approve a draft;
 7. open an external compose action without a false sent state;
 8. verify a user cannot access another workspace by changing a URL.
 
-Use browser tests only where browser and server behavior need to be tested together.
+Playwright provides the browser layer. The executable journey uses a disposable local
+Supabase stack and verifies unauthenticated routing, account sign-up/sign-in, workspace
+creation, Company Profile versioning, campaign creation, and Strategy review. It then
+uses the CI-only service-role boundary to seed synthetic worker-completed enrichment and
+draft records before exercising recipient acceptance, draft editing, export recording,
+and authenticated historical CSV download. Provider calls remain outside the default
+browser suite; Tavily and OpenRouter are tested at their adapter and worker boundaries.
+
+Run it after starting local Supabase and exporting its URL and keys:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
 
 ## 3. AI task tests
 
@@ -211,7 +224,7 @@ Once the scaffold exists, pull requests should run:
 - unit tests;
 - database migration and integration tests;
 - production build;
-- a minimal end-to-end suite when runtime cost is acceptable;
+- the minimal Playwright campaign-workflow suite against disposable Supabase;
 - dependency and secret scanning.
 
 The exact commands must be added only after the tools are installed and should remain synchronized with `package.json` and CI.

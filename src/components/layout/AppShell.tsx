@@ -7,20 +7,22 @@ import type { Workspace } from "@/server/workspaces/types";
 import styles from "./AppShell.module.css";
 
 const navItems = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/offers", label: "Offers" },
+  { href: "/dashboard", label: "Dashboard" },
   { href: "/campaigns", label: "Campaigns" },
-  { href: "/leads", label: "Leads" },
-  { href: "/drafts", label: "Outreach drafts" },
+  { href: "/company-profile", label: "Company Profile" },
+] as const;
+
+const footerItems = [
+  { href: "/usage", label: "Usage & Credits" },
   { href: "/settings", label: "Settings" },
+  { href: "/help", label: "Help" },
 ] as const;
 
 const titleByPath = [
-  { prefix: "/dashboard", title: "Overview", context: "Pipeline health" },
-  { prefix: "/offers", title: "Offers", context: "Seller knowledge" },
+  { prefix: "/dashboard", title: "Dashboard", context: "What needs attention" },
+  { prefix: "/company-profile", title: "Company Profile", context: "Seller knowledge" },
   { prefix: "/campaigns", title: "Campaigns", context: "Market strategy" },
-  { prefix: "/leads", title: "Leads", context: "Review queue" },
-  { prefix: "/drafts", title: "Outreach drafts", context: "Human approval" },
+  { prefix: "/usage", title: "Usage & Credits", context: "Cost visibility" },
   { prefix: "/settings", title: "Settings", context: "Workspace controls" },
 ] as const;
 
@@ -153,11 +155,27 @@ function SidebarContent({
   return (
     <div className={styles.sidebarInner}>
       <Link className={styles.wordmark} href="/dashboard" onClick={onNavigate}>
-        <span>OSA</span>
-        <strong>Outreach Agent</strong>
+        <span>O</span>
+        <strong>Opptium</strong>
       </Link>
       <nav className={styles.nav}>
         {navItems.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.href}
+              className={active ? styles.navActive : styles.navLink}
+              href={item.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
+      <nav className={styles.footerNav} aria-label="Workspace navigation">
+        {footerItems.map((item) => {
           const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
           return (
             <Link
@@ -177,7 +195,7 @@ function SidebarContent({
         <p>
           {currentWorkspace
             ? `${currentWorkspace.name} owns tenant data for this session.`
-            : "Create a workspace before replacing mock business records."}
+            : "Create a workspace to begin configuring Company Profile knowledge."}
         </p>
       </div>
     </div>

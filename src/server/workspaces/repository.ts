@@ -104,7 +104,7 @@ export async function updateWorkspace(input: {
 
 export async function clearWorkspaceData(workspaceId: string): Promise<void> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const tables = ["outreach_drafts", "leads", "campaigns", "offers"] as const;
+  const tables = ["outreach_drafts", "leads", "campaigns"] as const;
 
   for (const table of tables) {
     const { error } = await supabase.from(table).delete().eq("workspace_id", workspaceId);

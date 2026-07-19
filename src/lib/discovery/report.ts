@@ -6,10 +6,7 @@ import type {
   DiscoveryReportResult,
 } from "@/types/domain";
 
-export function calculateDiscoveryProgress(
-  totalLeads: number,
-  desiredLeadCount: number,
-) {
+export function calculateDiscoveryProgress(totalLeads: number, desiredLeadCount: number) {
   if (desiredLeadCount <= 0) {
     return totalLeads > 0 ? 100 : 0;
   }

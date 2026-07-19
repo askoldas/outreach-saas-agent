@@ -3,13 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import type { CampaignStatus } from "@/types/domain";
-import {
-  createCampaign,
-  getCampaign,
-  importSampleCampaigns,
-  updateCampaign,
-  updateCampaignStatus,
-} from "./repository";
+import { createCampaign, getCampaign, updateCampaignStatus } from "./repository";
 import { createActivityEvent } from "@/server/activity/repository";
 import { enqueueCampaignDiscoveryRun } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
@@ -99,13 +93,12 @@ export async function createCampaignAction(formData: FormData) {
   }
 
   const name = getString(formData, "name");
-  const offerId = getString(formData, "offerId");
   const geography = getString(formData, "geography");
 
-  if (name.length < 2 || !offerId || geography.length < 2) {
+  if (name.length < 2 || geography.length < 2) {
     redirect(
       `/campaigns/new?error=${encodeURIComponent(
-        "Enter a campaign name, selected offer, and target geography.",
+        "Enter a campaign name and target geography.",
       )}`,
     );
   }
@@ -119,7 +112,6 @@ export async function createCampaignAction(formData: FormData) {
     localizedTerms: getList(formData, "localizedTerms"),
     name,
     objective: getString(formData, "objective") || "Direct buyers",
-    offerId,
     qualificationCriteria: getList(formData, "qualificationCriteria"),
     sourceCategories: getList(formData, "sourceCategories"),
     targetSegments: getList(formData, "targetSegments"),
@@ -135,69 +127,6 @@ export async function createCampaignAction(formData: FormData) {
   revalidatePath("/campaigns");
   revalidatePath("/dashboard");
   redirect(`/campaigns/${campaign.id}`);
-}
-
-export async function updateCampaignAction(formData: FormData) {
-  const { currentWorkspace } = await getWorkspaceContext();
-
-  if (!currentWorkspace) {
-    redirect("/onboarding/workspace");
-  }
-
-  const campaignId = getString(formData, "campaignId");
-  const name = getString(formData, "name");
-  const offerId = getString(formData, "offerId");
-  const geography = getString(formData, "geography");
-
-  if (!campaignId || name.length < 2 || !offerId || geography.length < 2) {
-    redirect(
-      `/campaigns/${campaignId}/edit?error=${encodeURIComponent(
-        "Enter a campaign name, selected offer, and target geography.",
-      )}`,
-    );
-  }
-
-  const campaign = await updateCampaign(currentWorkspace.id, {
-    campaignId,
-    desiredLeadCount: getPositiveNumber(formData, "desiredLeadCount", 25),
-    exclusions: getList(formData, "exclusions"),
-    geography,
-    industryTerms: getList(formData, "industryTerms"),
-    language: getString(formData, "language") || "English",
-    localizedTerms: getList(formData, "localizedTerms"),
-    name,
-    objective: getString(formData, "objective") || "Direct buyers",
-    offerId,
-    qualificationCriteria: getList(formData, "qualificationCriteria"),
-    sourceCategories: getList(formData, "sourceCategories"),
-    targetSegments: getList(formData, "targetSegments"),
-    terms: getList(formData, "terms"),
-  });
-  await createActivityEvent(currentWorkspace.id, {
-    description: `${campaign.name} strategy was edited.`,
-    entityExternalId: campaign.id,
-    entityType: "campaign",
-    label: "Campaign strategy edited",
-  });
-
-  revalidatePath("/campaigns");
-  revalidatePath(`/campaigns/${campaign.id}`);
-  revalidatePath("/dashboard");
-  redirect(`/campaigns/${campaign.id}`);
-}
-
-export async function importSampleCampaignsAction() {
-  const { currentWorkspace } = await getWorkspaceContext();
-
-  if (!currentWorkspace) {
-    redirect("/onboarding/workspace");
-  }
-
-  await importSampleCampaigns(currentWorkspace.id);
-
-  revalidatePath("/campaigns");
-  revalidatePath("/dashboard");
-  redirect("/campaigns?message=sample-campaigns-imported");
 }
 
 function getString(formData: FormData, key: string) {

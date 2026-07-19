@@ -106,7 +106,6 @@ export async function clearWorkspaceDataAction(formData: FormData) {
   await clearWorkspaceData(currentWorkspace.id);
 
   revalidatePath("/dashboard");
-  revalidatePath("/offers");
   revalidatePath("/campaigns");
   revalidatePath("/leads");
   revalidatePath("/drafts");

@@ -1,14 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { OfferType } from "../../types/domain.ts";
 import { buildCampaignSearchQueries } from "../../lib/discovery/query-builder.ts";
 import { classifySearchResults } from "../../lib/discovery/result-classifier.ts";
 import type { ClassifiedSearchResult } from "../../lib/discovery/result-classifier.ts";
-import { calculateDiscoveryProgress, buildDiscoveryReport } from "../../lib/discovery/report.ts";
+import {
+  calculateDiscoveryProgress,
+  buildDiscoveryReport,
+} from "../../lib/discovery/report.ts";
 import { searchWeb } from "../../lib/providers/tavily.ts";
 import { updateRunStep } from "../lib/task-status.ts";
 import type { ResearchTaskRow } from "../lib/claim-task.ts";
 
 type CampaignRow = {
+  id: string;
   awaiting_review: number;
   desired_lead_count?: number;
   external_id: string;
@@ -17,7 +20,6 @@ type CampaignRow = {
   language: string;
   name: string;
   objective: string;
-  offer_external_id: string;
   strategy_criteria: string[];
   strategy_exclusions: string[];
   strategy_limitations: string[];
@@ -27,17 +29,15 @@ type CampaignRow = {
   target_segments: string[];
 };
 
-type OfferRow = {
-  buyer_types: string[];
+type SellerProfileRow = {
+  customer_types: string[];
   capabilities: string[];
   differentiators: string[];
-  external_id: string;
-  keywords: string[];
   limitations: string[];
-  name: string;
-  problems: string[];
+  company_name: string;
+  products_and_services: string[];
+  claims: string[];
   summary: string;
-  type: string;
 };
 
 type SavedLeadSource = {
@@ -67,9 +67,10 @@ export async function processSearchWebTask(
 ) {
   await updateRunStep(supabase, task.run_id, "Loading campaign", 5);
   const campaign = await loadCampaign(supabase, task);
-  const offer = await loadOffer(supabase, task.workspace_id, campaign.offer_external_id);
+  const sellerProfile = await loadSellerProfile(supabase, task, campaign.id);
   const existingCount = await countCampaignLeads(supabase, task);
-  const desiredLeadCount = campaign.desired_lead_count ?? getPayloadDesiredLeadCount(task);
+  const desiredLeadCount =
+    campaign.desired_lead_count ?? getPayloadDesiredLeadCount(task);
   const remainingLeadSlots = Math.max(desiredLeadCount - existingCount.total, 0);
   const existingContactTaskCount = await enqueueExistingLeadContactTasks(
     supabase,
@@ -105,7 +106,9 @@ export async function processSearchWebTask(
   }
 
   await updateRunStep(supabase, task.run_id, "Searching Tavily", 15);
-  const queries = buildCampaignSearchQueries(toCampaignLike(campaign, offer, desiredLeadCount));
+  const queries = buildCampaignSearchQueries(
+    toCampaignLike(campaign, sellerProfile, desiredLeadCount),
+  );
   const resultsByQuery = await Promise.all(
     queries.map(async (query) =>
       (await searchWeb(query)).map((result) => ({
@@ -190,21 +193,15 @@ async function loadCampaign(supabase: SupabaseClient, task: ResearchTaskRow) {
     .from("campaigns")
     .select(
       `
+        id,
         external_id,
         name,
         objective,
         geography,
         target_segments,
         language,
-        strategy_terms,
-        strategy_localized_terms,
-        strategy_sources,
-        strategy_criteria,
-        strategy_exclusions,
-        strategy_limitations,
         desired_lead_count,
         industry_terms,
-        offer_external_id,
         awaiting_review
       `,
     )
@@ -216,39 +213,73 @@ async function loadCampaign(supabase: SupabaseClient, task: ResearchTaskRow) {
     throw new Error(`Could not load campaign ${task.campaign_id}: ${error.message}`);
   }
 
-  return data as CampaignRow;
+  const campaign = data as CampaignRow;
+  const strategy = await loadFrozenStrategy(supabase, task.run_id);
+  return {
+    ...campaign,
+    geography: strategy.target_geography,
+    target_segments: strategy.company_types,
+    industry_terms: strategy.industries,
+    language: strategy.search_languages[0] ?? campaign.language,
+    strategy_terms: strategy.search_terms,
+    strategy_localized_terms: strategy.localized_terms,
+    strategy_sources: strategy.source_categories,
+    strategy_criteria: strategy.qualification_criteria,
+    strategy_exclusions: strategy.exclusions,
+    strategy_limitations: strategy.limitations,
+    desired_lead_count: strategy.target_company_count,
+  };
 }
 
-async function loadOffer(
+async function loadFrozenStrategy(supabase: SupabaseClient, runId: string) {
+  const { data: run, error: runError } = await supabase
+    .from("research_runs")
+    .select("strategy_version_id")
+    .eq("id", runId)
+    .single();
+  if (runError)
+    throw new Error(`Could not load frozen strategy reference: ${runError.message}`);
+  const strategyId = (run as { strategy_version_id: string | null }).strategy_version_id;
+  if (!strategyId) throw new Error("Research run is missing its frozen strategy.");
+  const { data, error } = await supabase
+    .from("campaign_strategy_versions")
+    .select(
+      "target_geography,company_types,industries,search_languages,search_terms,localized_terms,source_categories,qualification_criteria,exclusions,limitations,target_company_count",
+    )
+    .eq("id", strategyId)
+    .single();
+  if (error) throw new Error(`Could not load frozen strategy: ${error.message}`);
+  return data as {
+    target_geography: string;
+    company_types: string[];
+    industries: string[];
+    search_languages: string[];
+    search_terms: string[];
+    localized_terms: string[];
+    source_categories: string[];
+    qualification_criteria: string[];
+    exclusions: string[];
+    limitations: string[];
+    target_company_count: number;
+  };
+}
+
+async function loadSellerProfile(
   supabase: SupabaseClient,
-  workspaceId: string,
-  offerExternalId: string,
+  task: ResearchTaskRow,
+  campaignDatabaseId: string,
 ) {
   const { data, error } = await supabase
-    .from("offers")
-    .select(
-      `
-        external_id,
-        name,
-        type,
-        summary,
-        problems,
-        capabilities,
-        buyer_types,
-        differentiators,
-        limitations,
-        keywords
-      `,
-    )
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", offerExternalId)
-    .maybeSingle();
+    .from("campaign_profile_snapshots")
+    .select("snapshot")
+    .eq("workspace_id", task.workspace_id)
+    .eq("campaign_id", campaignDatabaseId)
+    .single();
 
   if (error) {
-    throw new Error(`Could not load offer for search context: ${error.message}`);
+    throw new Error(`Could not load frozen seller profile: ${error.message}`);
   }
-
-  return data ? (data as OfferRow) : null;
+  return (data as { snapshot: SellerProfileRow }).snapshot;
 }
 
 async function countCampaignLeads(supabase: SupabaseClient, task: ResearchTaskRow) {
@@ -290,23 +321,26 @@ async function saveLeadSources(
   }
 
   const uniqueSources = dedupeLeadSources(sources);
-  const { data, error } = await supabase.from("lead_sources").upsert(
-    uniqueSources.map((source) => ({
-      campaign_id: task.campaign_id,
-      classification: source.classification,
-      content: source.result.content ?? "",
-      query: source.result.query,
-      rejection_reason: source.rejectionReason || null,
-      result_json: source.result,
-      run_id: task.run_id,
-      score: source.result.score,
-      source_type: "tavily_search",
-      title: source.result.title,
-      url: source.result.url,
-      workspace_id: task.workspace_id,
-    })),
-    { onConflict: "workspace_id,campaign_id,url" },
-  ).select("id,url");
+  const { data, error } = await supabase
+    .from("lead_sources")
+    .upsert(
+      uniqueSources.map((source) => ({
+        campaign_id: task.campaign_id,
+        classification: source.classification,
+        content: source.result.content ?? "",
+        query: source.result.query,
+        rejection_reason: source.rejectionReason || null,
+        result_json: source.result,
+        run_id: task.run_id,
+        score: source.result.score,
+        source_type: "tavily_search",
+        title: source.result.title,
+        url: source.result.url,
+        workspace_id: task.workspace_id,
+      })),
+      { onConflict: "workspace_id,campaign_id,url" },
+    )
+    .select("id,url");
 
   if (error) {
     throw new Error(`Could not save lead sources: ${error.message}`);
@@ -426,7 +460,9 @@ async function enqueueExistingLeadContactTasks(
     .limit(Math.max(desiredLeadCount, 1));
 
   if (error) {
-    throw new Error(`Could not load existing leads for contact enrichment: ${error.message}`);
+    throw new Error(
+      `Could not load existing leads for contact enrichment: ${error.message}`,
+    );
   }
 
   const taskRows = ((data ?? []) as ExistingLeadForContactTask[])
@@ -496,7 +532,8 @@ async function finishCampaignRun(
     report: unknown;
   },
 ) {
-  const desiredLeadCount = campaign.desired_lead_count ?? getPayloadDesiredLeadCount(task);
+  const desiredLeadCount =
+    campaign.desired_lead_count ?? getPayloadDesiredLeadCount(task);
   const { error } = await supabase
     .from("campaigns")
     .update({
@@ -520,7 +557,7 @@ async function finishCampaignRun(
 
 function toCampaignLike(
   campaign: CampaignRow,
-  offer: OfferRow | null,
+  sellerProfile: SellerProfileRow,
   desiredLeadCount: number,
 ) {
   return {
@@ -535,20 +572,16 @@ function toCampaignLike(
     leadCount: 0,
     name: campaign.name,
     objective: campaign.objective,
-    offer: offer
-      ? {
-          buyerTypes: offer.buyer_types,
-          capabilities: offer.capabilities,
-          differentiators: offer.differentiators,
-          keywords: offer.keywords,
-          limitations: offer.limitations,
-          name: offer.name,
-          problems: offer.problems,
-          summary: offer.summary,
-          type: toOfferType(offer.type),
-        }
-      : null,
-    offerId: "",
+    sellerProfile: {
+      companyName: sellerProfile.company_name,
+      productsAndServices: sellerProfile.products_and_services,
+      customerTypes: sellerProfile.customer_types,
+      capabilities: sellerProfile.capabilities,
+      differentiators: sellerProfile.differentiators,
+      claims: sellerProfile.claims,
+      limitations: sellerProfile.limitations,
+      summary: sellerProfile.summary,
+    },
     progress: 0,
     status: "running" as const,
     strategy: {
@@ -583,19 +616,6 @@ function getPayloadDesiredLeadCount(task: ResearchTaskRow) {
   const value = Number(task.payload_json.desiredLeadCount);
 
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : 25;
-}
-
-function toOfferType(type: string): OfferType {
-  return (
-    type === "product" ||
-    type === "service" ||
-    type === "software" ||
-    type === "distribution" ||
-    type === "manufacturing" ||
-    type === "partnership"
-      ? type
-      : "service"
-  );
 }
 
 function normalizeUrlKey(url: string) {

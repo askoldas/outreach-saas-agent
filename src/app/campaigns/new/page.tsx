@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { CampaignWizard } from "@/features/campaigns/CampaignWizard";
-import { listOffers } from "@/server/offers/repository";
+import { CampaignBriefForm } from "@/features/campaigns/CampaignBriefForm";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { PageHeader } from "@/components/ui/PageHeader";
 
@@ -18,7 +17,6 @@ export default async function NewCampaignPage({
   }
 
   const params = await searchParams;
-  const offers = await listOffers(currentWorkspace.id);
 
   return (
     <>
@@ -26,7 +24,7 @@ export default async function NewCampaignPage({
         title="Create campaign"
         description={`Define a target market for ${currentWorkspace.name} and review a visible strategy before discovery begins.`}
       />
-      <CampaignWizard error={params.error} offers={offers} />
+      <CampaignBriefForm error={params.error} />
     </>
   );
 }

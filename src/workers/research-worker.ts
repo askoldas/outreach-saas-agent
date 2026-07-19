@@ -8,6 +8,8 @@ import { completeTask, failOrRetryTask } from "./lib/task-status.ts";
 import { processEnrichContactsTask } from "./tasks/enrich-contacts.ts";
 import { processEvaluateLeadTask } from "./tasks/evaluate-lead.ts";
 import { processSearchWebTask } from "./tasks/search-web.ts";
+import { processGenerateDraftTask } from "./tasks/generate-draft.ts";
+import { processAnalyzeCompanyProfileTask } from "./tasks/analyze-company-profile.ts";
 
 loadLocalEnv();
 const { pollIntervalMs, workerId } = getWorkerConfig();
@@ -69,6 +71,14 @@ async function processTask(task: Awaited<ReturnType<typeof claimNextResearchTask
 
   if (task.task_type === "enrich_contacts") {
     return processEnrichContactsTask(supabase, task);
+  }
+
+  if (task.task_type === "generate_draft") {
+    return processGenerateDraftTask(supabase, task);
+  }
+
+  if (task.task_type === "analyze_company_profile") {
+    return processAnalyzeCompanyProfileTask(supabase, task);
   }
 
   throw new Error(`Unsupported research task type: ${task.task_type}`);

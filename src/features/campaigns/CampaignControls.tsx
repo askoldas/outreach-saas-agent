@@ -39,9 +39,7 @@ export function CampaignControls({
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new Error(
-        payload.error ?? `Progress request failed with ${response.status}`,
-      );
+      throw new Error(payload.error ?? `Progress request failed with ${response.status}`);
     }
 
     const nextProgress = (await response.json()) as ResearchProgress;
@@ -181,7 +179,9 @@ export function CampaignControls({
       <Badge tone="accent">
         {isBusy ? message || "Working..." : message || `Status: ${currentStatus}`}
       </Badge>
-      {progressError ? <Badge tone="warning">Progress polling: {progressError}</Badge> : null}
+      {progressError ? (
+        <Badge tone="warning">Progress polling: {progressError}</Badge>
+      ) : null}
       {isDiscovering || progress ? (
         <div className={styles.stack}>
           <ProgressRow

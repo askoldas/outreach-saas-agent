@@ -1,5 +1,4 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
-import { leads as sampleLeads } from "@/data/mock/prospecting";
 import type { EvaluatedLeadCandidate } from "@/lib/providers/lead-evaluator";
 import type { SearchResult } from "@/lib/providers/tavily";
 import type {
@@ -59,12 +58,18 @@ type EvidenceClaimRow = {
 };
 
 type ContactRouteRow = {
+  id: string;
   sort_order: number;
   source: string;
   suggested_role: string;
   type: string;
   value: string;
   verification: ContactRoute["verification"];
+  verification_provider: string | null;
+  verification_query: string | null;
+  verification_source_title: string | null;
+  verification_source_url: string | null;
+  verified_at: string | null;
 };
 
 type PersistedLeadIdentifier = {
@@ -119,10 +124,16 @@ const leadSelect = `
     sort_order
   ),
   lead_contact_routes (
+    id,
     type,
     value,
     suggested_role,
     verification,
+    verification_provider,
+    verification_query,
+    verification_source_title,
+    verification_source_url,
+    verified_at,
     source,
     sort_order
   )
@@ -141,6 +152,22 @@ export async function listLeads(workspaceId: string): Promise<Lead[]> {
     throw new Error(`Could not load leads: ${error.message}`);
   }
 
+  return ((data ?? []) as LeadRow[]).map(mapLead);
+}
+
+export async function listCampaignLeads(
+  workspaceId: string,
+  campaignId: string,
+): Promise<Lead[]> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("leads")
+    .select(leadSelect)
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_id", campaignId)
+    .order("fit_score", { ascending: false })
+    .order("company", { ascending: true });
+  if (error) throw new Error(`Could not load campaign leads: ${error.message}`);
   return ((data ?? []) as LeadRow[]).map(mapLead);
 }
 
@@ -445,10 +472,7 @@ export async function applyLeadQualification(
   }
 
   const leadId = (data as { id: string }).id;
-  await replaceLeadQualificationDimensions(
-    leadId,
-    buildQualifiedDimensions(candidate),
-  );
+  await replaceLeadQualificationDimensions(leadId, buildQualifiedDimensions(candidate));
 
   const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
     [
@@ -682,109 +706,6 @@ export async function replaceLeadContactRoutes(
   }
 }
 
-export async function importSampleLeads(workspaceId: string): Promise<number> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .upsert(
-      sampleLeads.map((lead) => ({
-        campaign_id: lead.campaignId,
-        city: lead.city,
-        company: lead.company,
-        company_type: lead.companyType,
-        confidence: lead.confidence,
-        contactability: lead.contactability,
-        country: lead.country,
-        description: lead.description,
-        estimated_size: lead.estimatedSize,
-        external_id: lead.id,
-        fit_score: lead.fitScore,
-        industry: lead.industry,
-        status: lead.status,
-        summary: lead.summary,
-        website: lead.website,
-        workspace_id: workspaceId,
-      })),
-      { onConflict: "workspace_id,external_id" },
-    )
-    .select("id,external_id");
-
-  if (error) {
-    throw new Error(`Could not import sample leads: ${error.message}`);
-  }
-
-  const persistedLeads = (data ?? []) as PersistedLeadIdentifier[];
-  const leadIds = persistedLeads.map((lead) => lead.id);
-  const leadIdByExternalId = new Map(
-    persistedLeads.map((lead) => [lead.external_id, lead.id]),
-  );
-
-  if (leadIds.length === 0) {
-    return 0;
-  }
-
-  await replaceLeadChildren(
-    "lead_qualification_dimensions",
-    leadIds,
-    sampleLeads.flatMap((lead) => {
-      const leadId = leadIdByExternalId.get(lead.id);
-      return leadId
-        ? lead.qualification.map((item, index) => ({
-            confidence: item.confidence,
-            explanation: item.explanation,
-            label: item.label,
-            lead_id: leadId,
-            score: item.score,
-            sort_order: index,
-          }))
-        : [];
-    }),
-  );
-
-  await replaceLeadChildren(
-    "lead_evidence_claims",
-    leadIds,
-    sampleLeads.flatMap((lead) => {
-      const leadId = leadIdByExternalId.get(lead.id);
-      return leadId
-        ? lead.evidence.map((item, index) => ({
-            confidence: item.confidence,
-            external_id: item.id,
-            kind: item.kind,
-            lead_id: leadId,
-            retrieved_at: item.retrievedAt,
-            sort_order: index,
-            source_label: item.sourceLabel,
-            source_type: item.sourceType,
-            source_url: item.sourceUrl,
-            text: item.text,
-          }))
-        : [];
-    }),
-  );
-
-  await replaceLeadChildren(
-    "lead_contact_routes",
-    leadIds,
-    sampleLeads.flatMap((lead) => {
-      const leadId = leadIdByExternalId.get(lead.id);
-      return leadId
-        ? lead.contacts.map((item, index) => ({
-            lead_id: leadId,
-            sort_order: index,
-            source: item.source,
-            suggested_role: item.suggestedRole,
-            type: item.type,
-            value: item.value,
-            verification: item.verification,
-          }))
-        : [];
-    }),
-  );
-
-  return persistedLeads.length;
-}
-
 function mapLead(row: LeadRow): Lead {
   return {
     campaignId: row.campaign_id ?? "",
@@ -853,11 +774,22 @@ function mapEvidence(rows: EvidenceClaimRow[] | null): EvidenceClaim[] {
 
 function mapContacts(rows: ContactRouteRow[] | null): ContactRoute[] {
   return sortByOrder(rows).map((row) => ({
+    id: row.id,
     source: row.source,
     suggestedRole: row.suggested_role,
     type: row.type,
     value: row.value,
     verification: row.verification,
+    verificationProvenance:
+      row.verification_provider && row.verification_source_url && row.verified_at
+        ? {
+            provider: row.verification_provider,
+            query: row.verification_query ?? "",
+            sourceTitle: row.verification_source_title ?? row.verification_source_url,
+            sourceUrl: row.verification_source_url,
+            verifiedAt: row.verified_at,
+          }
+        : null,
   }));
 }
 

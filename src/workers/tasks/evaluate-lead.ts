@@ -18,29 +18,27 @@ type EvaluationPayload = {
 };
 
 type CampaignRow = {
+  id: string;
   external_id: string;
   geography: string;
   industry_terms?: string[] | null;
   language: string;
   objective: string;
-  offer_external_id: string;
   strategy_criteria: string[];
   strategy_exclusions: string[];
   strategy_terms: string[];
   target_segments: string[];
 };
 
-type OfferRow = {
-  buyer_types: string[];
+type SellerProfileRow = {
+  customer_types: string[];
   capabilities: string[];
   differentiators: string[];
-  external_id: string;
-  keywords: string[];
   limitations: string[];
-  name: string;
-  problems: string[];
+  company_name: string;
+  products_and_services: string[];
+  claims: string[];
   summary: string;
-  type: string;
 };
 
 export async function processEvaluateLeadTask(
@@ -50,8 +48,8 @@ export async function processEvaluateLeadTask(
   await updateRunStep(supabase, task.run_id, "Evaluating lead", 50);
   const payload = parsePayload(task);
   const campaign = await loadCampaign(supabase, task);
-  const offer = await loadOffer(supabase, task.workspace_id, campaign.offer_external_id);
-  const input = buildEvaluationInput(campaign, offer, payload);
+  const sellerProfile = await loadSellerProfile(supabase, task, campaign.id);
+  const input = buildEvaluationInput(campaign, sellerProfile, payload);
   const model = requireOpenRouterConfig().model;
 
   try {
@@ -67,10 +65,19 @@ export async function processEvaluateLeadTask(
     });
 
     if (result.evaluation.qualificationStatus !== "disqualified") {
-      const lead = await saveEvaluatedLead(supabase, task, payload.source, result.evaluation);
+      const lead = await saveEvaluatedLead(
+        supabase,
+        task,
+        payload.source,
+        result.evaluation,
+      );
       await enqueueContactEnrichmentTask(supabase, task, payload.source, lead);
     } else if (payload.source.sourceId) {
-      await updateLeadSourceEvaluation(supabase, payload.source.sourceId, result.evaluation);
+      await updateLeadSourceEvaluation(
+        supabase,
+        payload.source.sourceId,
+        result.evaluation,
+      );
     }
 
     return {
@@ -102,7 +109,7 @@ export async function processEvaluateLeadTask(
 
 function buildEvaluationInput(
   campaign: CampaignRow,
-  offer: OfferRow | null,
+  sellerProfile: SellerProfileRow,
   payload: EvaluationPayload,
 ): LeadEvaluationInput {
   return {
@@ -118,23 +125,16 @@ function buildEvaluationInput(
       },
       targetSegments: campaign.target_segments,
     },
-    offer: offer
-      ? {
-          buyerTypes: offer.buyer_types,
-          capabilities: offer.capabilities,
-          differentiators: offer.differentiators,
-          keywords: offer.keywords,
-          limitations: offer.limitations,
-          name: offer.name,
-          problems: offer.problems,
-          summary: offer.summary,
-          type: offer.type as LeadEvaluationInput["offer"] extends infer T
-            ? T extends { type: infer U }
-              ? U
-              : never
-            : never,
-        }
-      : null,
+    sellerProfile: {
+      companyName: sellerProfile.company_name,
+      productsAndServices: sellerProfile.products_and_services,
+      customerTypes: sellerProfile.customer_types,
+      capabilities: sellerProfile.capabilities,
+      differentiators: sellerProfile.differentiators,
+      claims: sellerProfile.claims,
+      limitations: sellerProfile.limitations,
+      summary: sellerProfile.summary,
+    },
     source: {
       classification: JSON.stringify(payload.source.classification ?? {}),
       content: payload.source.content,
@@ -151,16 +151,13 @@ async function loadCampaign(supabase: SupabaseClient, task: ResearchTaskRow) {
     .from("campaigns")
     .select(
       `
+        id,
         external_id,
         objective,
         geography,
         target_segments,
         language,
-        strategy_terms,
-        strategy_criteria,
-        strategy_exclusions,
-        industry_terms,
-        offer_external_id
+        industry_terms
       `,
     )
     .eq("workspace_id", task.workspace_id)
@@ -171,39 +168,62 @@ async function loadCampaign(supabase: SupabaseClient, task: ResearchTaskRow) {
     throw new Error(`Could not load campaign for lead evaluation: ${error.message}`);
   }
 
-  return data as CampaignRow;
+  const campaign = data as CampaignRow;
+  const { data: run, error: runError } = await supabase
+    .from("research_runs")
+    .select("strategy_version_id")
+    .eq("id", task.run_id)
+    .single();
+  if (runError)
+    throw new Error(`Could not load frozen strategy reference: ${runError.message}`);
+  const strategyId = (run as { strategy_version_id: string | null }).strategy_version_id;
+  if (!strategyId) throw new Error("Research run is missing its frozen strategy.");
+  const { data: strategy, error: strategyError } = await supabase
+    .from("campaign_strategy_versions")
+    .select(
+      "target_geography,company_types,industries,search_languages,search_terms,qualification_criteria,exclusions",
+    )
+    .eq("id", strategyId)
+    .single();
+  if (strategyError)
+    throw new Error(`Could not load frozen strategy: ${strategyError.message}`);
+  const frozen = strategy as {
+    target_geography: string;
+    company_types: string[];
+    industries: string[];
+    search_languages: string[];
+    search_terms: string[];
+    qualification_criteria: string[];
+    exclusions: string[];
+  };
+  return {
+    ...campaign,
+    geography: frozen.target_geography,
+    target_segments: frozen.company_types,
+    industry_terms: frozen.industries,
+    language: frozen.search_languages[0] ?? campaign.language,
+    strategy_terms: frozen.search_terms,
+    strategy_criteria: frozen.qualification_criteria,
+    strategy_exclusions: frozen.exclusions,
+  };
 }
 
-async function loadOffer(
+async function loadSellerProfile(
   supabase: SupabaseClient,
-  workspaceId: string,
-  offerExternalId: string,
+  task: ResearchTaskRow,
+  campaignDatabaseId: string,
 ) {
   const { data, error } = await supabase
-    .from("offers")
-    .select(
-      `
-        external_id,
-        name,
-        type,
-        summary,
-        problems,
-        capabilities,
-        buyer_types,
-        differentiators,
-        limitations,
-        keywords
-      `,
-    )
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", offerExternalId)
-    .maybeSingle();
+    .from("campaign_profile_snapshots")
+    .select("snapshot")
+    .eq("workspace_id", task.workspace_id)
+    .eq("campaign_id", campaignDatabaseId)
+    .single();
 
   if (error) {
-    throw new Error(`Could not load offer for lead evaluation: ${error.message}`);
+    throw new Error(`Could not load frozen seller profile: ${error.message}`);
   }
-
-  return data ? (data as OfferRow) : null;
+  return (data as { snapshot: SellerProfileRow }).snapshot;
 }
 
 async function logAiGeneration(
@@ -247,7 +267,10 @@ async function saveEvaluatedLead(
   source: EvaluationPayload["source"],
   evaluation: LeadEvaluation,
 ) {
-  const externalId = createDiscoveredLeadId(evaluation.website ?? source.url, evaluation.companyName ?? source.title);
+  const externalId = createDiscoveredLeadId(
+    evaluation.website ?? source.url,
+    evaluation.companyName ?? source.title,
+  );
   const website = evaluation.website ?? getOrigin(source.url);
   const { data, error } = await supabase
     .from("leads")
@@ -344,11 +367,19 @@ async function saveLeadForAiFailure(
     .single();
 
   if (upsertError) {
-    throw new Error(`Could not save lead after AI evaluation failure: ${upsertError.message}`);
+    throw new Error(
+      `Could not save lead after AI evaluation failure: ${upsertError.message}`,
+    );
   }
 
   const leadId = (data as { id: string }).id;
-  await replaceFailedLeadEvidenceAndQualification(supabase, leadId, source, errorMessage, fitScore);
+  await replaceFailedLeadEvidenceAndQualification(
+    supabase,
+    leadId,
+    source,
+    errorMessage,
+    fitScore,
+  );
 
   if (source.sourceId) {
     await updateLeadSourceEvaluationFailure(supabase, source.sourceId, errorMessage);
@@ -446,7 +477,9 @@ async function replaceLeadEvidenceAndQualification(
     .eq("lead_id", leadId);
 
   if (deleteError) {
-    throw new Error(`Could not clear lead qualification dimensions: ${deleteError.message}`);
+    throw new Error(
+      `Could not clear lead qualification dimensions: ${deleteError.message}`,
+    );
   }
 
   const dimensions = [
@@ -459,7 +492,8 @@ async function replaceLeadEvidenceAndQualification(
     {
       confidence: evaluation.missingInfo.length > 0 ? "low" : "medium",
       explanation:
-        evaluation.missingInfo.join("; ") || "Source snippet provided enough context for review.",
+        evaluation.missingInfo.join("; ") ||
+        "Source snippet provided enough context for review.",
       label: "Evidence quality",
       score: evaluation.missingInfo.length > 0 ? 45 : 65,
     },
@@ -486,7 +520,9 @@ async function replaceLeadEvidenceAndQualification(
     );
 
   if (dimensionError) {
-    throw new Error(`Could not save lead evaluation dimensions: ${dimensionError.message}`);
+    throw new Error(
+      `Could not save lead evaluation dimensions: ${dimensionError.message}`,
+    );
   }
 }
 
@@ -582,7 +618,9 @@ async function replaceFailedLeadEvidenceAndQualification(
     .eq("lead_id", leadId);
 
   if (deleteError) {
-    throw new Error(`Could not clear failed lead qualification dimensions: ${deleteError.message}`);
+    throw new Error(
+      `Could not clear failed lead qualification dimensions: ${deleteError.message}`,
+    );
   }
 
   const { error: dimensionError } = await supabase
@@ -616,7 +654,9 @@ async function replaceFailedLeadEvidenceAndQualification(
     ]);
 
   if (dimensionError) {
-    throw new Error(`Could not save failed lead qualification dimensions: ${dimensionError.message}`);
+    throw new Error(
+      `Could not save failed lead qualification dimensions: ${dimensionError.message}`,
+    );
   }
 }
 

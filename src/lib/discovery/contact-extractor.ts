@@ -26,9 +26,7 @@ export async function discoverContactRoutes(
   const attempts = pageResults.map((pageResult) => pageResult.attempt);
 
   snippets.push(
-    ...pageResults
-      .map((pageResult) => pageResult.text)
-      .filter((text) => text.length > 0),
+    ...pageResults.map((pageResult) => pageResult.text).filter((text) => text.length > 0),
   );
 
   const routes = extractContactRoutesFromEvidence({
@@ -147,7 +145,10 @@ function findEmails(text: string) {
   const unique = new Map<string, string>();
 
   for (const match of matches) {
-    const email = match.replace(/^mailto:/i, "").replace(/[),.;:]+$/g, "").trim();
+    const email = match
+      .replace(/^mailto:/i, "")
+      .replace(/[),.;:]+$/g, "")
+      .trim();
 
     if (email.includes("example.") || email.length > 180) {
       continue;
@@ -190,7 +191,11 @@ function findContactPageUrls(text: string) {
   for (const match of matches) {
     const url = match.replace(/[.;]+$/g, "");
 
-    if (/\/(contact|contacts|contact-us|contatti|contatto|kontakt|chi-siamo|azienda)\b/i.test(url)) {
+    if (
+      /\/(contact|contacts|contact-us|contatti|contatto|kontakt|chi-siamo|azienda)\b/i.test(
+        url,
+      )
+    ) {
       unique.set(normalizeRouteUrl(url), url);
     }
   }

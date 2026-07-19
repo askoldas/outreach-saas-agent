@@ -4,7 +4,6 @@ import { listActivityEvents } from "@/server/activity/repository";
 import { listCampaigns } from "@/server/campaigns/repository";
 import { listDrafts } from "@/server/drafts/repository";
 import { listLeads } from "@/server/leads/repository";
-import { listOffers } from "@/server/offers/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { confidenceTone, scoreTone, statusLabel, statusTone } from "@/lib/format";
 import styles from "@/features/shared/Feature.module.css";
@@ -20,14 +19,12 @@ export default async function DashboardPage() {
     redirect("/onboarding/workspace");
   }
 
-  const [activity, campaigns, drafts, leads, offers] = await Promise.all([
+  const [activity, campaigns, drafts, leads] = await Promise.all([
     listActivityEvents(currentWorkspace.id),
     listCampaigns(currentWorkspace.id),
     listDrafts(currentWorkspace.id),
     listLeads(currentWorkspace.id),
-    listOffers(currentWorkspace.id),
   ]);
-  const offerNameById = new Map(offers.map((offer) => [offer.id, offer.name]));
   const campaignNameById = new Map(
     campaigns.map((campaign) => [campaign.id, campaign.name]),
   );
@@ -39,8 +36,8 @@ export default async function DashboardPage() {
   return (
     <div className={styles.grid}>
       <PageHeader
-        title="Overview"
-        description={`Monitor active campaigns, lead quality, and review work for ${currentWorkspace.name}.`}
+        title="Dashboard"
+        description={`See what is happening, what needs attention, and what to do next for ${currentWorkspace.name}.`}
         actions={
           <ButtonLink href="/campaigns/new" variant="primary">
             Create campaign
@@ -79,7 +76,6 @@ export default async function DashboardPage() {
               <thead>
                 <tr>
                   <th>Campaign</th>
-                  <th>Offer</th>
                   <th>Geography</th>
                   <th>Progress</th>
                   <th>Leads</th>
@@ -99,7 +95,6 @@ export default async function DashboardPage() {
                       </Link>
                       <span className={styles.secondaryText}>{campaign.objective}</span>
                     </td>
-                    <td>{offerNameById.get(campaign.offerId) ?? "Unknown offer"}</td>
                     <td>{campaign.geography}</td>
                     <td>
                       <div
@@ -167,7 +162,10 @@ export default async function DashboardPage() {
                 return (
                   <tr key={lead.id}>
                     <td>
-                      <Link className={styles.primaryText} href={`/leads/${lead.id}`}>
+                      <Link
+                        className={styles.primaryText}
+                        href={`/campaigns/${lead.campaignId}/leads?view=ready&lead=${lead.id}`}
+                      >
                         {lead.company}
                       </Link>
                       <span className={styles.secondaryText}>{lead.companyType}</span>
@@ -183,7 +181,11 @@ export default async function DashboardPage() {
                       </Badge>
                     </td>
                     <td>
-                      <ButtonLink href={`/leads/${lead.id}`}>Review</ButtonLink>
+                      <ButtonLink
+                        href={`/campaigns/${lead.campaignId}/leads?view=ready&lead=${lead.id}`}
+                      >
+                        Review
+                      </ButtonLink>
                     </td>
                   </tr>
                 );

@@ -124,7 +124,7 @@ export default async function SettingsPage({
         </Card>
 
         <Card>
-          <CardHeader title="Your profile" eyebrow={profile.id.slice(0, 8)} />
+          <CardHeader title="Account" eyebrow={profile.id.slice(0, 8)} />
           <form className={styles.cardBody} action={updateProfileSettingsAction}>
             <div className={styles.stack}>
               <label className={form.field} htmlFor="display-name">
@@ -162,7 +162,7 @@ export default async function SettingsPage({
 
       <Card>
         <CardHeader
-          title="Members"
+          title="Team"
           eyebrow={`${members.length} visible member${members.length === 1 ? "" : "s"}`}
         />
         <div className={styles.tableWrap}>
@@ -213,7 +213,10 @@ export default async function SettingsPage({
       </Card>
 
       <Card>
-        <CardHeader title="Provider readiness" eyebrow="External services" />
+        <CardHeader
+          title="Advanced development diagnostics"
+          eyebrow="External services"
+        />
         <div className={styles.tableWrap}>
           <table className={styles.table}>
             <thead>
@@ -241,14 +244,12 @@ export default async function SettingsPage({
       </Card>
 
       <Card>
-        <CardHeader title="Danger zone" eyebrow="Workspace data" />
+        <CardHeader title="Data and privacy" eyebrow="Retention and deletion" />
         <form className={styles.cardBody} action={clearWorkspaceDataAction}>
           <div className={styles.stack}>
             <input name="workspaceId" type="hidden" value={currentWorkspace.id} />
             <label className={form.field} htmlFor="clear-confirmation">
-              <span>
-                Type CLEAR to remove offers, campaigns, leads, drafts, and activity
-              </span>
+              <span>Type CLEAR to remove campaigns, leads, drafts, and activity</span>
               <input
                 autoComplete="off"
                 className={form.input}

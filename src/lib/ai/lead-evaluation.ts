@@ -1,4 +1,4 @@
-import type { Campaign, Confidence, Offer } from "../../types/domain.ts";
+import type { Campaign, CompanyProfile, Confidence } from "../../types/domain.ts";
 import { generateText } from "../providers/openrouter.ts";
 
 export const LEAD_EVALUATOR_PROMPT_VERSION = "lead-evaluator-v1";
@@ -6,26 +6,21 @@ export const LEAD_EVALUATOR_PROMPT_VERSION = "lead-evaluator-v1";
 export type LeadEvaluationInput = {
   campaign: Pick<
     Campaign,
-    | "geography"
-    | "industryTerms"
-    | "language"
-    | "objective"
-    | "targetSegments"
+    "geography" | "industryTerms" | "language" | "objective" | "targetSegments"
   > & {
     strategy: Pick<Campaign["strategy"], "criteria" | "exclusions" | "terms">;
   };
-  offer: Pick<
-    Offer,
-    | "buyerTypes"
+  sellerProfile: Pick<
+    CompanyProfile,
+    | "customerTypes"
     | "capabilities"
     | "differentiators"
-    | "keywords"
     | "limitations"
-    | "name"
-    | "problems"
+    | "companyName"
+    | "productsAndServices"
+    | "claims"
     | "summary"
-    | "type"
-  > | null;
+  >;
   source: {
     classification: string;
     content: string;
@@ -115,7 +110,7 @@ function buildPromptInput(input: LeadEvaluationInput) {
       "Needs_review is appropriate when source evidence is partial but plausibly relevant.",
       "Disqualified is appropriate for directories, news, marketplaces, job pages, regulators, or irrelevant entities.",
     ],
-    offer: input.offer,
+    sellerProfile: input.sellerProfile,
     source: input.source,
   };
 }

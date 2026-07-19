@@ -1,6 +1,6 @@
 # Background Workers
 
-Agentfarm discovery now uses durable database-backed work instead of running Tavily
+Opptium discovery uses durable database-backed work instead of running Tavily
 inside a browser request or server action.
 
 ## Why
@@ -77,15 +77,15 @@ to browser code.
    `ai_generations`, and creates or updates qualified/needs-review leads. If AI
    fails, the lead is still saved for manual review.
 8. Saved leads receive `enrich_contacts` tasks.
-9. `enrich_contacts` extracts public emails, phone numbers, contact page URLs,
-   and website routes from saved source evidence, then performs a small safe
-   public website/contact-page check.
+9. `enrich_contacts` performs a company-domain-scoped Tavily contact search,
+   extracts public routes from provider and saved evidence, performs a shallow
+   first-party website/contact-page check, and persists verification provenance.
 
 ## Current Limitations
 
 - `search_web`, `evaluate_lead`, and `enrich_contacts` are implemented as worker
   tasks.
-- Query generation uses campaign and offer context with small optional geography
+- Query generation uses frozen Campaign Strategy and Company Profile context with geography
   hints. It is not intended to be a full country database.
-- Deep website crawling is not yet implemented. Contact enrichment only uses
-  stored source evidence and shallow public website/contact-page checks.
+- Deep website crawling is not implemented. Contact enrichment uses Tavily
+  search evidence, stored evidence, and shallow public website/contact-page checks.

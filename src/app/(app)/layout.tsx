@@ -9,7 +9,7 @@ export default async function AuthenticatedAppLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   const user = await getCurrentUser();
-  if (!user) redirect("/login?next=/dashboard");
+  if (!user) redirect("/login?next=/campaigns");
   const workspaceContext = await getWorkspaceContext().catch(() => ({
     currentWorkspace: null,
     workspaces: [],

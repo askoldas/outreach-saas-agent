@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(16);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password)
 values
@@ -163,6 +163,47 @@ select throws_ok(
   '42501',
   null,
   'another tenant cannot write usage into the first workspace'
+);
+
+select throws_ok(
+  $$ select public.clear_workspace_data('a0000000-0000-0000-0000-000000000001') $$,
+  '42501',
+  null,
+  'another tenant cannot clear the first workspace'
+);
+
+select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
+select public.clear_workspace_data('a0000000-0000-0000-0000-000000000001');
+
+select results_eq(
+  $$
+    select
+      (select count(*) from public.campaigns) +
+      (select count(*) from public.leads) +
+      (select count(*) from public.outreach_drafts) +
+      (select count(*) from public.research_runs) +
+      (select count(*) from public.research_tasks) +
+      (select count(*) from public.lead_sources) +
+      (select count(*) from public.ai_generations) +
+      (select count(*) from public.export_records) +
+      (select count(*) from public.usage_events) +
+      (select count(*) from public.activity_events)
+  $$,
+  array[0::bigint],
+  'clearing removes all workspace workflow and history records'
+);
+
+select results_eq(
+  $$
+    select
+      (select count(*) from public.workspaces)::bigint,
+      (select count(*) from public.workspace_members)::bigint,
+      (select count(*) from public.company_profiles)::bigint,
+      (select count(*) from public.company_profile_versions)::bigint,
+      (select min(version) from public.company_profile_versions)::bigint
+  $$,
+  $$ values (1::bigint, 1::bigint, 1::bigint, 1::bigint, 1::bigint) $$,
+  'clearing preserves workspace access and recreates one baseline Company Profile'
 );
 
 select * from finish();

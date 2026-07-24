@@ -15,3 +15,21 @@ Deep contact enrichment is explicit after approval and displays a credit estimat
 The MVP ends at Outreach CSV and Lead Research CSV export. Automatic sending, mailbox draft creation, follow-ups, reply detection, CRM integrations, production billing, paid enrichment vendors, deep crawling, and document uploads are excluded.
 
 Current implementation status is maintained in `OPPTIUM_REFACTOR_PLAN.md`.
+
+## AI-guided setup
+
+Company setup and Campaign creation use a hybrid guided model: one focused commercial
+decision, recommended structured choices, an Other/natural-language path, and a live
+summary of the persistent object. AI interpretations are rendered as validated proposed
+changes and materially important values require explicit Apply. The conversation is not
+the source of truth; Company Profile versions, campaign overrides, and Strategy versions
+remain authoritative and directly editable.
+
+Company setup adapts around detected offerings and unresolved review questions. Campaign
+setup begins with a selected Offering, then captures objective, segment, markets, buyer
+personas, qualification, exclusions, and a reviewable discovery strategy. Campaign
+overrides do not mutate the master Company Profile.
+
+Website analysis now classifies and groups related commercial items before review. Company setup normally asks a small set of decisions about offering structure, active prospecting propositions, markets, relationship types, commercial requirements, and genuine source conflicts. Optional wording and additional proof do not block publishing. “Improve profile structure” creates a new draft while retaining published campaigns and user-defined prospecting preferences.
+
+Responsibility boundary: Company Profile explains the stable business and can be used immediately after successful analysis. It does not require prospecting markets, buyer-persona confirmation, campaign qualification, or messaging decisions. Campaign creation owns the selected offering, objective, relationship type, target markets, segment, buyer roles, qualification, exclusions, and discovery strategy. Campaign choices remain campaign-local unless the user explicitly selects “Save as offering defaults”; operating-market facts are never overwritten.

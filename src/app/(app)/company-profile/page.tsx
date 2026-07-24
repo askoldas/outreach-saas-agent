@@ -3,16 +3,23 @@ import { getCurrentUser } from "@/server/auth/user";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { getCurrentCompanyProfile } from "@/server/company-profile/repository";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Card, CardHeader } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
-import { CompanyProfileEditor } from "@/features/company-profile/CompanyProfileEditor";
+import { Button, ButtonLink } from "@/components/ui/Button";
+import { CompanyProfileWorkspace } from "@/features/company-profile/CompanyProfileWorkspace";
+import { CompanyWebsiteSettings } from "@/features/company-profile/CompanyWebsiteSettings";
 import { analyzeCompanyProfileAction } from "@/server/company-profile/actions";
 import styles from "@/features/shared/Feature.module.css";
 import { getCampaignResearchProgress } from "@/server/research/repository";
 import { RunProgressPanel } from "@/features/progress/RunProgressPanel";
+import { CompanyGuidedSetup } from "@/features/company-profile/CompanyGuidedSetup";
+import { ContextualAiDrawer } from "@/features/guided/ContextualAiDrawer";
 
-export default async function CompanyProfilePage() {
+export default async function CompanyProfilePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; message?: string }>;
+}) {
+  const query = await searchParams;
   if (!(await getCurrentUser())) redirect("/login?next=/company-profile");
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
@@ -26,89 +33,74 @@ export default async function CompanyProfilePage() {
     campaignId: "company-profile",
     workspaceId: currentWorkspace.id,
   });
-  const sections = [
-    ["Overview", [profile.summary]],
-    ["Products and services", profile.productsAndServices],
-    ["Capabilities", profile.capabilities],
-    ["Customer types and industries", profile.customerTypes],
-    ["Differentiators", profile.differentiators],
-    ["Proof and case studies", profile.proofPoints],
-    ["Markets and languages", profile.marketsAndLanguages],
-    [
-      "Claims and limitations",
-      [...profile.claims, ...profile.limitations.map((x) => `Limitation: ${x}`)],
-    ],
-    ["Sources and materials", profile.sources],
-  ] as const;
+  const pendingQuestions = profile.reviewQuestions.filter(
+    (question) => question.status === "unanswered",
+  ).length;
+
   return (
     <div className={styles.grid}>
       <PageHeader
-        title="Company Profile"
-        description="Reusable seller knowledge for campaign strategy and evidence-grounded outreach."
+        title="Your Company"
+        description="Profile draft generated from your website. Review important commercial details before starting a campaign."
         actions={
           <>
+            {profile.structuredProfile?.offerings.length ? (
+              <ButtonLink variant="primary" href="/campaigns/new">
+                Create campaign
+              </ButtonLink>
+            ) : null}
             <form action={analyzeCompanyProfileAction}>
               <Button type="submit" disabled={!profile.website}>
-                Analyze website
+                {profile.structuredProfile
+                  ? "Improve profile structure"
+                  : "Analyse website"}
               </Button>
             </form>
-            <Button variant="primary">Add information</Button>
+            {pendingQuestions ? (
+              <ButtonLink variant="primary" href="#review-questions">
+                Review {pendingQuestions} questions
+              </ButtonLink>
+            ) : null}
           </>
         }
       />
+      <CompanyWebsiteSettings profile={profile} />
+      {query.message === "company-website-updated" ? (
+        <Badge tone="success">
+          Company website updated. Future analysis runs will use the new URL.
+        </Badge>
+      ) : null}
+      {query.error ? <Badge tone="danger">{errorMessage(query.error)}</Badge> : null}
       <RunProgressPanel
         key={analysisProgress?.runId ?? "no-analysis"}
         endpoint="/api/company-profile/analysis-progress"
         initialProgress={analysisProgress}
         title="Website analysis"
       />
-      <Card>
-        <CardHeader
-          title={profile.companyName}
-          eyebrow={profile.website ?? "Website not supplied"}
-          action={<Badge tone="warning">Persisted · version {profile.version}</Badge>}
-        />
-        <div className={styles.cardBody}>
-          <p className={styles.secondaryText}>
-            Last analysis: {profile.lastAnalyzed ?? "Not analysed"}. Missing information
-            is non-blocking.
-          </p>
-        </div>
-      </Card>
-      {profile.warnings.length ? (
-        <Card>
-          <CardHeader title="Readiness suggestions" eyebrow="Non-blocking" />
-          <div className={styles.cardBody}>
-            <ul className={styles.feed}>
-              {profile.warnings.map((warning) => (
-                <li key={warning}>
-                  <strong>{warning}</strong>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </Card>
-      ) : null}
-      <section className={styles.twoColumn}>
-        {sections.map(([title, values]) => (
-          <Card key={title}>
-            <CardHeader
-              title={title}
-              action={<Button variant="ghost">Edit section</Button>}
-            />
-            <div className={styles.cardBody}>
-              <ul className={styles.pillList}>
-                {values.length ? (
-                  values.map((value) => <li key={value}>{value}</li>)
-                ) : (
-                  <li>No information yet</li>
-                )}
-              </ul>
-            </div>
-          </Card>
-        ))}
-      </section>
-      <CompanyProfileEditor profile={profile} />
+      <ContextualAiDrawer
+        context={`Company — ${profile.companyName}`}
+        scope="company"
+        entityId={profile.id ?? "current"}
+        baseVersion={profile.version}
+        actions={[
+          "Improve the overview",
+          "Add a missing offering",
+          "Reclassify a capability",
+          "Suggest missing customer types",
+        ]}
+      />
+      <CompanyGuidedSetup profile={profile} />
+      <CompanyProfileWorkspace profile={profile} />
     </div>
   );
+}
+
+function errorMessage(error: string) {
+  const messages: Record<string, string> = {
+    "invalid-website-url": "Enter a valid public HTTP or HTTPS website URL.",
+    "question-answer-required": "Choose or enter an answer before continuing.",
+    "structured-profile-required":
+      "Analyse the website to create a structured profile first.",
+  };
+  return messages[error] ?? "The profile could not be updated.";
 }

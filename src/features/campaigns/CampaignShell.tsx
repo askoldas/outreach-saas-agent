@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Campaign } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import styles from "./CampaignShell.module.css";
+import { ContextualAiDrawer } from "@/features/guided/ContextualAiDrawer";
 
 export function CampaignShell({
   campaign,
@@ -9,15 +10,14 @@ export function CampaignShell({
   children,
 }: Readonly<{
   campaign: Campaign;
-  active: "overview" | "strategy" | "leads" | "outreach";
+  active: "discover" | "contacts" | "sequence";
   children: React.ReactNode;
 }>) {
   const base = `/campaigns/${campaign.id}`;
   const tabs = [
-    { key: "overview", label: "Overview", href: base },
-    { key: "strategy", label: "Strategy", href: `${base}/strategy` },
-    { key: "leads", label: "Leads", href: `${base}/leads` },
-    { key: "outreach", label: "Outreach", href: `${base}/outreach` },
+    { key: "discover", label: "Discover", href: `${base}/leads` },
+    { key: "contacts", label: "Contacts", href: `${base}/outreach?view=contacts` },
+    { key: "sequence", label: "Sequence", href: `${base}/outreach?view=drafts` },
   ] as const;
   return (
     <div className={styles.workspace}>
@@ -28,6 +28,7 @@ export function CampaignShell({
           <span>
             {campaign.objective} · {campaign.geography} · Updated {campaign.lastActivity}
           </span>
+          <Link href={`${base}/strategy`}>Campaign strategy</Link>
         </div>
         <Badge
           tone={
@@ -53,6 +54,18 @@ export function CampaignShell({
           </Link>
         ))}
       </nav>
+      <ContextualAiDrawer
+        context={`Campaign — ${campaign.name}`}
+        scope="campaign"
+        entityId={campaign.id}
+        baseVersion={campaign.strategyVersion ?? 0}
+        actions={[
+          "Narrow the target market",
+          "Add an exclusion",
+          "Change buyer personas",
+          "Explain the discovery strategy",
+        ]}
+      />
       {children}
     </div>
   );

@@ -6,6 +6,8 @@ const authRoutes = new Set(["/login", "/signup"]);
 const protectedPrefixes = [
   "/dashboard",
   "/campaigns",
+  "/leads",
+  "/sequences",
   "/company-profile",
   "/usage",
   "/settings",
@@ -51,7 +53,7 @@ export async function updateSession(request: NextRequest) {
 
   if (user && isAuthRoute) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = "/campaigns";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }

@@ -25,6 +25,7 @@ WORKER_ID=railway-research-worker
 WORKER_POLL_INTERVAL_MS=3000
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=
+OPENROUTER_TIMEOUT_MS=120000
 ```
 
 `OPENROUTER_*` is optional for the current `search_web` worker, but should be set

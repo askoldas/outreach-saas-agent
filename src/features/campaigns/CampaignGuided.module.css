@@ -1,0 +1,52 @@
+.options {
+  display: grid;
+  gap: 0.55rem;
+}
+.option {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.7rem;
+  align-items: start;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+.option:has(input:checked) {
+  border-color: var(--color-selected-border);
+  background: var(--color-selected-background);
+}
+.option input {
+  margin-top: 0.2rem;
+}
+.navigation {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.error {
+  color: var(--color-danger);
+}
+.customComposer {
+  display: grid;
+  gap: 0.65rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--color-border);
+}
+.proposal {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-selected-border);
+  border-radius: var(--radius-md);
+  background: var(--color-selected-background);
+}
+.proposal p {
+  display: grid;
+  gap: 0.15rem;
+  margin: 0;
+}
+.proposal p span {
+  color: var(--color-text-muted);
+  font-size: 0.76rem;
+}

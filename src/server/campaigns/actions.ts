@@ -7,6 +7,14 @@ import { createCampaign, getCampaign, updateCampaignStatus } from "./repository"
 import { createActivityEvent } from "@/server/activity/repository";
 import { enqueueCampaignDiscoveryRun } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
+import {
+  getCurrentCompanyProfile,
+  saveCompanyProfileVersion,
+} from "@/server/company-profile/repository";
+import {
+  calculateReadiness,
+  parseStructuredCompanyProfile,
+} from "@/lib/company-profile/structured-profile";
 
 type UpdateCampaignStatusInput = {
   campaignId: string;
@@ -33,6 +41,9 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
     desiredLeadCount: campaign.desiredLeadCount,
     workspaceId: currentWorkspace.id,
   });
+  if (campaign.status === "planning" || campaign.status === "paused") {
+    await updateCampaignStatus(currentWorkspace.id, campaign.id, "running");
+  }
 
   await createActivityEvent(currentWorkspace.id, {
     description: `Lead discovery run ${runId} was queued for ${campaign.name}.`,
@@ -116,7 +127,32 @@ export async function createCampaignAction(formData: FormData) {
     sourceCategories: getList(formData, "sourceCategories"),
     targetSegments: getList(formData, "targetSegments"),
     terms: getList(formData, "terms"),
+    selectedOfferingId: getString(formData, "selectedOfferingId") || null,
+    offeringOverrides: getJsonObject(formData, "offeringOverrides"),
   });
+  if (getString(formData, "saveAsOfferingDefaults") === "yes") {
+    const profile = await getCurrentCompanyProfile(currentWorkspace.id);
+    const selectedOfferingId = getString(formData, "selectedOfferingId");
+    if (profile?.structuredProfile && selectedOfferingId) {
+      const draft = structuredClone(profile.structuredProfile);
+      const offering = draft.offerings.find((item) => item.id === selectedOfferingId);
+      if (offering) {
+        offering.buyerPersonas = getList(formData, "buyerPersonas").map((title) => ({
+          titleGroup: title,
+          exampleTitles: [title],
+        }));
+        offering.qualificationRequirements = getList(formData, "qualificationCriteria");
+        offering.disqualifyingConditions = getList(formData, "exclusions");
+        offering.prospectingMarkets = getList(formData, "geography");
+        draft.readiness = calculateReadiness(draft);
+        await saveCompanyProfileVersion(currentWorkspace.id, {
+          ...profile,
+          structuredProfile: parseStructuredCompanyProfile(draft),
+          provenance: "manual",
+        });
+      }
+    }
+  }
   await createActivityEvent(currentWorkspace.id, {
     description: `${campaign.name} was created for ${campaign.geography}.`,
     entityExternalId: campaign.id,
@@ -144,4 +180,16 @@ function getList(formData: FormData, key: string) {
 function getPositiveNumber(formData: FormData, key: string, fallback: number) {
   const value = Number(getString(formData, key));
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function getJsonObject(formData: FormData, key: string) {
+  const value = getString(formData, key);
+  if (!value) return {};
+  try {
+    const parsed: unknown = JSON.parse(value);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+    return parsed as Record<string, unknown>;
+  } catch {
+    return {};
+  }
 }

@@ -164,7 +164,9 @@ export function CampaignControls({
     <div className={styles.stack}>
       <div className={styles.filters}>
         <Button disabled={isBusy} variant="primary" onClick={discoverLeads}>
-          Discover leads
+          {currentStatus === "planning"
+            ? "Start campaign and discover leads"
+            : "Discover more leads"}
         </Button>
         <Button disabled={isBusy} onClick={() => updateStatus("paused")}>
           Pause

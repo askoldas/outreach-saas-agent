@@ -27,6 +27,7 @@ Only decisions that govern the current implementation are retained here. Migrati
 - Tavily is the current public-search and contact-enrichment provider; OpenRouter is the current model gateway. Both remain behind internal adapters.
 - AI work is narrow, prompt-versioned, schema-validated, and provenance-logged. Model output cannot authorize access, spending, deletion, or sending.
 - Deterministic code owns authorization, validation, state transitions, deduplication, recipient recommendation, usage estimates, and CSV shaping.
+- AI guidance is scoped to one active Company, Offering, or Campaign. Guided drafts and conversations are not sources of truth; validated proposals require deterministic, version-checked application to canonical objects.
 - Provider calls are excluded from deterministic browser CI; adapter, schema, worker, and saved-fixture boundaries provide coverage.
 
 ## Testing and delivery

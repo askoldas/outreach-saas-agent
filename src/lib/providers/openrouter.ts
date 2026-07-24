@@ -18,23 +18,36 @@ type OpenRouterErrorPayload = {
 };
 
 type OpenRouterResponse = {
+  error?: { code?: number | string; message?: string };
   choices?: Array<{
+    error?: { code?: number | string; message?: string };
+    finish_reason?: string | null;
+    native_finish_reason?: string | null;
     message?: {
       content?: string;
     };
   }>;
+  usage?: { completion_tokens?: number; prompt_tokens?: number };
 };
 
 type GenerateTextOptions = {
+  jsonMode?: boolean;
+  maxCompletionTokens?: number;
+  reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
   taskName?: string;
+  timeoutMs?: number;
 };
+
+const defaultOpenRouterTimeoutMs = 120_000;
 
 export async function generateText(
   messages: OpenRouterMessage[],
   options: GenerateTextOptions = {},
 ): Promise<string> {
   const { apiKey, model } = requireOpenRouterConfig();
+  const fallbackModels = getOpenRouterFallbackModels(model);
   const taskName = options.taskName ?? "text generation";
+  const timeoutMs = options.timeoutMs ?? getOpenRouterTimeoutMs();
   let response: Response;
 
   try {
@@ -42,6 +55,19 @@ export async function generateText(
       body: JSON.stringify({
         messages,
         model,
+        ...(fallbackModels.length ? { models: fallbackModels } : {}),
+        ...(options.maxCompletionTokens
+          ? { max_completion_tokens: options.maxCompletionTokens }
+          : {}),
+        ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
+        ...(options.reasoningEffort
+          ? {
+              reasoning: {
+                effort: options.reasoningEffort,
+                exclude: true,
+              },
+            }
+          : {}),
         temperature: 0.2,
       }),
       cache: "no-store",
@@ -52,10 +78,10 @@ export async function generateText(
         "X-Title": "Outreach SaaS Agent",
       },
       method: "POST",
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
   } catch (error) {
-    const message = normalizeOpenRouterNetworkError(error);
+    const message = normalizeOpenRouterNetworkError(error, timeoutMs);
 
     logOpenRouterDiagnostics({
       body: "",
@@ -117,23 +143,72 @@ export async function generateText(
   const content = payload.choices?.[0]?.message?.content?.trim();
 
   if (!content) {
+    const diagnostic = describeEmptyCompletion(payload);
     logOpenRouterDiagnostics({
       body: rawBody,
-      message: "OpenRouter returned an empty message content.",
+      message: diagnostic,
       model,
       status: response.status,
       taskName,
     });
 
-    throw new Error(`OpenRouter returned an empty response for ${taskName}.`);
+    throw new Error(
+      `OpenRouter model "${model}" returned no content for ${taskName}. ${diagnostic}`,
+    );
+  }
+
+  const finishReason =
+    payload.choices?.[0]?.finish_reason ?? payload.choices?.[0]?.native_finish_reason;
+  if (finishReason === "length") {
+    throw new Error(
+      `OpenRouter truncated the response for ${taskName} at the completion-token limit.`,
+    );
   }
 
   return content;
 }
 
-function normalizeOpenRouterNetworkError(error: unknown) {
-  if (error instanceof DOMException && error.name === "TimeoutError") {
-    return "OpenRouter request timed out before returning a response.";
+export function getOpenRouterFallbackModels(primaryModel: string) {
+  return (process.env.OPENROUTER_FALLBACK_MODELS ?? "")
+    .split(",")
+    .map((model) => model.trim())
+    .filter(
+      (model, index, models) =>
+        Boolean(model) && model !== primaryModel && models.indexOf(model) === index,
+    );
+}
+
+export function describeEmptyCompletion(payload: OpenRouterResponse) {
+  const choice = payload.choices?.[0];
+  const providerError = payload.error?.message ?? choice?.error?.message;
+  if (providerError) return `Provider error: ${providerError}`;
+  const finishReason = choice?.finish_reason ?? choice?.native_finish_reason;
+  const completionTokens = payload.usage?.completion_tokens;
+  const promptTokens = payload.usage?.prompt_tokens;
+  const details = [
+    finishReason ? `finish reason: ${finishReason}` : "finish reason was not supplied",
+    typeof completionTokens === "number"
+      ? `completion tokens: ${completionTokens}`
+      : "completion token count was not supplied",
+    typeof promptTokens === "number" ? `prompt tokens: ${promptTokens}` : null,
+  ].filter(Boolean);
+  return `${details.join("; ")}. The selected provider/model may be unavailable, rate-limited, filtered, or unable to complete the requested structured output.`;
+}
+
+export function getOpenRouterTimeoutMs() {
+  const configured = Number(process.env.OPENROUTER_TIMEOUT_MS);
+  return Number.isFinite(configured) && configured >= 5_000
+    ? Math.floor(configured)
+    : defaultOpenRouterTimeoutMs;
+}
+
+function normalizeOpenRouterNetworkError(error: unknown, timeoutMs: number) {
+  if (
+    (error instanceof DOMException &&
+      (error.name === "TimeoutError" || error.name === "AbortError")) ||
+    (error instanceof Error && /aborted due to timeout|timed? out/i.test(error.message))
+  ) {
+    return `OpenRouter request timed out after ${Math.round(timeoutMs / 1000)} seconds before returning a response.`;
   }
 
   if (error instanceof Error) {

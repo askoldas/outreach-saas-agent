@@ -21,14 +21,16 @@
 
 .header p {
   color: var(--color-muted);
-  font-size: 0.78rem;
-  font-weight: 800;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 .header h2 {
-  font-size: 1.05rem;
+  font-size: var(--text-section-title);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-section-title);
 }
 
 .action {

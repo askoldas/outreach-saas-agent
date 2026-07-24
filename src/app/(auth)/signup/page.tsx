@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { redirect } from "next/navigation";
 import { signUpAction } from "@/server/auth/actions";
 import { getCurrentUser } from "@/server/auth/user";
@@ -16,7 +17,7 @@ export default async function SignUpPage({
   const user = await getCurrentUser();
 
   if (user) {
-    redirect("/dashboard");
+    redirect("/campaigns");
   }
 
   const params = await searchParams;
@@ -24,7 +25,7 @@ export default async function SignUpPage({
   return (
     <section className={styles.card} aria-labelledby="sign-up-title">
       <div className={styles.header}>
-        <span className={styles.wordmark}>Opptium</span>
+        <BrandLogo className={styles.wordmark} priority />
         <h1 id="sign-up-title">Create account</h1>
         <p>Email and password authentication is the first supported sign-in method.</p>
       </div>

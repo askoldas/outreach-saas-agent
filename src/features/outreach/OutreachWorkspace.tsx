@@ -189,8 +189,8 @@ export function OutreachWorkspace({
       {tab === "contacts" ? (
         <Card>
           <CardHeader
-            title="Recommended recipients"
-            eyebrow="Persisted public contact routes"
+            title="Recommended company channels"
+            eyebrow="Persisted public routes; not named-person leads"
             action={
               <Button
                 disabled={pending || recipients.length === 0}
@@ -205,7 +205,7 @@ export function OutreachWorkspace({
               <thead>
                 <tr>
                   <th>Company</th>
-                  <th>Selected recipient</th>
+                  <th>Selected channel</th>
                   <th>Type</th>
                   <th>Verification</th>
                   <th>Reason</th>
@@ -255,8 +255,8 @@ export function OutreachWorkspace({
                 disabled={pending || recipients.length === 0}
                 onClick={generateDrafts}
               >
-                Generate drafts ({estimateCredits("draft", recipients.length)} credits
-                est.)
+                Create sequence for selected channels (
+                {estimateCredits("draft", recipients.length)} credits est.)
               </Button>
             }
           />

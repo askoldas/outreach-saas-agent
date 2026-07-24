@@ -104,23 +104,12 @@ export async function updateWorkspace(input: {
 
 export async function clearWorkspaceData(workspaceId: string): Promise<void> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const tables = ["outreach_drafts", "leads", "campaigns"] as const;
+  const { error } = await supabase.rpc("clear_workspace_data", {
+    target_workspace_id: workspaceId,
+  });
 
-  for (const table of tables) {
-    const { error } = await supabase.from(table).delete().eq("workspace_id", workspaceId);
-
-    if (error) {
-      throw new Error(`Could not clear ${table}: ${error.message}`);
-    }
-  }
-
-  const { error: activityError } = await supabase
-    .from("activity_events")
-    .delete()
-    .eq("workspace_id", workspaceId);
-
-  if (activityError && !isMissingActivityDeletePolicyError(activityError.message)) {
-    throw new Error(`Could not clear activity events: ${activityError.message}`);
+  if (error) {
+    throw new Error(`Could not clear workspace data: ${error.message}`);
   }
 }
 
@@ -137,14 +126,6 @@ export async function getCurrentProfile(): Promise<Profile> {
   }
 
   return mapProfile(data as ProfileRow);
-}
-
-function isMissingActivityDeletePolicyError(message: string) {
-  return (
-    message.includes("row-level security") ||
-    message.includes("permission denied") ||
-    message.includes("violates row-level security policy")
-  );
 }
 
 function isAuthenticationRequiredError(error: unknown) {

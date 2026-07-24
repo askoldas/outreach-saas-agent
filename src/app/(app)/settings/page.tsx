@@ -249,7 +249,11 @@ export default async function SettingsPage({
           <div className={styles.stack}>
             <input name="workspaceId" type="hidden" value={currentWorkspace.id} />
             <label className={form.field} htmlFor="clear-confirmation">
-              <span>Type CLEAR to remove campaigns, leads, drafts, and activity</span>
+              <span>
+                Type CLEAR to remove all Company Profile, campaign, research, lead, draft,
+                export, usage, and activity data. Workspace settings and team members are
+                kept.
+              </span>
               <input
                 autoComplete="off"
                 className={form.input}

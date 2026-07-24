@@ -94,6 +94,7 @@ export type Campaign = {
   language: string;
   warnings: string[];
   latestDiscoveryReport: DiscoveryReport | null;
+  strategyVersion?: number;
   strategy: {
     terms: string[];
     localizedTerms: string[];
@@ -247,6 +248,11 @@ export type CompanyProfile = {
   warnings: string[];
   lastAnalyzed: string | null;
   provenance: "workspace" | "legacy_offer" | "manual" | "website_analysis";
+  structuredProfile: StructuredCompanyProfile | null;
+  extractedFacts: ExtractedProfileFact[];
+  reviewQuestions: ReviewQuestion[];
+  profileStatus: "draft" | "needs_input" | "ready" | "published";
+  readinessScore: number;
 };
 
 export type RecommendedRecipient = {
@@ -278,3 +284,8 @@ export type UsageEvent = {
   actualCredits: number;
   createdAt: string;
 };
+import type {
+  ExtractedProfileFact,
+  ReviewQuestion,
+  StructuredCompanyProfile,
+} from "@/lib/company-profile/structured-profile";

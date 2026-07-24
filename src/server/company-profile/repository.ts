@@ -1,5 +1,6 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { CompanyProfile } from "@/types/domain";
+import { parseStructuredCompanyProfile } from "@/lib/company-profile/structured-profile";
 
 type CompanyProfileVersionRow = {
   id: string;
@@ -19,9 +20,14 @@ type CompanyProfileVersionRow = {
   warnings: string[];
   provenance: CompanyProfile["provenance"];
   created_at: string;
+  structured_profile: unknown;
+  extracted_facts: CompanyProfile["extractedFacts"];
+  review_questions: CompanyProfile["reviewQuestions"];
+  profile_status: CompanyProfile["profileStatus"];
+  readiness_score: number;
 };
 
-const versionSelect = `id, version, company_name, website_url, summary, products_and_services, capabilities, customer_types, differentiators, proof_points, markets_and_languages, claims, limitations, sources, warnings, provenance, created_at`;
+const versionSelect = `id, version, company_name, website_url, summary, products_and_services, capabilities, customer_types, differentiators, proof_points, markets_and_languages, claims, limitations, sources, warnings, provenance, created_at, structured_profile, extracted_facts, review_questions, profile_status, readiness_score`;
 
 export async function getCurrentCompanyProfile(
   workspaceId: string,
@@ -53,9 +59,15 @@ export async function saveCompanyProfileVersion(
   profile: CompanyProfile,
 ): Promise<CompanyProfile> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase.rpc("save_company_profile_version", {
+  if (!profile.structuredProfile) {
+    throw new Error("Structured Company Profile data is required.");
+  }
+  const structuredProfile = parseStructuredCompanyProfile(profile.structuredProfile);
+  const { data, error } = await supabase.rpc("save_structured_company_profile_version", {
     target_workspace_id: workspaceId,
-    profile_data: profile,
+    profile_data: structuredProfile,
+    facts_data: profile.extractedFacts,
+    questions_data: profile.reviewQuestions,
   });
   if (error) throw new Error(`Could not save Company Profile: ${error.message}`);
   return mapCompanyProfileVersion(data as CompanyProfileVersionRow);
@@ -80,6 +92,13 @@ function mapCompanyProfileVersion(row: CompanyProfileVersionRow): CompanyProfile
     warnings: row.warnings,
     lastAnalyzed: row.created_at,
     provenance: row.provenance,
+    structuredProfile: row.structured_profile
+      ? parseStructuredCompanyProfile(row.structured_profile)
+      : null,
+    extractedFacts: row.extracted_facts ?? [],
+    reviewQuestions: row.review_questions ?? [],
+    profileStatus: row.profile_status ?? "draft",
+    readinessScore: row.readiness_score ?? 0,
   };
 }
 

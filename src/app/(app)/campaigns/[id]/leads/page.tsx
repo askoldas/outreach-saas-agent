@@ -4,6 +4,7 @@ import { CampaignShell } from "@/features/campaigns/CampaignShell";
 import { CampaignLeadReview } from "@/features/leads/CampaignLeadReview";
 import { listCampaignLeads } from "@/server/leads/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
+import { CampaignControls } from "@/features/campaigns/CampaignControls";
 export default async function LeadsPage({
   params,
   searchParams,
@@ -16,7 +17,13 @@ export default async function LeadsPage({
   const { currentWorkspace } = await getWorkspaceContext();
   const leads = currentWorkspace ? await listCampaignLeads(currentWorkspace.id, id) : [];
   return (
-    <CampaignShell campaign={campaign} active="leads">
+    <CampaignShell campaign={campaign} active="discover">
+      <CampaignControls
+        campaignId={campaign.id}
+        desiredLeadCount={campaign.desiredLeadCount}
+        initialLeadCount={leads.length}
+        status={campaign.status}
+      />
       <CampaignLeadReview initialLeads={leads} campaignId={id} initialView={query.view} />
     </CampaignShell>
   );

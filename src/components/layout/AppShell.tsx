@@ -3,13 +3,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import type { Workspace } from "@/server/workspaces/types";
 import styles from "./AppShell.module.css";
 
 const navItems = [
-  { href: "/dashboard", label: "Dashboard" },
+  { href: "/company-profile", label: "Your Company" },
   { href: "/campaigns", label: "Campaigns" },
-  { href: "/company-profile", label: "Company Profile" },
+  { href: "/leads", label: "Leads" },
+  { href: "/sequences", label: "Sequences" },
 ] as const;
 
 const footerItems = [
@@ -19,9 +21,10 @@ const footerItems = [
 ] as const;
 
 const titleByPath = [
-  { prefix: "/dashboard", title: "Dashboard", context: "What needs attention" },
-  { prefix: "/company-profile", title: "Company Profile", context: "Seller knowledge" },
+  { prefix: "/company-profile", title: "Your Company", context: "Seller knowledge" },
   { prefix: "/campaigns", title: "Campaigns", context: "Market strategy" },
+  { prefix: "/leads", title: "Leads", context: "Companies and contacts" },
+  { prefix: "/sequences", title: "Sequences", context: "Prepared outreach" },
   { prefix: "/usage", title: "Usage & Credits", context: "Cost visibility" },
   { prefix: "/settings", title: "Settings", context: "Workspace controls" },
 ] as const;
@@ -40,7 +43,11 @@ export function AppShell({
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const page = useMemo(
-    () => titleByPath.find((item) => pathname.startsWith(item.prefix)) ?? titleByPath[0],
+    () =>
+      titleByPath.find((item) => pathname.startsWith(item.prefix)) ?? {
+        title: "Opptium",
+        context: "Workspace",
+      },
     [pathname],
   );
 
@@ -150,9 +157,8 @@ function SidebarContent({
 }>) {
   return (
     <div className={styles.sidebarInner}>
-      <Link className={styles.wordmark} href="/dashboard" onClick={onNavigate}>
-        <span>O</span>
-        <strong>Opptium</strong>
+      <Link className={styles.wordmark} href="/campaigns" onClick={onNavigate}>
+        <BrandLogo className={styles.logo} priority />
       </Link>
       <nav className={styles.nav}>
         {navItems.map((item) => {
@@ -176,7 +182,7 @@ function SidebarContent({
           return (
             <Link
               key={item.href}
-              className={active ? styles.navActive : styles.navLink}
+              className={active ? styles.utilityActive : styles.utilityLink}
               href={item.href}
               onClick={onNavigate}
               aria-current={active ? "page" : undefined}

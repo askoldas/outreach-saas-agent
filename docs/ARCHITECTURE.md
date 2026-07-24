@@ -28,4 +28,16 @@ Deterministic domain modules own validation, recipient recommendation, export sh
 
 Tenant isolation is verified at the database boundary with pgTAP against a disposable local Supabase stack. The suite impersonates separate authenticated owners, exercises campaign profile/strategy creation and the persisted outreach workflow, and asserts that cross-workspace reads and writes are blocked by RLS. CI starts a fresh database, applies ordered migrations, runs these tests, and discards it.
 
+AI-guided interaction is an orchestration layer above canonical objects. Validated
+`AiGuidedResponse` values may contain one focused question and allowlisted proposed
+changes. Server actions re-authorize the workspace, validate the proposal again, verify
+the base Company Profile or Strategy version, and create a new persistent version before
+recording an applied-change audit. Guided drafts and scoped conversations are separately
+discardable; replaying messages is never required to reconstruct business state.
+
+The reusable guided workspace owns selection/custom-input rendering and a live object
+summary. Company and Campaign contextual drawers receive only their active structured
+context. The initial campaign wizard persists a workspace-scoped draft and freezes the
+selected Offering plus campaign-only overrides at creation.
+
 Schema retirement was guarded by a service-role-only readiness audit and completed by migration `20260719000600`. Discovery, qualification, Strategy pages, and draft generation fail closed when canonical frozen context is missing.

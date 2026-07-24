@@ -4,7 +4,7 @@ import {
   companyProfileAnalysisPromptVersion,
 } from "../../lib/ai/company-profile-analysis.ts";
 import { requireOpenRouterConfig } from "../../lib/providers/config.ts";
-import { searchWeb } from "../../lib/providers/tavily.ts";
+import { extractWebPages, searchWeb } from "../../lib/providers/tavily.ts";
 import type { ResearchTaskRow } from "../lib/claim-task.ts";
 import { updateRunStep } from "../lib/task-status.ts";
 
@@ -27,15 +27,26 @@ export async function processAnalyzeCompanyProfileTask(
     throw new Error(`Could not load frozen Company Profile input: ${error.message}`);
   const origin = new URL(website).origin;
   const host = new URL(origin).hostname.replace(/^www\./, "");
-  const results = await searchWeb(
-    `site:${host} company products services capabilities customers markets about`,
+  let results = await searchWeb(
+    `${host} company products services capabilities customers markets about`,
     8,
+    { includeDomains: [host], includeRawContent: true },
   );
+  if (!results.some((item) => item.content.trim())) {
+    results = await extractWebPages([website]);
+  }
   const sources = results
     .filter((item) => item.content.trim())
-    .map((item) => ({ title: item.title, url: item.url, content: item.content }));
+    .slice(0, 6)
+    .map((item) => ({
+      title: item.title,
+      url: item.url,
+      content: item.content.trim().slice(0, 12_000),
+    }));
   if (sources.length === 0)
-    throw new Error("Website analysis found no usable public source content.");
+    throw new Error(
+      "Website analysis could not extract readable public content from this website. Check that the URL is public and not blocked by robots, authentication, or anti-bot protection.",
+    );
   await updateRunStep(supabase, task.run_id, "Extracting Company Profile", 65);
   const model = requireOpenRouterConfig().model;
   try {
@@ -44,11 +55,13 @@ export async function processAnalyzeCompanyProfileTask(
       sources,
     });
     const { data: saved, error: saveError } = await supabase.rpc(
-      "save_analyzed_company_profile_version",
+      "save_analyzed_company_profile_version_v2",
       {
         target_workspace_id: task.workspace_id,
         target_run_id: task.run_id,
-        profile_data: generated.profile,
+        structured_profile_data: generated.analysis.profile,
+        facts_data: generated.analysis.facts,
+        questions_data: generated.analysis.reviewQuestions,
         target_prompt_version: companyProfileAnalysisPromptVersion,
       },
     );
@@ -64,7 +77,7 @@ export async function processAnalyzeCompanyProfileTask(
       prompt_version: companyProfileAnalysisPromptVersion,
       prompt_json: { profileVersionId, website, sources },
       output_text: generated.rawOutput,
-      output_json: generated.profile,
+      output_json: generated.analysis,
       status: "completed",
       completed_at: new Date().toISOString(),
     });

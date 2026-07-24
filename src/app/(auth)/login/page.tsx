@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import { redirect } from "next/navigation";
 import { signInAction } from "@/server/auth/actions";
 import { getCurrentUser } from "@/server/auth/user";
@@ -18,7 +19,7 @@ export default async function SignInPage({
   const user = await getCurrentUser();
 
   if (user) {
-    redirect("/dashboard");
+    redirect("/campaigns");
   }
 
   const params = await searchParams;
@@ -26,14 +27,14 @@ export default async function SignInPage({
   return (
     <section className={styles.card} aria-labelledby="sign-in-title">
       <div className={styles.header}>
-        <span className={styles.wordmark}>Opptium</span>
+        <BrandLogo className={styles.wordmark} priority />
         <h1 id="sign-in-title">Sign in</h1>
         <p>Use your workspace account to review campaigns, leads, and drafts.</p>
       </div>
       <form className={styles.body} action={signInAction}>
         {params.error ? <div className={styles.error}>{params.error}</div> : null}
         {params.message ? <div className={styles.message}>{params.message}</div> : null}
-        <input type="hidden" name="next" value={params.next ?? "/dashboard"} />
+        <input type="hidden" name="next" value={params.next ?? "/campaigns"} />
         <label className={form.field} htmlFor="email">
           <span>Email</span>
           <input

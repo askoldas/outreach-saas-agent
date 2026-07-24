@@ -34,6 +34,7 @@ type StrategyRow = {
   qualification_criteria: string[];
   search_terms: string[];
   source_categories: string[];
+  version: number;
 };
 
 export type CreateCampaignInput = {
@@ -49,10 +50,12 @@ export type CreateCampaignInput = {
   sourceCategories: string[];
   targetSegments: string[];
   terms: string[];
+  selectedOfferingId: string | null;
+  offeringOverrides: Record<string, unknown>;
 };
 
 const campaignSelect = `external_id,name,objective,geography,target_segments,progress,lead_count,awaiting_review,status,last_activity_label,language,warnings,desired_lead_count,industry_terms,latest_discovery_report,current_strategy_version_id`;
-const strategySelect = `id,search_terms,localized_terms,source_categories,qualification_criteria,exclusions,limitations`;
+const strategySelect = `id,version,search_terms,localized_terms,source_categories,qualification_criteria,exclusions,limitations`;
 
 export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
   const { supabase } = await createAuthenticatedDatabaseClient();
@@ -154,6 +157,8 @@ export async function createCampaign(
     status: "planning",
     target_segments: input.targetSegments,
     warnings: ["Review strategy before starting discovery."],
+    selected_offering_id: input.selectedOfferingId,
+    offering_overrides: input.offeringOverrides,
     workspace_id: workspaceId,
   });
   if (error) throw new Error(`Could not create campaign: ${error.message}`);
@@ -205,6 +210,7 @@ function mapCampaign(row: CampaignRow, strategy: StrategyRow): Campaign {
     objective: row.objective,
     progress: row.progress,
     status: row.status,
+    strategyVersion: strategy.version,
     strategy: {
       criteria: strategy.qualification_criteria,
       exclusions: strategy.exclusions,

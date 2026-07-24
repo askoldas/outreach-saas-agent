@@ -8,6 +8,12 @@ This repository contains one Next.js 16 App Router application with strict TypeS
 
 Persisted today: authentication, workspaces, manually edited and website-analyzed Company Profile versions, immutable campaign profile snapshots, immutable Campaign Strategy versions tied to research runs, campaigns, leads, evidence/qualification/contact routes, drafts, activity, research runs, and tasks.
 
+Company setup and Campaign creation use compact AI-guided workspaces with recommended
+structured selections, optional natural-language interpretation, explicit proposal
+application, live summaries, persistent guided drafts, scoped assistant history, and
+applied-change audit records. Direct editing remains available and conversations never
+replace the canonical Company Profile, Campaign, or Strategy objects.
+
 Company Profile analysis, Campaign Strategy refinement, lead qualification, and draft generation use schema-validated provider output with persisted provenance. Draft generation is a durable worker task grounded in frozen Company Profile and Campaign Strategy versions, saved lead evidence, and an accepted public recipient route. Tavily-backed contact enrichment retains route-level verification provenance. Enrichment state, accepted recipient selections, immutable export history, and operation-level usage events are persisted; CSV files are generated locally from frozen authorized records.
 
 The application uses Company Profiles and immutable Campaign Strategy versions exclusively. Discovery and qualification consume immutable campaign profile snapshots and frozen strategy versions. Migration `20260719000600` completed the audited retirement of the former Offer schema and duplicated campaign strategy columns.
@@ -16,7 +22,9 @@ The application uses Company Profiles and immutable Campaign Strategy versions e
 
 - Public: `/`, `/product`, `/use-cases`, `/features/*`, `/pricing`, `/security`, `/resources`, `/about`, `/contact`, `/privacy`, `/terms`
 - Authentication: `/login`, `/signup`, `/logout`
-- `/dashboard`
+- `/dashboard` (redirects to `/campaigns`)
+- `/leads/contacts` and `/leads/companies`
+- `/sequences`
 - `/campaigns`, `/campaigns/new`
 - `/campaigns/[id]`, `/strategy`, `/leads`, `/outreach`
 - `/company-profile`

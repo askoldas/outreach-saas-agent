@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import styles from "./Marketing.module.css";
 
 const productLinks = [
@@ -17,7 +18,7 @@ export function MarketingShell({
     <div className={styles.site}>
       <header className={styles.header}>
         <Link className={styles.brand} href="/">
-          Opptium
+          <BrandLogo className={styles.logo} priority />
         </Link>
         <nav className={styles.nav} aria-label="Public navigation">
           <details className={styles.dropdown}>
@@ -36,8 +37,8 @@ export function MarketingShell({
         </nav>
         <div className={styles.actions}>
           {authenticated ? (
-            <Link className={styles.secondaryButton} href="/dashboard">
-              Open dashboard
+            <Link className={styles.secondaryButton} href="/campaigns">
+              Open app
             </Link>
           ) : (
             <Link className={styles.secondaryButton} href="/login">
@@ -46,7 +47,7 @@ export function MarketingShell({
           )}
           <Link
             className={styles.primaryButton}
-            href={authenticated ? "/dashboard" : "/signup"}
+            href={authenticated ? "/campaigns" : "/signup"}
           >
             {authenticated ? "Go to app" : "Start for free"}
           </Link>
@@ -56,7 +57,7 @@ export function MarketingShell({
       <footer className={styles.footer}>
         <div>
           <Link className={styles.brand} href="/">
-            Opptium
+            <BrandLogo className={styles.logo} />
           </Link>
           <p>Evidence-backed B2B prospecting and outbound preparation.</p>
         </div>

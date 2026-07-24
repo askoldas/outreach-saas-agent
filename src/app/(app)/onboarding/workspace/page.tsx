@@ -19,7 +19,7 @@ export default async function WorkspaceOnboardingPage({
   const { workspaces } = await getWorkspaceContext();
 
   if (workspaces.length > 0) {
-    redirect("/dashboard");
+    redirect("/campaigns");
   }
 
   const params = await searchParams;

@@ -14,7 +14,7 @@ export default async function StrategyPage({
     throw new Error("Campaign Strategy is missing for this campaign.");
   }
   return (
-    <CampaignShell campaign={campaign} active="strategy">
+    <CampaignShell campaign={campaign} active="discover">
       <StrategyWorkspace campaign={campaign} initialStrategy={strategy} />
     </CampaignShell>
   );

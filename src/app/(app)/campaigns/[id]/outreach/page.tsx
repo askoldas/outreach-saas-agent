@@ -29,7 +29,12 @@ export default async function OutreachPage({
       ])
     : [[], [], [], null];
   return (
-    <CampaignShell campaign={campaign} active="outreach">
+    <CampaignShell
+      campaign={campaign}
+      active={
+        query.view === "drafts" || query.view === "exports" ? "sequence" : "contacts"
+      }
+    >
       <OutreachWorkspace
         recipients={buildRecommendedRecipients(leads)}
         drafts={drafts}

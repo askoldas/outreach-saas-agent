@@ -28,7 +28,7 @@ export async function createWorkspaceAction(formData: FormData) {
 
   const workspace = await createWorkspace({ name, websiteUrl });
   await setCurrentWorkspaceCookie(workspace.id);
-  redirect("/dashboard");
+  redirect("/campaigns");
 }
 
 export async function selectWorkspaceAction(formData: FormData) {
@@ -36,11 +36,11 @@ export async function selectWorkspaceAction(formData: FormData) {
   const workspaces = await listWorkspaces();
 
   if (!workspaces.some((workspace) => workspace.id === workspaceId)) {
-    redirect("/dashboard?error=workspace-not-found");
+    redirect("/campaigns?error=workspace-not-found");
   }
 
   await setCurrentWorkspaceCookie(workspaceId);
-  redirect("/dashboard");
+  redirect("/campaigns");
 }
 
 export async function updateWorkspaceSettingsAction(formData: FormData) {

@@ -12,8 +12,9 @@
 }
 
 .header h1 {
-  font-size: clamp(1.6rem, 3vw, 2.3rem);
-  line-height: 1.05;
+  font-size: var(--text-page-title);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-page-title);
 }
 
 .header p {

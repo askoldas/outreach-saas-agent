@@ -4,14 +4,14 @@
   min-height: 24px;
   padding: 0 var(--space-2);
   border-radius: 999px;
-  font-size: 0.78rem;
-  font-weight: 800;
-  line-height: 1;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-caption);
   white-space: nowrap;
 }
 
 .neutral {
-  background: #eef2f1;
+  background: var(--color-surface-muted);
   color: var(--color-muted);
 }
 
@@ -31,11 +31,11 @@
 }
 
 .accent {
-  background: var(--color-accent-soft);
-  color: var(--color-accent-strong);
+  background: var(--color-info-soft);
+  color: var(--color-info);
 }
 
 .blue {
-  background: #e4edff;
-  color: var(--color-blue);
+  background: var(--color-info-soft);
+  color: var(--color-info);
 }

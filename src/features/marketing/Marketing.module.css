@@ -1,7 +1,7 @@
 .site {
   min-height: 100vh;
-  background: #fbfaf7;
-  color: var(--color-ink);
+  background: var(--color-canvas);
+  color: var(--color-text);
 }
 .header {
   position: sticky;
@@ -13,13 +13,16 @@
   min-height: 72px;
   padding: 0 max(var(--space-5), calc((100vw - 1180px) / 2));
   border-bottom: 1px solid var(--color-line);
-  background: rgb(251 250 247 / 0.9);
+  background: rgb(247 249 250 / 90%);
   backdrop-filter: blur(14px);
 }
 .brand {
-  font-size: 1.2rem;
-  font-weight: 900;
-  letter-spacing: -0.03em;
+  display: inline-flex;
+  color: inherit;
+}
+.logo {
+  width: 132px;
+  height: auto;
 }
 .nav,
 .actions {
@@ -60,7 +63,7 @@
 }
 .menu a:hover {
   background: var(--color-bg-soft);
-  color: var(--color-accent-strong);
+  color: var(--color-link-hover);
 }
 .primaryButton,
 .secondaryButton {
@@ -73,12 +76,28 @@
   font-weight: 850;
 }
 .primaryButton {
-  background: var(--color-sidebar);
-  color: white;
+  border: 1px solid var(--color-brand);
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
+}
+.primaryButton:hover {
+  border-color: var(--color-brand-hover);
+  background: var(--color-brand-hover);
+  color: var(--color-brand-contrast);
+}
+.primaryButton:active {
+  border-color: var(--color-brand-active);
+  background: var(--color-brand-active);
 }
 .secondaryButton {
-  border: 1px solid var(--color-line-strong);
-  background: white;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+.secondaryButton:hover {
+  border-color: var(--color-brand-light);
+  background: var(--color-brand-soft);
+  color: var(--color-brand-hover);
 }
 .hero,
 .placeholder {
@@ -94,7 +113,7 @@
 }
 .eyebrow {
   margin: 0;
-  color: var(--color-accent-strong);
+  color: var(--color-brand);
   font-size: 0.78rem;
   font-weight: 900;
   letter-spacing: 0.1em;
@@ -126,7 +145,7 @@
   padding: var(--space-5);
   border: 1px solid var(--color-line);
   border-radius: var(--radius-lg);
-  background: white;
+  background: var(--color-surface);
   box-shadow: var(--shadow-sm);
 }
 .workflow span {
@@ -159,7 +178,7 @@
   gap: var(--space-8);
   padding: 4rem max(var(--space-5), calc((100vw - 1180px) / 2));
   border-top: 1px solid var(--color-line);
-  background: white;
+  background: var(--color-surface);
 }
 .footer > div {
   display: grid;

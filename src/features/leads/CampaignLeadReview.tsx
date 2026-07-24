@@ -4,7 +4,7 @@ import type { Lead, ReviewState } from "@/types/domain";
 import { fitLabel, confidenceLabel, leadReviewState } from "@/lib/opptium/domain";
 import { updateLeadReviewAction } from "@/server/leads/actions";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
 const tabs: { key: ReviewState; label: string }[] = [
   { key: "ready", label: "Ready for review" },
@@ -131,7 +131,7 @@ export function CampaignLeadReview({
                   </td>
                 </tr>
                 {expanded === lead.id ? (
-                  <tr>
+                  <tr className={styles.expandedRow}>
                     <td colSpan={7}>
                       <div className={styles.twoColumn}>
                         <section>
@@ -170,7 +170,7 @@ export function CampaignLeadReview({
                               </li>
                             )}
                           </ul>
-                          <h3>Basic public contacts</h3>
+                          <h3>Public company channels</h3>
                           <ul className={styles.feed}>
                             {lead.contacts.map((contact) => (
                               <li key={contact.value}>
@@ -202,6 +202,14 @@ export function CampaignLeadReview({
       {visible.length === 0 ? (
         <p className={styles.secondaryText}>No companies in this view.</p>
       ) : null}
+      <div>
+        <ButtonLink
+          href={`/campaigns/${campaignId}/outreach?view=contacts`}
+          variant="primary"
+        >
+          Find contacts at approved companies
+        </ButtonLink>
+      </div>
     </div>
   );
 }

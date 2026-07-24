@@ -62,7 +62,7 @@ function getString(formData: FormData, key: string) {
 
 function getSafeNext(next: string) {
   if (!next || !next.startsWith("/") || next.startsWith("//")) {
-    return "/dashboard";
+    return "/campaigns";
   }
 
   return next;

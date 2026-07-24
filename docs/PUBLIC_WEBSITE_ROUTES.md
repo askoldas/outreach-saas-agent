@@ -32,7 +32,7 @@ Navigation from the public site to `/login` or `/signup` is intercepted into an 
 
 ## Authenticated application
 
-- `/dashboard`
+- `/dashboard` (compatibility redirect to `/campaigns`)
 - `/company-profile`
 - `/campaigns`
 - `/campaigns/new`
@@ -40,12 +40,18 @@ Navigation from the public site to `/login` or `/signup` is intercepted into an 
 - `/campaigns/[id]/strategy`
 - `/campaigns/[id]/leads`
 - `/campaigns/[id]/outreach`
+- `/leads` (redirect to Contacts)
+- `/leads/contacts`
+- `/leads/companies`
+- `/sequences`
 - `/usage`
 - `/settings`
 - `/help`
 - `/onboarding/workspace`
 
 The `(app)` layout enforces authentication and supplies the application shell and workspace context. Application pages are `noindex`. Server repositories and database RLS remain the authorization boundary.
+
+The authenticated product opens on Campaigns. Global Leads aggregates persisted companies and contact routes across campaigns; global Sequences aggregates persisted outreach drafts by campaign. Campaign-local navigation presents the workflow as Discover → Contacts → Sequence while retaining established campaign URLs. Sending, scheduling, reply metrics, and named-person records are not shown because those backend models do not yet exist.
 
 ## Source structure
 

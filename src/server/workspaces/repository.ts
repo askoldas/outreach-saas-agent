@@ -65,10 +65,16 @@ export async function createWorkspace(input: {
   websiteUrl?: string;
 }): Promise<Workspace> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase.rpc("create_workspace", {
-    workspace_name: input.name,
-    workspace_website_url: input.websiteUrl ?? null,
-  });
+  const websiteUrl = input.websiteUrl?.trim();
+  const { data, error } = await supabase.rpc(
+    "create_workspace",
+    websiteUrl
+      ? {
+          workspace_name: input.name,
+          workspace_website_url: websiteUrl,
+        }
+      : { workspace_name: input.name },
+  );
 
   if (error) {
     throw new Error(`Could not create workspace: ${error.message}`);
@@ -104,6 +110,39 @@ export async function updateWorkspace(input: {
 
 export async function clearWorkspaceData(workspaceId: string): Promise<void> {
   const { supabase } = await createAuthenticatedDatabaseClient();
+  const documents: Array<{ storage_bucket: string; storage_path: string }> = [];
+  const pageSize = 500;
+
+  for (let from = 0; ; from += pageSize) {
+    const { data, error: documentError } = await supabase
+      .from("documents")
+      .select("storage_bucket,storage_path")
+      .eq("workspace_id", workspaceId)
+      .range(from, from + pageSize - 1);
+    if (documentError) {
+      throw new Error(`Could not load workspace documents: ${documentError.message}`);
+    }
+    documents.push(...(data ?? []));
+    if (!data || data.length < pageSize) break;
+  }
+
+  const documentsByBucket = new Map<string, string[]>();
+  for (const document of documents) {
+    const paths = documentsByBucket.get(document.storage_bucket) ?? [];
+    paths.push(document.storage_path);
+    documentsByBucket.set(document.storage_bucket, paths);
+  }
+
+  for (const [bucket, bucketDocuments] of documentsByBucket) {
+    for (let from = 0; from < bucketDocuments.length; from += 100) {
+      const { error: storageError } = await supabase.storage
+        .from(bucket)
+        .remove(bucketDocuments.slice(from, from + 100));
+      if (storageError) {
+        throw new Error(`Could not delete workspace documents: ${storageError.message}`);
+      }
+    }
+  }
   const { error } = await supabase.rpc("clear_workspace_data", {
     target_workspace_id: workspaceId,
   });

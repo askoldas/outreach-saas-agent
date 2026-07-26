@@ -16,6 +16,11 @@
   border-color: var(--color-selected-border);
   background: var(--color-selected-background);
 }
+.option[data-selected="true"] {
+  border-color: var(--color-selected-border);
+  background: var(--color-selected-background);
+  box-shadow: 0 0 0 1px var(--color-selected-border);
+}
 .option input {
   margin-top: 0.2rem;
 }

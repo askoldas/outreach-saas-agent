@@ -107,8 +107,11 @@ export async function clearWorkspaceDataAction(formData: FormData) {
 
   revalidatePath("/dashboard");
   revalidatePath("/campaigns");
+  revalidatePath("/company-profile");
   revalidatePath("/leads");
   revalidatePath("/drafts");
+  revalidatePath("/sequences");
+  revalidatePath("/usage");
   revalidatePath("/settings");
   redirect("/settings?message=workspace-data-cleared");
 }

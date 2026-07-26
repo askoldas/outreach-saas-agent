@@ -1,4 +1,5 @@
 # Opptium
+
 ## Product, Agent Architecture and Technical Specification
 
 ## Status

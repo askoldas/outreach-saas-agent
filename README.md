@@ -26,7 +26,7 @@ The application uses Company Profiles and immutable Campaign Strategy versions e
 - `/leads/contacts` and `/leads/companies`
 - `/sequences`
 - `/campaigns`, `/campaigns/new`
-- `/campaigns/[id]`, `/strategy`, `/leads`, `/outreach`
+- `/campaigns/[id]`, `/market-analysis`, `/discovery`, `/strategy`, `/leads`, `/outreach`
 - `/company-profile`
 - `/usage`
 - `/settings`

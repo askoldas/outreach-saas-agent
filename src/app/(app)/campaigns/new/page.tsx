@@ -20,7 +20,8 @@ export default async function NewCampaignPage({
 
   const params = await searchParams;
   const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile?.structuredProfile) redirect("/company-profile?error=structured-profile-required");
+  if (!profile?.structuredProfile)
+    redirect("/company-profile?error=structured-profile-required");
   const draft = await getGuidedDraft(currentWorkspace.id, "campaign", "new");
 
   return (

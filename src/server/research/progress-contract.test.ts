@@ -11,6 +11,10 @@ test("Company Profile progress is authenticated and workspace scoped", async () 
   assert.match(route, /workspaceId: currentWorkspace\.id/);
   assert.match(route, /campaignId: "company-profile"/);
   assert.match(route, /Cache-Control.*no-store/s);
+
+  const repository = await readFile(new URL("./repository.ts", import.meta.url), "utf8");
+  assert.match(repository, /\.from\("provider_executions"\)/);
+  assert.match(repository, /\.eq\("operation", "company_profile_analysis"\)/);
 });
 
 test("shared progress panel polls only active durable runs", async () => {

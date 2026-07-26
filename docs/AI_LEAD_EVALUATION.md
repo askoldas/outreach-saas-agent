@@ -1,6 +1,6 @@
 # AI Lead Evaluation
 
-Lead evaluation is the first AI task in the background worker pipeline.
+Lead evaluation is the qualification stage of Trigger.dev Campaign discovery.
 
 ## Purpose
 
@@ -8,20 +8,20 @@ The evaluator decides whether a Tavily-discovered source is likely to represent
 a useful B2B lead for the selected campaign and frozen Company Profile. It does not draft
 outreach, send email, invent private contacts, or bypass human review.
 
-## Worker Flow
+## Trigger Flow
 
 1. `search_web` builds horizontal Campaign Strategy and Company Profile-aware queries.
-2. Tavily results are saved to `lead_sources`.
+2. Tavily results are saved to canonical `company_sources`.
 3. General source classification marks each result as company website,
    contact page, directory, association, registry, marketplace, job posting,
    article/news, social profile, irrelevant, or unknown.
-4. Plausible candidate sources get `evaluate_lead` tasks.
-5. `evaluate_lead` calls OpenRouter and requires strict JSON.
-6. Valid `qualified` or `needs_review` evaluations create or update leads.
-7. Failed AI evaluations still create a needs-review lead with
-   `qualification_status = failed` so discovery is not blocked by OpenRouter.
-8. `disqualified` evaluations remain in `lead_sources` and `ai_generations`.
-9. Saved leads receive a durable `enrich_contacts` task.
+4. Plausible sources create canonical companies and Campaign associations.
+5. The discovery service calls OpenRouter and requires strict JSON.
+6. Evaluations persist immutable qualification results, dimensions, and evidence.
+7. Failed AI evaluations preserve a needs-review Campaign company with
+   `insufficient_evidence` status.
+8. Every attempt is audited in `ai_requests`.
+9. Contact enrichment remains an explicit post-approval Trigger task.
 
 ## Prompt Version
 
@@ -31,9 +31,8 @@ Current prompt version:
 lead - evaluator - v1;
 ```
 
-Every OpenRouter call writes an `ai_generations` row with provider, model, task
-name, prompt version, input JSON, output text/JSON when successful, error
-message when failed, workspace id, run id, and task id.
+Every OpenRouter call writes an `ai_requests` row with provider, selected model,
+fallback state, prompt/schema version, token/cost metadata, status, and error details.
 
 ## Output Schema
 
@@ -59,8 +58,7 @@ The model must return strict JSON matching the lead evaluator schema:
 }
 ```
 
-Invalid JSON or missing required fields fails the task so the worker retry policy
-can handle it.
+Invalid JSON or missing required fields preserve the candidate for manual review.
 
 ## Rules
 
@@ -74,7 +72,7 @@ can handle it.
 ## Contact Enrichment
 
 Contact enrichment is provider-backed, evidence-based, and separate from AI
-qualification. The worker performs a company-domain-scoped Tavily search and
+qualification. The Trigger service performs a company-domain-scoped Tavily search and
 parses provider results, saved evidence, and shallow public website/contact-page
 checks deterministically. Provider-derived routes retain the query, source URL,
 source title, provider, and verification timestamp.
@@ -94,7 +92,7 @@ saved as `Phone` contacts, and lead contactability increases from `low` to
 ## Current Limitations
 
 - Evaluation depends on Tavily result snippets and source URLs.
-- Deep website crawling is not yet a worker task.
-- Contact enrichment is a separate worker task and does not invent emails or
+- Deep website crawling is not implemented.
+- Contact enrichment is a separate Trigger task and does not invent emails or
   people.
 - Outreach drafting is handled by a separate grounded durable task after approval.

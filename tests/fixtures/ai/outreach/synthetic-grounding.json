@@ -1,0 +1,12 @@
+{
+  "promptVersion": "grounded-outreach-draft-v1",
+  "inputSchema": "campaign, frozen seller context, strategy, lead evidence, recipient route",
+  "expectedOutputSchema": "GeneratedDraft",
+  "requiredEvidencePreservation": ["exact sellerClaims", "exact evidenceUsed"],
+  "requiredStatusConstraints": ["manual review required", "no send action"],
+  "prohibitedUnsupportedClaims": [
+    "invented metrics",
+    "invented relationship",
+    "invented recipient facts"
+  ]
+}

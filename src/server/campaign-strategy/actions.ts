@@ -10,14 +10,15 @@ import {
   generateCampaignStrategy,
   strategyGenerationPromptVersion,
 } from "@/lib/ai/strategy-generation";
-import { requireOpenRouterConfig } from "@/lib/providers/config";
-import { recordUsageEvent } from "@/server/outreach/repository";
 
 export async function saveCampaignStrategyAction(formData: FormData) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
   const campaignId = text(formData, "campaignId");
   if (!campaignId) throw new Error("Campaign id is required");
+  const campaign = await getCampaign(currentWorkspace.id, campaignId);
+  if (!campaign) throw new Error("Campaign not found.");
+  assertRevisionAllowed(campaign.status);
   await saveCampaignStrategyVersion(currentWorkspace.id, campaignId, {
     id: null,
     version: 0,
@@ -60,6 +61,7 @@ export async function generateCampaignStrategyAction(input: {
     getCurrentCampaignStrategy(currentWorkspace.id, input.campaignId),
   ]);
   if (!campaign || !currentStrategy) throw new Error("Campaign Strategy not found.");
+  assertRevisionAllowed(campaign.status);
   const { supabase, user } = await createAuthenticatedDatabaseClient();
   const { data: campaignRow, error: campaignError } = await supabase
     .from("campaigns")
@@ -71,7 +73,7 @@ export async function generateCampaignStrategyAction(input: {
     throw new Error(`Could not load campaign context: ${campaignError.message}`);
   const { data: snapshot, error: snapshotError } = await supabase
     .from("campaign_profile_snapshots")
-    .select("snapshot")
+    .select("snapshot_data")
     .eq("workspace_id", currentWorkspace.id)
     .eq("campaign_id", (campaignRow as { id: string }).id)
     .single();
@@ -79,7 +81,8 @@ export async function generateCampaignStrategyAction(input: {
     throw new Error(`Could not load frozen Company Profile: ${snapshotError.message}`);
   const generated = await generateCampaignStrategy({
     campaign: campaign as unknown as Record<string, unknown>,
-    companyProfile: (snapshot as { snapshot: Record<string, unknown> }).snapshot,
+    companyProfile: (snapshot as { snapshot_data: Record<string, unknown> })
+      .snapshot_data,
     currentStrategy,
     instruction,
   });
@@ -87,33 +90,46 @@ export async function generateCampaignStrategyAction(input: {
     ...generated.strategy,
     refinementSummary: [...generated.strategy.refinementSummary, instruction],
   });
-  const model = requireOpenRouterConfig().model;
-  const { error: logError } = await supabase.from("ai_generations").insert({
+  const requestHash = `strategy:${input.campaignId}:${saved.version}`;
+  const { error: logError } = await supabase.from("ai_requests").insert({
     workspace_id: currentWorkspace.id,
-    campaign_id: input.campaignId,
     provider: "openrouter",
-    model,
-    task_name: "generate_campaign_strategy",
+    role: "campaign_planning",
+    selected_model: generated.modelCall.requestedModel,
+    fallback_model: generated.modelCall.fallbackUsed
+      ? generated.modelCall.actualModel
+      : null,
+    fallback_used: generated.modelCall.fallbackUsed,
     prompt_version: strategyGenerationPromptVersion,
-    prompt_json: {
-      campaign,
-      companyProfile: (snapshot as { snapshot: unknown }).snapshot,
-      currentStrategy,
-      instruction,
-    },
-    output_text: generated.rawOutput,
-    output_json: { ...generated.strategy, savedStrategyVersionId: saved.id },
     status: "completed",
+    request_hash: requestHash,
+    input_units: generated.modelCall.inputTokens,
+    output_units: generated.modelCall.outputTokens,
+    actual_cost: generated.modelCall.providerReportedCost ?? 0,
+    currency: generated.modelCall.providerCurrency ?? "USD",
+    metadata: {
+      actualModel: generated.modelCall.actualModel,
+      fallbackReason: generated.modelCall.fallbackReason,
+      latencyMs: generated.modelCall.latencyMs,
+      providerRequestId: generated.modelCall.providerRequestId,
+      savedStrategyVersionId: saved.id,
+      instruction,
+      totalTokens: generated.modelCall.totalTokens,
+    },
+    started_at: new Date().toISOString(),
     completed_at: new Date().toISOString(),
   });
   if (logError) throw new Error(`Could not log Strategy generation: ${logError.message}`);
-  await recordUsageEvent(currentWorkspace.id, user.id, {
-    campaignId: input.campaignId,
+  const { error: usageError } = await supabase.from("usage_ledger").insert({
+    workspace_id: currentWorkspace.id,
     operation: "strategy_generation",
-    estimated: 3,
-    actual: 3,
-    referenceId: saved.id ?? `strategy-${saved.version}`,
+    entry_type: "settlement",
+    idempotency_key: requestHash,
+    credits: 3,
+    metadata: { createdBy: user.id, strategyVersionId: saved.id },
   });
+  if (usageError)
+    throw new Error(`Could not record Strategy usage: ${usageError.message}`);
   revalidatePath(`/campaigns/${input.campaignId}`);
   revalidatePath(`/campaigns/${input.campaignId}/strategy`);
   revalidatePath("/usage");
@@ -132,4 +148,10 @@ function list(data: FormData, key: string) {
 function positive(data: FormData, key: string, fallback: number) {
   const value = Number(text(data, key));
   return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
+}
+
+function assertRevisionAllowed(status: string) {
+  if (status === "running") {
+    throw new Error("Pause the active campaign run before adjusting its market.");
+  }
 }

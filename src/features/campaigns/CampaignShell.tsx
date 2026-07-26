@@ -1,8 +1,16 @@
 import Link from "next/link";
 import type { Campaign } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
-import styles from "./CampaignShell.module.css";
 import { ContextualAiDrawer } from "@/features/guided/ContextualAiDrawer";
+import styles from "./CampaignShell.module.css";
+
+type CampaignSection =
+  | "overview"
+  | "market"
+  | "discovery"
+  | "companies"
+  | "contacts"
+  | "outreach";
 
 export function CampaignShell({
   campaign,
@@ -10,14 +18,17 @@ export function CampaignShell({
   children,
 }: Readonly<{
   campaign: Campaign;
-  active: "discover" | "contacts" | "sequence";
+  active: CampaignSection;
   children: React.ReactNode;
 }>) {
   const base = `/campaigns/${campaign.id}`;
   const tabs = [
-    { key: "discover", label: "Discover", href: `${base}/leads` },
+    { key: "overview", label: "Overview", href: base },
+    { key: "market", label: "Market Analysis", href: `${base}/market-analysis` },
+    { key: "discovery", label: "Discovery", href: `${base}/discovery` },
+    { key: "companies", label: "Companies", href: `${base}/leads` },
     { key: "contacts", label: "Contacts", href: `${base}/outreach?view=contacts` },
-    { key: "sequence", label: "Sequence", href: `${base}/outreach?view=drafts` },
+    { key: "outreach", label: "Outreach", href: `${base}/outreach?view=drafts` },
   ] as const;
   return (
     <div className={styles.workspace}>

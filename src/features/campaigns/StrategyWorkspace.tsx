@@ -20,14 +20,22 @@ type ArrayKey = Exclude<
 export function StrategyWorkspace({
   campaign,
   initialStrategy,
-}: Readonly<{ campaign: Campaign; initialStrategy: CampaignStrategyVersion }>) {
+  startRevising = false,
+}: Readonly<{
+  campaign: Campaign;
+  initialStrategy: CampaignStrategyVersion;
+  startRevising?: boolean;
+}>) {
   const router = useRouter();
   const [strategy, setStrategy] = useState(initialStrategy);
   const [instruction, setInstruction] = useState("");
-  const [revising, setRevising] = useState(initialStrategy.status !== "used");
+  const [revising, setRevising] = useState(
+    initialStrategy.status !== "used" || (startRevising && campaign.status !== "running"),
+  );
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
   const locked = initialStrategy.status === "used" && !revising;
+  const activeRun = campaign.status === "running";
 
   function changeList(key: ArrayKey, value: string) {
     setStrategy((current) => ({ ...current, [key]: toList(value) }));
@@ -194,7 +202,8 @@ export function StrategyWorkspace({
           <div className={`${styles.cardBody} ${styles.stack}`}>
             <p className={styles.secondaryText}>
               Refinement modifies structured fields. Saving creates a new immutable
-              version.
+              version. Pause an active run before changing its market. A paused run keeps
+              its frozen strategy; stop it and start a new run to use the revised version.
             </p>
             <label className={form.field}>
               <span>Request a change</span>
@@ -220,12 +229,16 @@ export function StrategyWorkspace({
             ) : null}
             {message ? <Badge tone="accent">{message}</Badge> : null}
             {locked ? (
-              <Button variant="primary" onClick={() => setRevising(true)}>
+              <Button
+                variant="primary"
+                disabled={activeRun}
+                onClick={() => setRevising(true)}
+              >
                 Create revised strategy
               </Button>
             ) : (
               <>
-                <Button type="submit" variant="primary">
+                <Button type="submit" variant="primary" disabled={activeRun}>
                   Save as new version
                 </Button>
                 <Button

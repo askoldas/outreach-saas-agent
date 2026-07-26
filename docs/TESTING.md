@@ -173,6 +173,17 @@ Do not use large snapshots as a substitute for meaningful assertions, especially
 
 ## 7. Migration testing
 
+The new-project baseline is generated from `supabase/baseline/*.sql` with
+`node scripts/build-clean-baseline.mjs`. A normal local reset reads only
+`supabase/migrations/20260725000100_opptium_clean_baseline.sql`. Historical migration
+contracts read `supabase/migrations-legacy/` and do not imply those files should be
+applied to the new project.
+
+Before linked or remote database commands, run
+`node scripts/assert-safe-supabase-target.mjs`. It must fail unless the hosted URL
+and the Supabase CLI link both match the approved clean project
+`aqhuzmqzeipubxrxadyj`.
+
 For every migration change:
 
 1. apply all migrations to an empty database;
@@ -241,3 +252,18 @@ A change is complete when:
 - security and tenant impact were considered;
 - user-facing and architecture documentation is updated when needed;
 - checks actually run are reported accurately.
+
+Campaign workflow coverage additionally protects geography-before-proposal, strict
+Campaign Brief and market-plan schemas, raw candidate provenance before qualification,
+duplicate/exclusion classification gates, progressive counters, and bounded target,
+iteration, query, result, and marginal-yield stopping rules.
+
+Campaign navigation contract coverage verifies the responsive Overview, Market Analysis,
+Discovery, Companies, Contacts, and Outreach sections and ensures the Campaign root is a
+real stage overview rather than a redirect.
+
+The labeled synthetic discovery evaluation can be run independently with
+`pnpm test:discovery-quality`. It enforces minimum precision and recall for deterministic
+source eligibility and checks directory extraction against expected company domains.
+Add a fixture whenever a production-safe false positive or false negative is converted
+into a synthetic regression case.

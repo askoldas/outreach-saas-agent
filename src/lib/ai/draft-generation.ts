@@ -1,4 +1,4 @@
-import { generateText } from "../providers/openrouter.ts";
+import { generateTextResult } from "../providers/openrouter.ts";
 
 export const draftPromptVersion = "grounded-outreach-draft-v1";
 
@@ -24,7 +24,7 @@ export type GeneratedDraft = {
 };
 
 export async function generateGroundedDraft(input: DraftGenerationInput) {
-  const rawOutput = await generateText(
+  const modelCall = await generateTextResult(
     [
       {
         role: "system",
@@ -38,10 +38,10 @@ export async function generateGroundedDraft(input: DraftGenerationInput) {
       },
       { role: "user", content: JSON.stringify(input) },
     ],
-    { taskName: "grounded outreach draft" },
+    { role: "outreach_generation", taskName: "grounded outreach draft" },
   );
-
-  return { draft: parseGeneratedDraft(rawOutput), rawOutput };
+  const rawOutput = modelCall.data;
+  return { draft: parseGeneratedDraft(rawOutput), rawOutput, modelCall };
 }
 
 export function parseGeneratedDraft(rawOutput: string): GeneratedDraft {

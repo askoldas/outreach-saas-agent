@@ -5,10 +5,15 @@ import { Badge } from "@/components/ui/Badge";
 import styles from "@/features/shared/Feature.module.css";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { listUsageEvents } from "@/server/outreach/repository";
+import { CommercialValidation } from "@/features/usage/CommercialValidation";
+import { getCommercialValidationMetrics } from "@/server/usage/repository";
 export default async function UsagePage() {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
-  const events = await listUsageEvents(currentWorkspace.id);
+  const [events, validation] = await Promise.all([
+    listUsageEvents(currentWorkspace.id),
+    getCommercialValidationMetrics(currentWorkspace.id),
+  ]);
   const actual = events.reduce((sum, event) => sum + event.actualCredits, 0);
   const estimated = events.reduce((sum, event) => sum + event.estimatedCredits, 0);
   return (
@@ -33,6 +38,7 @@ export default async function UsagePage() {
           </div>
         </Card>
       </section>
+      <CommercialValidation metrics={validation} />
       <Card>
         <CardHeader
           title="Usage history"

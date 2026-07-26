@@ -1,4 +1,4 @@
-import { generateText } from "../providers/openrouter.ts";
+import { generateTextResult } from "../providers/openrouter.ts";
 import type { CampaignStrategyVersion } from "../../types/domain.ts";
 
 export const strategyGenerationPromptVersion = "campaign-strategy-v1";
@@ -9,7 +9,7 @@ export async function generateCampaignStrategy(input: {
   currentStrategy: CampaignStrategyVersion;
   instruction: string;
 }) {
-  const rawOutput = await generateText(
+  const modelCall = await generateTextResult(
     [
       {
         role: "system",
@@ -26,9 +26,10 @@ export async function generateCampaignStrategy(input: {
         }),
       },
     ],
-    { taskName: "campaign strategy generation" },
+    { role: "campaign_planning", taskName: "campaign strategy generation" },
   );
-  return { strategy: parseCampaignStrategy(rawOutput), rawOutput };
+  const rawOutput = modelCall.data;
+  return { strategy: parseCampaignStrategy(rawOutput), rawOutput, modelCall };
 }
 
 export function parseCampaignStrategy(rawOutput: string): CampaignStrategyVersion {

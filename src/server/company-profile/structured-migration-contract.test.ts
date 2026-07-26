@@ -3,19 +3,19 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const migrationUrl = new URL(
-  "../../../supabase/migrations/20260723000200_create_structured_company_profiles.sql",
+  "../../../supabase/migrations-legacy/20260723000200_create_structured_company_profiles.sql",
   import.meta.url,
 );
 const projectionFixUrl = new URL(
-  "../../../supabase/migrations/20260723000300_fix_company_profile_json_projection.sql",
+  "../../../supabase/migrations-legacy/20260723000300_fix_company_profile_json_projection.sql",
   import.meta.url,
 );
 const explicitAnalysisRpcUrl = new URL(
-  "../../../supabase/migrations/20260723000400_make_analyzed_profile_rpc_explicit.sql",
+  "../../../supabase/migrations-legacy/20260723000400_make_analyzed_profile_rpc_explicit.sql",
   import.meta.url,
 );
 const promptVersionFixUrl = new URL(
-  "../../../supabase/migrations/20260723000600_fix_company_profile_prompt_version_column.sql",
+  "../../../supabase/migrations-legacy/20260723000600_fix_company_profile_prompt_version_column.sql",
   import.meta.url,
 );
 

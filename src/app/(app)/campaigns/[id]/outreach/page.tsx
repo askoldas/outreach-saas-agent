@@ -32,7 +32,7 @@ export default async function OutreachPage({
     <CampaignShell
       campaign={campaign}
       active={
-        query.view === "drafts" || query.view === "exports" ? "sequence" : "contacts"
+        query.view === "drafts" || query.view === "exports" ? "outreach" : "contacts"
       }
     >
       <OutreachWorkspace

@@ -1,5 +1,7 @@
 import { requireTavilyConfig } from "./config.ts";
 
+const tavilyRequestTimeoutMs = 30_000;
+
 type TavilySearchResult = {
   content?: string;
   raw_content?: string;
@@ -47,6 +49,7 @@ export async function searchWeb(
       Authorization: `Bearer ${apiKey}`,
     },
     method: "POST",
+    signal: AbortSignal.timeout(tavilyRequestTimeoutMs),
   });
 
   if (!response.ok) {
@@ -72,6 +75,7 @@ export async function extractWebPages(urls: string[]): Promise<SearchResult[]> {
       Authorization: `Bearer ${apiKey}`,
     },
     method: "POST",
+    signal: AbortSignal.timeout(tavilyRequestTimeoutMs),
   });
   if (!response.ok) {
     throw new Error(`Tavily extract failed with status ${response.status}.`);

@@ -28,14 +28,16 @@ test("Company Profile extraction disables expensive reasoning", () => {
   assert.match(source, /reasoningEffort:\s*"none"/);
 });
 
-test("OpenRouter fallbacks exclude duplicates and the primary model", () => {
-  const previous = process.env.OPENROUTER_FALLBACK_MODELS;
-  process.env.OPENROUTER_FALLBACK_MODELS =
-    "nvidia/model:free, google/gemma:free, google/gemma:free, openrouter/free";
-  assert.deepEqual(getOpenRouterFallbackModels("nvidia/model:free"), [
-    "google/gemma:free",
-    "openrouter/free",
+test("Company Profile extraction reserves enough output for structured JSON", () => {
+  const source = readFileSync(
+    new URL("../ai/company-profile-analysis.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(source, /maxCompletionTokens:\s*6_000/);
+});
+
+test("critical OpenRouter roles use only the configured paid fallback", () => {
+  assert.deepEqual(getOpenRouterFallbackModels("profile_analysis"), [
+    "openai/gpt-5-mini",
   ]);
-  if (previous === undefined) delete process.env.OPENROUTER_FALLBACK_MODELS;
-  else process.env.OPENROUTER_FALLBACK_MODELS = previous;
 });

@@ -14,6 +14,10 @@ Deep contact enrichment is explicit after approval and displays a credit estimat
 
 The MVP ends at Outreach CSV and Lead Research CSV export. Automatic sending, mailbox draft creation, follow-ups, reply detection, CRM integrations, production billing, paid enrichment vendors, deep crawling, and document uploads are excluded.
 
+The Usage page reports descriptive workspace funnel metrics from persisted product
+events. Response rate and willingness-to-pay are not inferred because the application
+does not send outreach or collect commercial research responses.
+
 Current implementation status is maintained in `OPPTIUM_REFACTOR_PLAN.md`.
 
 ## AI-guided setup
@@ -29,6 +33,10 @@ Company setup adapts around detected offerings and unresolved review questions. 
 setup begins with a selected Offering, then captures objective, segment, markets, buyer
 personas, qualification, exclusions, and a reviewable discovery strategy. Campaign
 overrides do not mutate the master Company Profile.
+
+A completed Campaign setup consumes its guided draft. Opening Create campaign again
+starts at Offering selection and never silently reuses the prior Campaign's market,
+segment, or review step. Incomplete drafts may still be resumed.
 
 Website analysis now classifies and groups related commercial items before review. Company setup normally asks a small set of decisions about offering structure, active prospecting propositions, markets, relationship types, commercial requirements, and genuine source conflicts. Optional wording and additional proof do not block publishing. “Improve profile structure” creates a new draft while retaining published campaigns and user-defined prospecting preferences.
 

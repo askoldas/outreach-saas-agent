@@ -19,6 +19,14 @@ const campaignControls = readFileSync(
   new URL("../campaigns/CampaignControls.tsx", import.meta.url),
   "utf8",
 );
+const campaignAction = readFileSync(
+  new URL("../../server/campaigns/actions.ts", import.meta.url),
+  "utf8",
+);
+const guidedRepository = readFileSync(
+  new URL("../../server/guided/repository.ts", import.meta.url),
+  "utf8",
+);
 
 test("Company setup is decision-led while direct editing remains available", () => {
   assert.match(company, /activeQuestion/);
@@ -27,15 +35,16 @@ test("Company setup is decision-led while direct editing remains available", () 
   assert.match(company, /Publish Company Profile/);
 });
 
-test("Campaign setup starts from an offering and keeps a live structured summary", () => {
-  assert.match(campaign, /Which offering should this campaign promote/);
-  assert.match(campaign, /What commercial relationship are you seeking/);
-  assert.match(campaign, /Which markets should this campaign target/);
-  assert.match(campaign, /saveAsOfferingDefaults/);
+test("Campaign setup starts from geography and keeps a live structured summary", () => {
+  assert.match(campaign, /Where do you want to find companies/);
+  assert.match(campaign, /proposeCampaignBriefAction/);
+  assert.match(campaign, /Review the recommended offering/);
+  assert.match(campaign, /Review the recommended target client/);
+  assert.match(campaign, /Qualified companies wanted/);
   assert.match(campaign, /GuidedStatus/);
   assert.match(campaign, /offeringOverrides/);
-  assert.match(campaign, /interpretCampaignDraftRequestAction/);
-  assert.match(campaign, /Apply changes/);
+  assert.match(campaign, /briefProposal/);
+  assert.match(campaign, /confirmedBrief/);
 });
 
 test("contextual AI is scoped and cannot silently apply proposals", () => {
@@ -45,7 +54,17 @@ test("contextual AI is scoped and cannot silently apply proposals", () => {
   assert.match(drawer, /Suggestions are not saved until/);
 });
 
-test("new campaigns can be started from the Discover page", () => {
+test("campaign progress remains controllable from the Discover page", () => {
   assert.match(discoverPage, /CampaignControls/);
   assert.match(campaignControls, /Start campaign and discover leads/);
+});
+
+test("successful campaign creation consumes its reusable new-campaign draft", () => {
+  assert.match(campaignAction, /completeGuidedDraft\(currentWorkspace\.id/);
+  assert.match(guidedRepository, /\.update\(\{ status: "applied" \}\)/);
+  assert.match(guidedRepository, /\.gte\("created_at", data\.updated_at\)/);
+  assert.match(guidedRepository, /\.in\("status", \["draft", "ready"\]\)/);
+  assert.doesNotMatch(campaign, /Any relevant market/);
+  assert.match(campaign, /disabled=\{pending \|\| !countryCodes\.length\}/);
+  assert.match(campaignAction, /enqueueCampaignDiscoveryRun/);
 });

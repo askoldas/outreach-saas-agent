@@ -1,9 +1,5 @@
-import {
-  parseAiGuidedResponse,
-  type AiGuidedResponse,
-  type GuidedScope,
-} from "../guided/contracts.ts";
-import { generateText } from "../providers/openrouter.ts";
+import { parseAiGuidedResponse, type GuidedScope } from "../guided/contracts.ts";
+import { generateTextResult } from "../providers/openrouter.ts";
 import { parseCompleteJsonObject } from "./company-profile-analysis.ts";
 
 export const guidedInterpretationPromptVersion = "guided-change-v1";
@@ -38,8 +34,8 @@ export async function interpretGuidedChange(input: {
   entityId: string;
   request: string;
   context: Record<string, unknown>;
-}): Promise<{ response: AiGuidedResponse; rawOutput: string }> {
-  const rawOutput = await generateText(
+}) {
+  const modelCall = await generateTextResult(
     [
       {
         role: "system",
@@ -90,12 +86,14 @@ export async function interpretGuidedChange(input: {
       },
     ],
     {
+      role: "guided_interpretation",
       jsonMode: true,
       maxCompletionTokens: 2_000,
       reasoningEffort: "none",
       taskName: "guided commercial change interpretation",
     },
   );
+  const rawOutput = modelCall.data;
   const parsed = parseCompleteJsonObject(rawOutput);
   const response = parseAiGuidedResponse(parsed);
   if (response.context.scope !== input.scope)
@@ -104,7 +102,7 @@ export async function interpretGuidedChange(input: {
     if (!change.fieldPath || !isAllowedPath(input.scope, change.fieldPath))
       throw new Error(`Unsupported guided field path: ${change.fieldPath ?? "missing"}.`);
   }
-  return { response, rawOutput };
+  return { response, rawOutput, modelCall };
 }
 
 function isAllowedPath(scope: "company" | "campaign", path: string) {

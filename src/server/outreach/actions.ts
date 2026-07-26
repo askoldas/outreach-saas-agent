@@ -104,6 +104,6 @@ export async function queueDraftGenerationAction(input: { campaignId: string }) 
   revalidatePath(`/campaigns/${input.campaignId}/outreach`);
   revalidatePath("/usage");
   return {
-    message: `Queued ${run.taskCount} grounded draft${run.taskCount === 1 ? "" : "s"}. Refresh after the worker completes.`,
+    message: `Queued ${run.taskCount} grounded draft${run.taskCount === 1 ? "" : "s"}. Refresh after Trigger.dev completes.`,
   };
 }

@@ -6,6 +6,7 @@ test("Tavily search requests and prefers extracted raw website content", async (
   const originalFetch = globalThis.fetch;
   process.env.TAVILY_API_KEY = "test-key";
   globalThis.fetch = async (_input, init) => {
+    assert.ok(init?.signal);
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     assert.equal(body.include_raw_content, "text");
     assert.deepEqual(body.include_domains, ["example.test"]);
@@ -34,8 +35,9 @@ test("Tavily search requests and prefers extracted raw website content", async (
 test("Tavily extract provides direct URL fallback content", async () => {
   const originalFetch = globalThis.fetch;
   process.env.TAVILY_API_KEY = "test-key";
-  globalThis.fetch = async (input) => {
+  globalThis.fetch = async (input, init) => {
     assert.equal(String(input), "https://api.tavily.com/extract");
+    assert.ok(init?.signal);
     return Response.json({
       results: [{ url: "https://example.test/", raw_content: "Homepage content" }],
     });

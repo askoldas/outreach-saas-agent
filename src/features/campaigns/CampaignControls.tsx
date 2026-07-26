@@ -24,12 +24,12 @@ export function CampaignControls({
 }>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(status === "running");
   const [message, setMessage] = useState("");
   const [currentStatus, setCurrentStatus] = useState(status);
   const [progress, setProgress] = useState<ResearchProgress | null>(null);
   const [progressError, setProgressError] = useState("");
-  const isBusy = isPending || isDiscovering;
+  const isWorking = isPending || isDiscovering;
 
   async function refreshProgress() {
     const response = await fetch(
@@ -46,12 +46,10 @@ export function CampaignControls({
     setProgress(nextProgress);
     setProgressError("");
 
-    if (
-      nextProgress.status === "completed" ||
-      nextProgress.status === "failed" ||
-      nextProgress.status === "cancelled"
-    ) {
+    if (shouldStopPolling(nextProgress)) {
       setIsDiscovering(false);
+      synchronizeStatus(nextProgress, setCurrentStatus);
+      router.refresh();
     }
 
     return nextProgress;
@@ -86,12 +84,10 @@ export function CampaignControls({
           setProgress(payload);
           setProgressError("");
 
-          if (
-            payload.status === "completed" ||
-            payload.status === "failed" ||
-            payload.status === "cancelled"
-          ) {
+          if (shouldStopPolling(payload)) {
             setIsDiscovering(false);
+            synchronizeStatus(payload, setCurrentStatus);
+            router.refresh();
           }
         }
       } catch (error) {
@@ -112,7 +108,7 @@ export function CampaignControls({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [campaignId, isDiscovering]);
+  }, [campaignId, isDiscovering, router]);
 
   function updateStatus(
     nextStatus: Extract<CampaignStatus, "completed" | "paused" | "running">,
@@ -125,6 +121,13 @@ export function CampaignControls({
         });
 
         setCurrentStatus(nextStatus);
+        if (nextStatus === "running") {
+          setProgress(null);
+          setProgressError("");
+          setIsDiscovering(true);
+        } else if (nextStatus === "paused" || nextStatus === "completed") {
+          setIsDiscovering(false);
+        }
         setMessage(result.message);
         router.refresh();
       } catch (error) {
@@ -133,8 +136,19 @@ export function CampaignControls({
     });
   }
 
+  function stopCampaign() {
+    if (
+      !window.confirm(
+        "Stop this campaign run? Completed discovery results will be preserved.",
+      )
+    )
+      return;
+    updateStatus("completed");
+  }
+
   async function discoverLeads() {
     setIsDiscovering(true);
+    setCurrentStatus("running");
     setProgress(null);
     setProgressError("");
     setMessage("Discovery queued. Waiting for the worker...");
@@ -163,23 +177,42 @@ export function CampaignControls({
   return (
     <div className={styles.stack}>
       <div className={styles.filters}>
-        <Button disabled={isBusy} variant="primary" onClick={discoverLeads}>
+        <Button
+          disabled={
+            isPending ||
+            isDiscovering ||
+            (currentStatus !== "planning" && currentStatus !== "completed")
+          }
+          variant="primary"
+          onClick={discoverLeads}
+        >
           {currentStatus === "planning"
             ? "Start campaign and discover leads"
             : "Discover more leads"}
         </Button>
-        <Button disabled={isBusy} onClick={() => updateStatus("paused")}>
+        <Button
+          disabled={isPending || currentStatus !== "running"}
+          onClick={() => updateStatus("paused")}
+        >
           Pause
         </Button>
-        <Button disabled={isBusy} onClick={() => updateStatus("running")}>
+        <Button
+          disabled={isPending || currentStatus !== "paused"}
+          onClick={() => updateStatus("running")}
+        >
           Continue
         </Button>
-        <Button disabled={isBusy} onClick={() => updateStatus("completed")}>
-          Complete
+        <Button
+          disabled={
+            isPending || (currentStatus !== "running" && currentStatus !== "paused")
+          }
+          onClick={stopCampaign}
+        >
+          Stop campaign
         </Button>
       </div>
       <Badge tone="accent">
-        {isBusy ? message || "Working..." : message || `Status: ${currentStatus}`}
+        {isWorking ? message || "Working..." : message || `Status: ${currentStatus}`}
       </Badge>
       {progressError ? (
         <Badge tone="warning">Progress polling: {progressError}</Badge>
@@ -209,12 +242,44 @@ export function CampaignControls({
             {progress?.runId ? `(${progress.runId.slice(0, 8)})` : ""}
             {progress?.lastError ? ` - ${progress.lastError}` : ""}
           </span>
+          {progress?.currentIteration ? (
+            <span className={styles.secondaryText}>
+              Discovery iteration {progress.currentIteration} / 5
+            </span>
+          ) : null}
           <span className={styles.secondaryText}>
-            Lead target: {initialLeadCount} / {desiredLeadCount} before this run
+            Qualified-company target: {progress?.companiesQualified ?? initialLeadCount} /{" "}
+            {desiredLeadCount}
+          </span>
+          <span className={styles.secondaryText}>
+            {progress?.candidatesDiscovered ?? 0} candidates discovered ·{" "}
+            {progress?.candidatesUnique ?? 0} unique ·{" "}
+            {progress?.candidatesClassified ?? 0} classified ·{" "}
+            {progress?.companiesEvaluated ?? 0} evaluated ·{" "}
+            {progress?.companiesQualified ?? 0} qualified
           </span>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function synchronizeStatus(
+  progress: ResearchProgress,
+  setStatus: (status: CampaignStatus) => void,
+) {
+  if (progress.currentStep === "Campaign paused") setStatus("paused");
+  else if (progress.status === "completed" || progress.status === "cancelled")
+    setStatus("completed");
+}
+
+function shouldStopPolling(progress: ResearchProgress) {
+  return (
+    progress.status === "completed" ||
+    progress.status === "failed" ||
+    progress.status === "cancelled" ||
+    progress.currentStep === "Campaign paused" ||
+    progress.currentStep === "Waiting for your targeting clarification"
   );
 }
 

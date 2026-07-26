@@ -1,5 +1,20 @@
 # Domain Model
 
+## Clean-baseline transition
+
+The clean target model replaces the legacy campaign-bound `Lead` persistence with:
+
+```text
+Company -> Campaign Company -> Qualification
+Company -> Contact -> Contact Method
+Campaign Company -> Campaign Contact -> Outreach Draft
+Campaign -> Campaign Run -> Events / Questions / Approvals
+```
+
+Current TypeScript `Lead` and `ContactRoute` read models remain temporary compatibility
+contracts until Phase 2. The canonical clean database model is documented in
+`docs/database/clean-baseline-design.md`.
+
 - `Workspace`: tenant, membership, settings, and authorization boundary.
 - `CompanyProfile`: stable workspace-owned identity for structured seller knowledge.
 - `CompanyProfileVersion`: immutable numbered seller-knowledge version and provenance.
@@ -12,6 +27,23 @@
 - `ReviewQuestion`: one commercially meaningful decision required to make discovery, qualification, buyer selection, or messaging safe.
 - `CampaignProfileSnapshot`: immutable copy of the exact profile version selected when a campaign is created.
 - `Campaign`: natural-language objective, focus, geography, desired count, status, and strategy reference.
+- `CampaignBrief`: confirmed geography, campaign-only Offering wording, structured
+  target client, and requested qualified-company quantity. The original validated AI
+  proposal remains separate from the user-confirmed brief. A saved Campaign Strategy
+  revision synchronizes the confirmed market and target-client fields for future runs
+  without changing the original proposal or Company Profile.
+- `MarketAnalysis`: versioned run artifact for market breadth, local terminology,
+  sources, signals, exclusions, data challenges, and search approach.
+- `DiscoveryPlan`, `DiscoveryPath`, and `DiscoveryIteration`: bounded, auditable search
+  intent, queries, provenance, counters, yield, and continuation decision.
+- `DiscoveryCandidate`: lightweight raw search candidate saved before qualification.
+- `CandidateClassification`: cheap deterministic or economical-model decision gating
+  whether a raw candidate may receive deep evidence-aware evaluation.
+- `CampaignAgentCheckpoint`: retry-safe workspace-scoped snapshot of one Campaign Agent
+  loop state at a deterministic phase boundary; it is operational state, not model
+  conversation memory.
+- `ProviderExecution`: one auditable paid-work boundary. Campaign Agent iteration
+  executions reference their orchestration parent and carry a bounded iteration number.
 - `StrategyVersion`: persisted immutable targeting, relevance, qualification, contact-role, and research plan. Editable predecessors become superseded; a research run references and freezes the exact used version.
 - `Lead`: a candidate company scoped to one campaign.
 - `Qualification`: Fit Score, label, confidence, dimensions, explanation, and evidence. Contactability is separate.

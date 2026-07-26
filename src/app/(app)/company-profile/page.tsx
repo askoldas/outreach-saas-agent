@@ -24,11 +24,6 @@ export default async function CompanyProfilePage({
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
   const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile) {
-    throw new Error(
-      "Company Profile is missing. Apply the ordered profile migrations before using this workspace.",
-    );
-  }
   const analysisProgress = await getCampaignResearchProgress({
     campaignId: "company-profile",
     workspaceId: currentWorkspace.id,
@@ -98,6 +93,9 @@ export default async function CompanyProfilePage({
 function errorMessage(error: string) {
   const messages: Record<string, string> = {
     "invalid-website-url": "Enter a valid public HTTP or HTTPS website URL.",
+    "website-required": "Save a website URL before starting website analysis.",
+    "company-profile-not-found":
+      "The workspace profile could not be initialized. Refresh and try again.",
     "question-answer-required": "Choose or enter an answer before continuing.",
     "structured-profile-required":
       "Analyse the website to create a structured profile first.",

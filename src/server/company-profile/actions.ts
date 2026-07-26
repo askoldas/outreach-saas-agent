@@ -6,8 +6,6 @@ import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { saveCompanyProfileVersion } from "./repository";
 import { getCurrentCompanyProfile } from "./repository";
 import { enqueueCompanyProfileAnalysisRun } from "@/server/research/repository";
-import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
-import { recordUsageEvent } from "@/server/outreach/repository";
 import {
   calculateReadiness,
   createEmptyStructuredProfile,
@@ -215,20 +213,26 @@ export async function updateCompanyWebsiteAction(formData: FormData) {
 export async function analyzeCompanyProfileAction() {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
-  const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile?.id || !profile.website)
-    redirect("/company-profile?error=website-required");
+  let profile = await getCurrentCompanyProfile(currentWorkspace.id);
+  const website = profile.website;
+  if (!website) redirect("/company-profile?error=website-required");
+  if (!profile.id) {
+    profile = await saveCompanyProfileVersion(currentWorkspace.id, {
+      ...profile,
+      provenance: "workspace",
+      structuredProfile: createEmptyStructuredProfile({
+        name: profile.companyName,
+        websiteUrl: website,
+      }),
+    });
+  }
+  const profileVersionId = profile.id;
+  if (!profileVersionId)
+    throw new Error("Could not initialize Company Profile version for analysis.");
   const { runId } = await enqueueCompanyProfileAnalysisRun({
     workspaceId: currentWorkspace.id,
-    profileVersionId: profile.id,
-    website: profile.website,
-  });
-  const { user } = await createAuthenticatedDatabaseClient();
-  await recordUsageEvent(currentWorkspace.id, user.id, {
-    operation: "company_research",
-    estimated: 5,
-    actual: 0,
-    referenceId: runId,
+    profileVersionId,
+    website,
   });
   revalidatePath("/company-profile");
   revalidatePath("/usage");

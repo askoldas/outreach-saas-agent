@@ -213,9 +213,7 @@ export function classifySearchResult(
 function isPotentialLeadSource(classification: SourceClassification) {
   return (
     classification.sourceType === "company_website" ||
-    classification.sourceType === "company_contact_page" ||
-    classification.sourceType === "association" ||
-    classification.sourceType === "directory"
+    classification.sourceType === "company_contact_page"
   );
 }
 

@@ -1,42 +1,29 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
-import { saveCampaignStrategyVersion } from "@/server/campaign-strategy/repository";
 import type {
   Campaign,
   CampaignStatus,
   CampaignStrategyVersion,
   DiscoveryReport,
 } from "@/types/domain";
+import type {
+  CampaignBriefProposal,
+  ConfirmedCampaignBrief,
+} from "@/lib/campaign-workflow/contracts";
 
 type CampaignRow = {
-  awaiting_review: number;
-  current_strategy_version_id: string;
-  desired_lead_count: number;
   external_id: string;
-  geography: string;
-  industry_terms: string[];
-  language: string;
-  last_activity_label: string;
-  latest_discovery_report: DiscoveryReport | null;
-  lead_count: number;
   name: string;
   objective: string;
-  progress: number;
-  status: CampaignStatus;
-  target_segments: string[];
-  warnings: string[];
+  target_geography: string;
+  industries: string[];
+  company_characteristics: string[];
+  preferred_outreach_language: string;
+  target_volume: number;
+  status: string;
+  updated_at: string;
+  current_strategy_version_id: string | null;
 };
-
-type StrategyRow = {
-  id: string;
-  exclusions: string[];
-  limitations: string[];
-  localized_terms: string[];
-  qualification_criteria: string[];
-  search_terms: string[];
-  source_categories: string[];
-  version: number;
-};
-
+type StrategyRow = { id: string; version: number; strategy: CampaignStrategyVersion };
 export type CreateCampaignInput = {
   desiredLeadCount: number;
   exclusions: string[];
@@ -53,9 +40,7 @@ export type CreateCampaignInput = {
   selectedOfferingId: string | null;
   offeringOverrides: Record<string, unknown>;
 };
-
-const campaignSelect = `external_id,name,objective,geography,target_segments,progress,lead_count,awaiting_review,status,last_activity_label,language,warnings,desired_lead_count,industry_terms,latest_discovery_report,current_strategy_version_id`;
-const strategySelect = `id,version,search_terms,localized_terms,source_categories,qualification_criteria,exclusions,limitations`;
+const campaignSelect = `external_id,name,objective,target_geography,industries,company_characteristics,preferred_outreach_language,target_volume,status,updated_at,current_strategy_version_id`;
 
 export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
   const { supabase } = await createAuthenticatedDatabaseClient();
@@ -63,45 +48,39 @@ export async function listCampaigns(workspaceId: string): Promise<Campaign[]> {
     .from("campaigns")
     .select(campaignSelect)
     .eq("workspace_id", workspaceId)
-    .order("name", { ascending: true });
+    .order("name");
   if (error) throw new Error(`Could not load campaigns: ${error.message}`);
-  return hydrateCampaigns(supabase, workspaceId, (data ?? []) as CampaignRow[]);
+  return hydrate(supabase, workspaceId, (data ?? []) as CampaignRow[]);
 }
-
-export async function getCampaign(
-  workspaceId: string,
-  campaignId: string,
-): Promise<Campaign | null> {
+export async function getCampaign(workspaceId: string, id: string) {
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data, error } = await supabase
     .from("campaigns")
     .select(campaignSelect)
     .eq("workspace_id", workspaceId)
-    .eq("external_id", campaignId)
+    .eq("external_id", id)
     .maybeSingle();
   if (error) throw new Error(`Could not load campaign: ${error.message}`);
   if (!data) return null;
-  const [campaign] = await hydrateCampaigns(supabase, workspaceId, [data as CampaignRow]);
-  return campaign ?? null;
+  return (await hydrate(supabase, workspaceId, [data as CampaignRow]))[0] ?? null;
 }
-
 export async function updateCampaignStatus(
   workspaceId: string,
-  campaignId: string,
+  id: string,
   status: CampaignStatus,
-): Promise<Campaign> {
+) {
   const { supabase } = await createAuthenticatedDatabaseClient();
+  const persisted = status === "running" ? "active" : status;
   const { error } = await supabase
     .from("campaigns")
-    .update({ last_activity_label: "Just now", status })
+    .update({ status: persisted })
     .eq("workspace_id", workspaceId)
-    .eq("external_id", campaignId);
+    .eq("external_id", id);
   if (error) throw new Error(`Could not update campaign: ${error.message}`);
-  const campaign = await getCampaign(workspaceId, campaignId);
-  if (!campaign) throw new Error("Updated campaign could not be reloaded.");
-  return campaign;
+  const result = await getCampaign(workspaceId, id);
+  if (!result) throw new Error("Updated campaign could not be reloaded.");
+  return result;
 }
-
 export async function updateCampaignDiscoveryState(
   workspaceId: string,
   campaignId: string,
@@ -112,118 +91,128 @@ export async function updateCampaignDiscoveryState(
     progress: number;
     status: CampaignStatus;
   },
-): Promise<void> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const failures = input.latestDiscoveryReport.aiQualificationFailures.length;
-  const { error } = await supabase
-    .from("campaigns")
-    .update({
-      awaiting_review: input.awaitingReview,
-      last_activity_label: "Just now",
-      latest_discovery_report: input.latestDiscoveryReport,
-      lead_count: input.leadCount,
-      progress: input.progress,
-      status: input.status,
-      warnings:
-        failures > 0
-          ? [
-              `${failures} lead qualification result${failures === 1 ? "" : "s"} need manual review.`,
-            ]
-          : [],
-    })
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", campaignId);
-  if (error) throw new Error(`Could not update discovery state: ${error.message}`);
+) {
+  void workspaceId;
+  void campaignId;
+  void input;
+  throw new Error(
+    "Legacy discovery state is unavailable until campaign_runs are migrated.",
+  );
 }
-
-export async function createCampaign(
-  workspaceId: string,
-  input: CreateCampaignInput,
-): Promise<Campaign> {
+export async function createCampaign(workspaceId: string, input: CreateCampaignInput) {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const externalId = await createUniqueCampaignExternalId(workspaceId, input.name);
-  const { error } = await supabase.from("campaigns").insert({
-    awaiting_review: 0,
-    desired_lead_count: input.desiredLeadCount,
-    external_id: externalId,
-    geography: input.geography,
-    industry_terms: input.industryTerms,
-    language: input.language,
-    last_activity_label: "Just now",
-    lead_count: 0,
-    name: input.name,
-    objective: input.objective,
-    progress: 0,
-    status: "planning",
-    target_segments: input.targetSegments,
-    warnings: ["Review strategy before starting discovery."],
-    selected_offering_id: input.selectedOfferingId,
-    offering_overrides: input.offeringOverrides,
-    workspace_id: workspaceId,
+  const externalId = await uniqueId(workspaceId, input.name);
+  const strategy = initialStrategy(input);
+  const { error } = await supabase.rpc("create_clean_campaign", {
+    target_workspace_id: workspaceId,
+    campaign_data: {
+      externalId,
+      name: input.name,
+      objective: input.objective,
+      geography: input.geography,
+      industries: input.industryTerms,
+      characteristics: input.targetSegments,
+      exclusions: input.exclusions,
+      targetVolume: input.desiredLeadCount,
+      language: input.language,
+      selectedOfferingId: input.selectedOfferingId,
+      targetDescription: JSON.stringify(input.offeringOverrides),
+    },
+    initial_strategy: strategy,
   });
   if (error) throw new Error(`Could not create campaign: ${error.message}`);
-
-  await saveCampaignStrategyVersion(workspaceId, externalId, initialStrategy(input));
-  const campaign = await getCampaign(workspaceId, externalId);
-  if (!campaign) throw new Error("Created campaign could not be reloaded.");
-  return campaign;
+  const result = await getCampaign(workspaceId, externalId);
+  if (!result) throw new Error("Created campaign could not be reloaded.");
+  return result;
 }
 
-async function hydrateCampaigns(
+export async function saveCampaignBrief(
+  workspaceId: string,
+  campaignExternalId: string,
+  input: {
+    profileVersionId: string;
+    proposal: CampaignBriefProposal;
+    confirmedBrief: ConfirmedCampaignBrief;
+    promptVersion: string;
+    requestedModel: string;
+    actualModel: string;
+    fallbackUsed: boolean;
+    clarificationAnswer: { answer: string } | null;
+  },
+) {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id")
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignExternalId)
+    .single();
+  if (campaignError)
+    throw new Error(`Could not resolve campaign: ${campaignError.message}`);
+  const { error } = await supabase.from("campaign_briefs").insert({
+    workspace_id: workspaceId,
+    campaign_id: campaign.id,
+    profile_version_id: input.profileVersionId,
+    proposal: input.proposal,
+    confirmed_brief: input.confirmedBrief,
+    prompt_version: input.promptVersion,
+    requested_model: input.requestedModel,
+    actual_model: input.actualModel,
+    fallback_used: input.fallbackUsed,
+    confidence: input.proposal.confidence,
+    clarification_answer: input.clarificationAnswer,
+  });
+  if (error) throw new Error(`Could not save Campaign Brief: ${error.message}`);
+}
+async function hydrate(
   supabase: Awaited<ReturnType<typeof createAuthenticatedDatabaseClient>>["supabase"],
   workspaceId: string,
   rows: CampaignRow[],
 ) {
-  if (rows.length === 0) return [];
-  const ids = [...new Set(rows.map((row) => row.current_strategy_version_id))];
-  if (ids.some((id) => !id))
-    throw new Error("Campaign is missing its current Strategy version.");
+  const ids = rows
+    .map((row) => row.current_strategy_version_id)
+    .filter((id): id is string => Boolean(id));
+  if (!ids.length) return [];
   const { data, error } = await supabase
     .from("campaign_strategy_versions")
-    .select(strategySelect)
+    .select("id,version,strategy")
     .eq("workspace_id", workspaceId)
     .in("id", ids);
   if (error) throw new Error(`Could not load campaign strategies: ${error.message}`);
-  const strategies = new Map(
-    ((data ?? []) as StrategyRow[]).map((strategy) => [strategy.id, strategy]),
+  const byId = new Map(((data ?? []) as StrategyRow[]).map((row) => [row.id, row]));
+  return rows.map((row) =>
+    mapCampaign(row, byId.get(row.current_strategy_version_id ?? "")!),
   );
-  return rows.map((row) => {
-    const strategy = strategies.get(row.current_strategy_version_id);
-    if (!strategy)
-      throw new Error(`Campaign ${row.external_id} has no readable Strategy version.`);
-    return mapCampaign(row, strategy);
-  });
 }
-
-function mapCampaign(row: CampaignRow, strategy: StrategyRow): Campaign {
+function mapCampaign(row: CampaignRow, strategyRow: StrategyRow): Campaign {
+  const strategy = strategyRow.strategy;
   return {
-    awaitingReview: row.awaiting_review,
-    desiredLeadCount: row.desired_lead_count,
-    geography: row.geography,
-    industryTerms: row.industry_terms,
     id: row.external_id,
-    language: row.language,
-    lastActivity: row.last_activity_label,
-    latestDiscoveryReport: row.latest_discovery_report,
-    leadCount: row.lead_count,
     name: row.name,
     objective: row.objective,
-    progress: row.progress,
-    status: row.status,
-    strategyVersion: strategy.version,
+    geography: row.target_geography,
+    industryTerms: row.industries,
+    targetSegments: row.company_characteristics,
+    progress: 0,
+    leadCount: 0,
+    desiredLeadCount: row.target_volume,
+    awaitingReview: 0,
+    status: row.status === "active" ? "running" : (row.status as CampaignStatus),
+    lastActivity: row.updated_at,
+    language: row.preferred_outreach_language,
+    warnings: [],
+    latestDiscoveryReport: null,
+    strategyVersion: strategyRow.version,
     strategy: {
-      criteria: strategy.qualification_criteria,
+      terms: strategy.searchTerms,
+      localizedTerms: strategy.localizedTerms,
+      sources: strategy.sourceCategories,
+      criteria: strategy.qualificationCriteria,
       exclusions: strategy.exclusions,
       limitations: strategy.limitations,
-      localizedTerms: strategy.localized_terms,
-      sources: strategy.source_categories,
-      terms: strategy.search_terms,
     },
-    targetSegments: row.target_segments,
-    warnings: row.warnings,
   };
 }
-
 function initialStrategy(input: CreateCampaignInput): CampaignStrategyVersion {
   return {
     id: null,
@@ -254,29 +243,21 @@ function initialStrategy(input: CreateCampaignInput): CampaignStrategyVersion {
     refinementSummary: ["Initial strategy created from campaign brief."],
   };
 }
-
-async function createUniqueCampaignExternalId(workspaceId: string, name: string) {
+async function uniqueId(workspaceId: string, name: string) {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const baseSlug = slugify(name) || "campaign";
-  let candidate = baseSlug;
-  let suffix = 0;
-  while (true) {
-    const { data, error } = await supabase
+  const base =
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "") || "campaign";
+  for (let suffix = 0; ; suffix++) {
+    const candidate = suffix ? `${base}-${suffix}` : base;
+    const { data } = await supabase
       .from("campaigns")
       .select("id")
       .eq("workspace_id", workspaceId)
       .eq("external_id", candidate)
       .maybeSingle();
-    if (error) throw new Error(`Could not check campaign slug: ${error.message}`);
     if (!data) return candidate;
-    suffix += 1;
-    candidate = `${baseSlug}-${suffix}`;
   }
-}
-
-function slugify(input: string) {
-  return input
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
 }

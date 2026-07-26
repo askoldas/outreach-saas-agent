@@ -68,6 +68,12 @@ export type DiscoveryProgress = {
 };
 
 export type ResearchProgress = {
+  candidatesDiscovered?: number;
+  candidatesUnique?: number;
+  candidatesClassified?: number;
+  companiesEvaluated?: number;
+  companiesQualified?: number;
+  currentIteration?: number;
   completedTasks: number;
   currentStep: string;
   failedTasks: number;

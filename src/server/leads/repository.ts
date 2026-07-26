@@ -1,81 +1,30 @@
+import { createHash } from "node:crypto";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { EvaluatedLeadCandidate } from "@/lib/providers/lead-evaluator";
 import type { SearchResult } from "@/lib/providers/tavily";
 import type {
   Confidence,
   ContactRoute,
-  ContactDiscoveryStatus,
   DiscoveryProgress,
-  EvidenceClaim,
-  EvidenceKind,
   Lead,
   LeadQualificationStatus,
   LeadStatus,
-  QualificationDimension,
 } from "@/types/domain";
-
-type LeadRow = {
-  campaign_id: string | null;
-  city: string;
-  company: string;
-  company_type: string;
-  confidence: Confidence;
-  contactability: Confidence;
-  country: string;
-  description: string;
-  estimated_size: string;
-  external_id: string;
-  fit_score: number;
-  industry: string;
-  lead_contact_routes: ContactRouteRow[] | null;
-  lead_evidence_claims: EvidenceClaimRow[] | null;
-  lead_qualification_dimensions: QualificationDimensionRow[] | null;
-  qualification_error?: string | null;
-  qualification_status?: LeadQualificationStatus;
-  status: LeadStatus;
-  summary: string;
-  website: string;
-};
-
-type QualificationDimensionRow = {
-  confidence: Confidence;
-  explanation: string;
-  label: string;
-  score: number;
-  sort_order: number;
-};
-
-type EvidenceClaimRow = {
-  confidence: Confidence;
-  external_id: string;
-  kind: EvidenceKind;
-  retrieved_at: string;
-  sort_order: number;
-  source_label: string;
-  source_type: string;
-  source_url: string;
-  text: string;
-};
-
-type ContactRouteRow = {
-  id: string;
-  sort_order: number;
-  source: string;
-  suggested_role: string;
-  type: string;
-  value: string;
-  verification: ContactRoute["verification"];
-  verification_provider: string | null;
-  verification_query: string | null;
-  verification_source_title: string | null;
-  verification_source_url: string | null;
-  verified_at: string | null;
-};
+import {
+  getCleanCampaignLeadCounts,
+  getCleanLead,
+  listCleanLeads,
+  updateCleanLeadStatus,
+} from "./clean-repository";
 
 type PersistedLeadIdentifier = {
-  external_id: string;
-  id: string;
+  campaignCompanyId: string;
+  sourceUrl: string;
 };
+
+type DatabaseClient = Awaited<
+  ReturnType<typeof createAuthenticatedDatabaseClient>
+>["supabase"];
 
 type DiscoveredLeadInput = {
   campaignId: string;
@@ -89,102 +38,19 @@ export type SavedDiscoveredLead = {
   result: SearchResult;
 };
 
-const leadSelect = `
-  external_id,
-  company,
-  website,
-  country,
-  city,
-  campaign_id,
-  company_type,
-  industry,
-  estimated_size,
-  description,
-  fit_score,
-  confidence,
-  contactability,
-  status,
-  summary,
-  lead_qualification_dimensions (
-    label,
-    score,
-    confidence,
-    explanation,
-    sort_order
-  ),
-  lead_evidence_claims (
-    external_id,
-    kind,
-    text,
-    source_type,
-    source_label,
-    source_url,
-    retrieved_at,
-    confidence,
-    sort_order
-  ),
-  lead_contact_routes (
-    id,
-    type,
-    value,
-    suggested_role,
-    verification,
-    verification_provider,
-    verification_query,
-    verification_source_title,
-    verification_source_url,
-    verified_at,
-    source,
-    sort_order
-  )
-`;
-
 export async function listLeads(workspaceId: string): Promise<Lead[]> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select(leadSelect)
-    .eq("workspace_id", workspaceId)
-    .order("fit_score", { ascending: false })
-    .order("company", { ascending: true });
-
-  if (error) {
-    throw new Error(`Could not load leads: ${error.message}`);
-  }
-
-  return ((data ?? []) as LeadRow[]).map(mapLead);
+  return listCleanLeads(workspaceId);
 }
 
 export async function listCampaignLeads(
   workspaceId: string,
   campaignId: string,
 ): Promise<Lead[]> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select(leadSelect)
-    .eq("workspace_id", workspaceId)
-    .eq("campaign_id", campaignId)
-    .order("fit_score", { ascending: false })
-    .order("company", { ascending: true });
-  if (error) throw new Error(`Could not load campaign leads: ${error.message}`);
-  return ((data ?? []) as LeadRow[]).map(mapLead);
+  return listCleanLeads(workspaceId, campaignId);
 }
 
 export async function getLead(workspaceId: string, leadId: string): Promise<Lead | null> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select(leadSelect)
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", leadId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Could not load lead: ${error.message}`);
-  }
-
-  return data ? mapLead(data as LeadRow) : null;
+  return getCleanLead(workspaceId, leadId);
 }
 
 export async function updateLeadStatus(
@@ -192,43 +58,14 @@ export async function updateLeadStatus(
   leadId: string,
   status: LeadStatus,
 ): Promise<Lead> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .update({ status })
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", leadId)
-    .select(leadSelect)
-    .single();
-
-  if (error) {
-    throw new Error(`Could not update lead: ${error.message}`);
-  }
-
-  return mapLead(data as LeadRow);
+  return updateCleanLeadStatus(workspaceId, leadId, status);
 }
 
 export async function getCampaignLeadCounts(
   workspaceId: string,
   campaignId: string,
 ): Promise<{ awaitingReview: number; total: number }> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select("status")
-    .eq("workspace_id", workspaceId)
-    .eq("campaign_id", campaignId);
-
-  if (error) {
-    throw new Error(`Could not count campaign leads: ${error.message}`);
-  }
-
-  const rows = (data ?? []) as Array<{ status: LeadStatus }>;
-
-  return {
-    awaitingReview: rows.filter((row) => row.status === "needs_review").length,
-    total: rows.length,
-  };
+  return getCleanCampaignLeadCounts(workspaceId, campaignId);
 }
 
 export async function getCampaignDiscoveryProgress(
@@ -237,68 +74,53 @@ export async function getCampaignDiscoveryProgress(
   desiredLeadCount: number,
 ): Promise<DiscoveryProgress> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase
-    .from("leads")
-    .select(
-      `
-        qualification_status,
-        lead_contact_routes (
-          value,
-          verification
-        )
-      `,
-    )
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id")
     .eq("workspace_id", workspaceId)
-    .eq("campaign_id", campaignId);
-
-  if (isMissingQualificationColumnError(error)) {
-    const fallback = await supabase
-      .from("leads")
-      .select(
-        `
-          lead_contact_routes (
-            value,
-            verification
-          )
-        `,
-      )
-      .eq("workspace_id", workspaceId)
-      .eq("campaign_id", campaignId);
-
-    if (fallback.error) {
-      throw new Error(`Could not load discovery progress: ${fallback.error.message}`);
-    }
-
-    const fallbackRows = (fallback.data ?? []) as Array<{
-      lead_contact_routes: Array<{ value: string; verification: string }> | null;
-    }>;
-
+    .eq("external_id", campaignId)
+    .maybeSingle();
+  if (campaignError)
+    throw new Error(`Could not load discovery progress: ${campaignError.message}`);
+  if (!campaign)
     return {
-      contactEnrichedCount: countRowsWithContactRoutes(fallbackRows),
+      contactEnrichedCount: 0,
       desiredLeadCount,
-      leadCount: fallbackRows.length,
+      leadCount: 0,
       qualificationAttemptedCount: 0,
       qualifiedCount: 0,
     };
-  }
 
-  if (error) {
-    throw new Error(`Could not load discovery progress: ${error.message}`);
-  }
+  const { data, error } = await supabase
+    .from("campaign_companies")
+    .select(
+      `
+        qualification_results (status),
+        campaign_contacts (id)
+      `,
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_id", campaign.id);
+  if (error) throw new Error(`Could not load discovery progress: ${error.message}`);
 
-  const rows = (data ?? []) as Array<{
-    lead_contact_routes: Array<{ value: string; verification: string }> | null;
-    qualification_status?: LeadQualificationStatus | null;
+  const rows = (data ?? []) as unknown as Array<{
+    campaign_contacts: Array<{ id: string }> | null;
+    qualification_results: Array<{ status: string }> | null;
   }>;
 
   return {
-    contactEnrichedCount: countRowsWithContactRoutes(rows),
+    contactEnrichedCount: rows.filter((row) => (row.campaign_contacts ?? []).length > 0)
+      .length,
     desiredLeadCount,
     leadCount: rows.length,
     qualificationAttemptedCount: rows.filter(
-      (row) => row.qualification_status && row.qualification_status !== "pending",
+      (row) => (row.qualification_results ?? []).length > 0,
     ).length,
-    qualifiedCount: rows.filter((row) => row.qualification_status === "qualified").length,
+    qualifiedCount: rows.filter((row) =>
+      (row.qualification_results ?? []).some((result) =>
+        ["highly_relevant", "qualified"].includes(result.status),
+      ),
+    ).length,
   };
 }
 
@@ -312,196 +134,200 @@ export async function importRawDiscoveredLeads(
 
   const uniqueInputs = dedupeDiscoveredLeadInputs(inputs);
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const leadRows = uniqueInputs.map((input) => {
-    const website = getOrigin(input.result.url);
-    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
-
-    return {
-      campaign_id: input.campaignId,
-      city: "Unknown",
-      company: normalizeCompanyName(input.result.title),
-      company_type: "Discovered company",
-      confidence: "low" as const,
-      contactability: "low" as const,
-      country: input.country,
-      description: input.result.content || input.result.title,
-      estimated_size: "Unknown",
-      external_id: externalId,
-      fit_score: scoreToFit(input.result.score),
-      industry: "Unqualified web discovery",
-      status: "needs_review" as const,
-      summary:
-        input.result.content ||
-        "Discovered from Tavily search. Needs manual review if AI qualification fails.",
-      website,
-      workspace_id: workspaceId,
-    };
-  });
-
-  let { data, error } = await supabase
-    .from("leads")
-    .upsert(
-      leadRows.map((row) => ({
-        ...row,
-        qualification_error: null,
-        qualification_status: "pending" as const,
-      })),
-      { onConflict: "workspace_id,external_id" },
-    )
-    .select("id,external_id");
-
-  if (isMissingQualificationColumnError(error)) {
-    const fallbackResult = await supabase
-      .from("leads")
-      .upsert(leadRows, { onConflict: "workspace_id,external_id" })
-      .select("id,external_id");
-
-    data = fallbackResult.data;
-    error = fallbackResult.error;
-  }
-
-  if (error) {
-    throw new Error(`Could not import discovered leads: ${error.message}`);
-  }
-
-  const persistedLeads = (data ?? []) as PersistedLeadIdentifier[];
-  const leadIdByExternalId = new Map(
-    persistedLeads.map((lead) => [lead.external_id, lead.id]),
+  const campaignIds = [...new Set(uniqueInputs.map((input) => input.campaignId))];
+  const { data: campaigns, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id,external_id")
+    .eq("workspace_id", workspaceId)
+    .in("external_id", campaignIds);
+  if (campaignError)
+    throw new Error(`Could not resolve discovery Campaigns: ${campaignError.message}`);
+  const campaignByExternalId = new Map(
+    (campaigns ?? []).map((campaign) => [campaign.external_id, campaign.id]),
   );
-  const evidenceRows = uniqueInputs.flatMap((input, index) => {
-    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
-    const leadId = leadIdByExternalId.get(externalId);
 
-    return leadId
-      ? [
-          {
-            confidence: "medium" as const,
-            external_id: `search-${index + 1}`,
-            kind: "fact" as const,
-            lead_id: leadId,
-            retrieved_at: new Date().toISOString().slice(0, 10),
-            sort_order: 0,
-            source_label: input.result.title,
-            source_type: "Tavily search result",
-            source_url: input.result.url,
-            text:
-              input.result.content ||
-              `Tavily returned ${input.result.title} for the campaign query.`,
-          },
-        ]
-      : [];
-  });
-
-  if (evidenceRows.length > 0) {
-    const { error: evidenceError } = await supabase
-      .from("lead_evidence_claims")
-      .upsert(evidenceRows, { onConflict: "lead_id,external_id" });
-
-    if (evidenceError) {
+  const persisted: PersistedLeadIdentifier[] = [];
+  for (const input of uniqueInputs) {
+    const campaignDatabaseId = campaignByExternalId.get(input.campaignId);
+    if (!campaignDatabaseId)
+      throw new Error(`Campaign ${input.campaignId} was not found for discovery.`);
+    const companyId = await findOrCreateCompany(supabase, workspaceId, input);
+    const { data: campaignCompany, error: associationError } = await supabase
+      .from("campaign_companies")
+      .upsert(
+        {
+          workspace_id: workspaceId,
+          campaign_id: campaignDatabaseId,
+          company_id: companyId,
+          status: "discovered",
+          source_summary: input.result.content || input.result.title,
+          metadata: { sourceScore: input.result.score },
+        },
+        { onConflict: "campaign_id,company_id" },
+      )
+      .select("id")
+      .single();
+    if (associationError)
       throw new Error(
-        `Could not save discovered lead evidence: ${evidenceError.message}`,
+        `Could not associate discovered company: ${associationError.message}`,
       );
-    }
+
+    const { error: sourceError } = await supabase.from("company_sources").upsert(
+      {
+        workspace_id: workspaceId,
+        company_id: companyId,
+        provider: "tavily",
+        source_type: "search_result",
+        title: input.result.title,
+        source_url: input.result.url,
+        original_url: input.result.url,
+        excerpt: input.result.content || input.result.title,
+        raw_content: input.result.content || null,
+        metadata: { score: input.result.score },
+      },
+      { onConflict: "workspace_id,provider,source_url" },
+    );
+    if (sourceError)
+      throw new Error(`Could not save discovered company source: ${sourceError.message}`);
+
+    persisted.push({
+      campaignCompanyId: campaignCompany.id,
+      sourceUrl: input.result.url,
+    });
   }
 
+  const persistedByUrl = new Map(
+    persisted.map((row) => [normalizeUrl(row.sourceUrl), row.campaignCompanyId]),
+  );
   return uniqueInputs.flatMap((input) => {
-    const externalId = createDiscoveredLeadId(input.result.url, input.result.title);
-    const databaseId = leadIdByExternalId.get(externalId);
-
-    return databaseId
-      ? [
-          {
-            databaseId,
-            externalId,
-            result: input.result,
-          },
-        ]
-      : [];
+    const id = persistedByUrl.get(normalizeUrl(input.result.url));
+    return id ? [{ databaseId: id, externalId: id, result: input.result }] : [];
   });
+}
+
+async function findOrCreateCompany(
+  supabase: Awaited<ReturnType<typeof createAuthenticatedDatabaseClient>>["supabase"],
+  workspaceId: string,
+  input: DiscoveredLeadInput,
+) {
+  const website = getOrigin(input.result.url);
+  const domain = normalizedDomain(website);
+  if (domain) {
+    const { data: existingDomain, error: domainError } = await supabase
+      .from("company_domains")
+      .select("company_id")
+      .eq("workspace_id", workspaceId)
+      .eq("normalized_domain", domain)
+      .maybeSingle();
+    if (domainError)
+      throw new Error(`Could not resolve company domain: ${domainError.message}`);
+    if (existingDomain) return existingDomain.company_id;
+  }
+
+  const name = normalizeCompanyName(input.result.title);
+  const { data: company, error: companyError } = await supabase
+    .from("companies")
+    .insert({
+      workspace_id: workspaceId,
+      name,
+      normalized_name: normalizeCompanyKey(name),
+      website_url: website,
+      country: input.country || null,
+      description: input.result.content || input.result.title,
+      metadata: { discoveredBy: "tavily" },
+    })
+    .select("id")
+    .single();
+  if (companyError)
+    throw new Error(`Could not save discovered company: ${companyError.message}`);
+
+  if (domain) {
+    const { error: domainInsertError } = await supabase.from("company_domains").insert({
+      workspace_id: workspaceId,
+      company_id: company.id,
+      domain,
+      normalized_domain: domain,
+      is_primary: true,
+      verification_status: "source_confirmed",
+      metadata: { sourceUrl: input.result.url },
+    });
+    if (domainInsertError)
+      throw new Error(
+        `Could not save discovered company domain: ${domainInsertError.message}`,
+      );
+  }
+  return company.id;
 }
 
 export async function applyLeadQualification(
   workspaceId: string,
-  leadExternalId: string,
+  campaignCompanyId: string,
   candidate: EvaluatedLeadCandidate,
 ): Promise<void> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  let { data, error } = await supabase
-    .from("leads")
+  const association = await loadCampaignCompanyForQualification(
+    supabase,
+    workspaceId,
+    campaignCompanyId,
+  );
+  const { error: companyError } = await supabase
+    .from("companies")
     .update({
-      company: normalizeCompanyName(candidate.companyName),
+      name: normalizeCompanyName(candidate.companyName),
+      normalized_name: normalizeCompanyKey(candidate.companyName),
       company_type: candidate.companyType,
-      confidence: candidate.confidence,
       description: candidate.summary,
-      fit_score: candidate.fitScore,
       industry: candidate.industry,
-      qualification_error: null,
-      qualification_status: "qualified",
-      status: "needs_review",
-      summary: candidate.summary,
+      website_url: getOrigin(candidate.result.url),
     })
     .eq("workspace_id", workspaceId)
-    .eq("external_id", leadExternalId)
-    .select("id")
-    .single();
+    .eq("id", association.company_id);
+  if (companyError)
+    throw new Error(`Could not update qualified company: ${companyError.message}`);
 
-  if (isMissingQualificationColumnError(error)) {
-    const fallbackResult = await supabase
-      .from("leads")
-      .update({
-        company: normalizeCompanyName(candidate.companyName),
-        company_type: candidate.companyType,
-        confidence: candidate.confidence,
-        description: candidate.summary,
-        fit_score: candidate.fitScore,
-        industry: candidate.industry,
-        status: "needs_review",
-        summary: candidate.summary,
-      })
-      .eq("workspace_id", workspaceId)
-      .eq("external_id", leadExternalId)
-      .select("id")
-      .single();
-
-    data = fallbackResult.data;
-    error = fallbackResult.error;
-  }
-
-  if (error) {
-    throw new Error(`Could not update lead qualification: ${error.message}`);
-  }
-
-  const leadId = (data as { id: string }).id;
-  await replaceLeadQualificationDimensions(leadId, buildQualifiedDimensions(candidate));
-
-  const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
-    [
+  await persistCleanQualification(supabase, {
+    workspaceId,
+    campaignCompanyId,
+    status:
+      candidate.fitScore >= 80
+        ? "highly_relevant"
+        : candidate.fitScore >= 60
+          ? "qualified"
+          : "possible",
+    score: candidate.fitScore,
+    confidence: candidate.confidence,
+    summary: candidate.summary,
+    relationshipHypothesis: candidate.reason,
+    positiveSignals: [candidate.reason],
+    negativeSignals: [],
+    missingEvidence: [],
+    dimensions: buildQualifiedDimensions(candidate),
+    evidence: [
       {
+        criterion: "Campaign fit",
+        evidenceKind: "inference",
+        statement: candidate.reason,
+        sourceUrl: candidate.result.url,
         confidence: candidate.confidence,
-        external_id: "ai-qualification",
-        kind: "inference",
-        lead_id: leadId,
-        retrieved_at: new Date().toISOString().slice(0, 10),
-        sort_order: 1,
-        source_label: "OpenRouter lead qualification",
-        source_type: "AI lead qualification",
-        source_url: candidate.result.url,
-        text: candidate.reason,
+        metadata: {
+          source_label: candidate.result.title,
+          source_type: "AI lead qualification",
+        },
       },
     ],
-    { onConflict: "lead_id,external_id" },
+    input: candidate,
+  });
+  await updateCampaignCompanyQualificationState(
+    supabase,
+    workspaceId,
+    campaignCompanyId,
+    null,
   );
-
-  if (evidenceError) {
-    throw new Error(
-      `Could not save lead qualification evidence: ${evidenceError.message}`,
-    );
-  }
 }
 
 export async function applyManualReviewQualification(
   workspaceId: string,
-  leadExternalId: string,
+  campaignCompanyId: string,
   input: {
     companyType: string;
     fitScore: number;
@@ -511,83 +337,42 @@ export async function applyManualReviewQualification(
   },
 ): Promise<void> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  let { data, error } = await supabase
-    .from("leads")
-    .update({
-      company_type: input.companyType,
-      confidence: "low",
-      description: input.summary,
-      fit_score: input.fitScore,
-      industry: input.industry,
-      qualification_error: input.reason,
-      qualification_status: "non_ai_manual_review",
-      status: "needs_review",
-      summary: input.summary,
-    })
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", leadExternalId)
-    .select("id")
-    .single();
-
-  if (isMissingQualificationColumnError(error)) {
-    const fallbackResult = await supabase
-      .from("leads")
-      .update({
-        company_type: input.companyType,
-        confidence: "low",
-        description: input.summary,
-        fit_score: input.fitScore,
-        industry: input.industry,
-        status: "needs_review",
-        summary: input.summary,
-      })
-      .eq("workspace_id", workspaceId)
-      .eq("external_id", leadExternalId)
-      .select("id")
-      .single();
-
-    data = fallbackResult.data;
-    error = fallbackResult.error;
-  }
-
-  if (error) {
-    throw new Error(`Could not update manual lead qualification: ${error.message}`);
-  }
-
-  const leadId = (data as { id: string }).id;
-  await replaceLeadQualificationDimensions(
-    leadId,
-    buildManualReviewDimensions(input.fitScore, input.reason),
-  );
-
-  const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
-    [
+  await loadCampaignCompanyForQualification(supabase, workspaceId, campaignCompanyId);
+  await persistCleanQualification(supabase, {
+    workspaceId,
+    campaignCompanyId,
+    status: "insufficient_evidence",
+    score: input.fitScore,
+    confidence: "low",
+    summary: input.summary,
+    relationshipHypothesis: input.reason,
+    positiveSignals: [],
+    negativeSignals: [],
+    missingEvidence: [input.reason],
+    dimensions: buildManualReviewDimensions(input.fitScore, input.reason),
+    evidence: [
       {
+        criterion: "Campaign fit",
+        evidenceKind: "inference",
+        statement: input.reason,
+        sourceUrl: null,
         confidence: "low",
-        external_id: "manual-review-qualification",
-        kind: "inference",
-        lead_id: leadId,
-        retrieved_at: new Date().toISOString().slice(0, 10),
-        sort_order: 1,
-        source_label: "Deterministic local fallback",
-        source_type: "Non-AI manual-review qualification",
-        source_url: "",
-        text: input.reason,
+        metadata: { source_type: "manual_review" },
       },
     ],
-    { onConflict: "lead_id,external_id" },
+    input,
+  });
+  await updateCampaignCompanyQualificationState(
+    supabase,
+    workspaceId,
+    campaignCompanyId,
+    input.reason,
   );
-
-  if (evidenceError) {
-    throw new Error(
-      `Could not save manual qualification evidence: ${evidenceError.message}`,
-    );
-  }
 }
 
 export async function markLeadQualificationForManualReview(
   workspaceId: string,
-  leadExternalId: string,
+  campaignCompanyId: string,
   errorMessage: string,
   qualificationStatus: Extract<
     LeadQualificationStatus,
@@ -595,206 +380,173 @@ export async function markLeadQualificationForManualReview(
   > = "needs_manual_review",
 ): Promise<void> {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  let { data, error } = await supabase
-    .from("leads")
-    .update({
-      qualification_error: sanitizeQualificationError(errorMessage),
-      qualification_status: qualificationStatus,
-      status: "needs_review",
-    })
-    .eq("workspace_id", workspaceId)
-    .eq("external_id", leadExternalId)
-    .select("id")
-    .single();
-
-  if (isMissingQualificationColumnError(error)) {
-    const fallbackResult = await supabase
-      .from("leads")
-      .update({
-        status: "needs_review",
-      })
-      .eq("workspace_id", workspaceId)
-      .eq("external_id", leadExternalId)
-      .select("id")
-      .single();
-
-    data = fallbackResult.data;
-    error = fallbackResult.error;
-  }
-
-  if (error) {
-    throw new Error(`Could not mark lead for manual review: ${error.message}`);
-  }
-
-  const leadId = (data as { id: string }).id;
-  await replaceLeadQualificationDimensions(
-    leadId,
-    buildFailedQualificationDimensions(errorMessage),
-  );
-
-  const { error: evidenceError } = await supabase.from("lead_evidence_claims").upsert(
-    [
+  void qualificationStatus;
+  const message = sanitizeQualificationError(errorMessage);
+  await loadCampaignCompanyForQualification(supabase, workspaceId, campaignCompanyId);
+  await persistCleanQualification(supabase, {
+    workspaceId,
+    campaignCompanyId,
+    status: "insufficient_evidence",
+    score: 35,
+    confidence: "low",
+    summary: "Qualification requires manual review.",
+    relationshipHypothesis: "",
+    positiveSignals: [],
+    negativeSignals: [],
+    missingEvidence: [message],
+    dimensions: buildFailedQualificationDimensions(message),
+    evidence: [
       {
+        criterion: "Evidence quality",
+        evidenceKind: "unknown",
+        statement: `AI qualification failed: ${message}`,
+        sourceUrl: null,
         confidence: "low",
-        external_id: "qualification-error",
-        kind: "unknown",
-        lead_id: leadId,
-        retrieved_at: new Date().toISOString().slice(0, 10),
-        sort_order: 2,
-        source_label: "OpenRouter lead qualification",
-        source_type: "AI qualification failure",
-        source_url: "",
-        text: sanitizeQualificationError(errorMessage),
+        metadata: { source_type: "ai_qualification_failure" },
       },
     ],
-    { onConflict: "lead_id,external_id" },
+    input: { errorMessage: message },
+  });
+  await updateCampaignCompanyQualificationState(
+    supabase,
+    workspaceId,
+    campaignCompanyId,
+    message,
   );
-
-  if (evidenceError) {
-    throw new Error(
-      `Could not save qualification failure evidence: ${evidenceError.message}`,
-    );
-  }
 }
 
 export async function replaceLeadContactRoutes(
-  leadDatabaseId: string,
+  campaignCompanyId: string,
   routes: ContactRoute[],
 ): Promise<void> {
-  if (routes.length === 0) {
-    return;
-  }
-
+  if (routes.length === 0) return;
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const { error: deleteError } = await supabase
-    .from("lead_contact_routes")
-    .delete()
-    .eq("lead_id", leadDatabaseId);
+  const { data: association, error: associationError } = await supabase
+    .from("campaign_companies")
+    .select("id,workspace_id,company_id")
+    .eq("id", campaignCompanyId)
+    .single();
+  if (associationError)
+    throw new Error(
+      `Could not load company contact context: ${associationError.message}`,
+    );
 
-  if (deleteError) {
-    throw new Error(`Could not clear lead contact routes: ${deleteError.message}`);
+  for (const route of routes) {
+    const methodType = cleanContactMethodType(route.type);
+    const normalizedValue = normalizeContactValue(methodType, route.value);
+    const { data: existingMethod, error: existingError } = await supabase
+      .from("contact_methods")
+      .select("id,company_id")
+      .eq("workspace_id", association.workspace_id)
+      .eq("method_type", methodType)
+      .eq("normalized_value", normalizedValue)
+      .maybeSingle();
+    if (existingError)
+      throw new Error(`Could not resolve contact method: ${existingError.message}`);
+    if (existingMethod && existingMethod.company_id !== association.company_id)
+      throw new Error("Contact method is already associated with another company.");
+
+    let contactMethodId = existingMethod?.id;
+    if (!contactMethodId) {
+      const { data: created, error } = await supabase
+        .from("contact_methods")
+        .insert({
+          workspace_id: association.workspace_id,
+          company_id: association.company_id,
+          method_type: methodType,
+          value: route.value.trim(),
+          normalized_value: normalizedValue,
+          verification_status: cleanVerification(route.verification),
+          metadata: { source: route.source },
+        })
+        .select("id")
+        .single();
+      if (error) throw new Error(`Could not save contact method: ${error.message}`);
+      contactMethodId = created.id;
+    }
+
+    const provenance = route.verificationProvenance;
+    if (provenance) {
+      const { data: existingSource, error: sourceLookupError } = await supabase
+        .from("contact_sources")
+        .select("id")
+        .eq("workspace_id", association.workspace_id)
+        .eq("contact_method_id", contactMethodId)
+        .eq("provider", provenance.provider)
+        .eq("source_url", provenance.sourceUrl)
+        .maybeSingle();
+      if (sourceLookupError)
+        throw new Error(`Could not resolve contact source: ${sourceLookupError.message}`);
+      if (!existingSource) {
+        const { error } = await supabase.from("contact_sources").insert({
+          workspace_id: association.workspace_id,
+          contact_method_id: contactMethodId,
+          provider: provenance.provider,
+          query: provenance.query,
+          source_title: provenance.sourceTitle,
+          source_url: provenance.sourceUrl,
+          retrieved_at: provenance.verifiedAt,
+        });
+        if (error) throw new Error(`Could not save contact source: ${error.message}`);
+      }
+    }
+
+    const { data: campaignContact, error: campaignContactError } = await supabase
+      .from("campaign_contacts")
+      .select("id")
+      .eq("workspace_id", association.workspace_id)
+      .eq("campaign_company_id", campaignCompanyId)
+      .eq("contact_method_id", contactMethodId)
+      .maybeSingle();
+    if (campaignContactError)
+      throw new Error(
+        `Could not resolve Campaign contact: ${campaignContactError.message}`,
+      );
+    if (!campaignContact) {
+      const { error } = await supabase.from("campaign_contacts").insert({
+        workspace_id: association.workspace_id,
+        campaign_company_id: campaignCompanyId,
+        contact_method_id: contactMethodId,
+        role_relevance: route.suggestedRole,
+        selection_status: "candidate",
+        recommendation_reason: route.source,
+      });
+      if (error) throw new Error(`Could not save Campaign contact: ${error.message}`);
+    }
   }
-
-  const { error: insertError } = await supabase.from("lead_contact_routes").insert(
-    routes.map((route, index) => ({
-      lead_id: leadDatabaseId,
-      sort_order: index,
-      source: route.source,
-      suggested_role: route.suggestedRole,
-      type: route.type,
-      value: route.value,
-      verification: route.verification,
-    })),
-  );
-
-  if (insertError) {
-    throw new Error(`Could not save lead contact routes: ${insertError.message}`);
-  }
-
-  const confirmedRoutes = routes.filter(
-    (route) => route.verification === "source_confirmed",
-  ).length;
-  const contactability: Confidence =
-    confirmedRoutes >= 2 ? "high" : confirmedRoutes === 1 ? "medium" : "low";
-  const { error: updateError } = await supabase
-    .from("leads")
-    .update({ contactability })
-    .eq("id", leadDatabaseId);
-
-  if (updateError) {
-    throw new Error(`Could not update lead contactability: ${updateError.message}`);
-  }
 }
 
-function mapLead(row: LeadRow): Lead {
-  return {
-    campaignId: row.campaign_id ?? "",
-    city: row.city,
-    company: row.company,
-    companyType: row.company_type,
-    confidence: row.confidence,
-    contactability: row.contactability,
-    contactDiscoveryStatus: getContactDiscoveryStatus(row),
-    contacts: mapContacts(row.lead_contact_routes),
-    country: row.country,
-    description: row.description,
-    estimatedSize: row.estimated_size,
-    evidence: mapEvidence(row.lead_evidence_claims),
-    fitScore: row.fit_score,
-    id: row.external_id,
-    industry: row.industry,
-    qualification: mapQualification(row.lead_qualification_dimensions),
-    qualificationError: row.qualification_error ?? "",
-    qualificationStatus: row.qualification_status ?? "needs_manual_review",
-    status: row.status,
-    summary: row.summary,
-    website: row.website,
-  };
+function cleanContactMethodType(
+  value: string,
+):
+  | "email"
+  | "phone"
+  | "linkedin_url"
+  | "contact_form"
+  | "general_company_email"
+  | "website" {
+  const normalized = value.trim().toLowerCase().replaceAll("-", "_");
+  if (normalized === "phone") return "phone";
+  if (normalized.includes("linkedin")) return "linkedin_url";
+  if (normalized.includes("form")) return "contact_form";
+  if (normalized.includes("general") || normalized.includes("company_email"))
+    return "general_company_email";
+  if (normalized === "website" || normalized === "url") return "website";
+  return "email";
 }
 
-function getContactDiscoveryStatus(row: LeadRow): ContactDiscoveryStatus {
-  if ((row.lead_contact_routes ?? []).length > 0) {
-    return "completed";
-  }
-
-  if (
-    (row.lead_evidence_claims ?? []).some(
-      (claim) => claim.external_id === "contact-enrichment",
-    )
-  ) {
-    return "completed";
-  }
-
-  return row.qualification_status === "pending" ? "pending" : "not_run";
+function normalizeContactValue(methodType: string, value: string) {
+  const trimmed = value.trim();
+  if (methodType === "email" || methodType === "general_company_email")
+    return trimmed.toLowerCase();
+  if (methodType === "phone") return trimmed.replace(/[^\d+]/g, "");
+  return normalizeUrl(trimmed);
 }
 
-function mapQualification(
-  rows: QualificationDimensionRow[] | null,
-): QualificationDimension[] {
-  return sortByOrder(rows).map((row) => ({
-    confidence: row.confidence,
-    explanation: row.explanation,
-    label: row.label,
-    score: row.score,
-  }));
-}
-
-function mapEvidence(rows: EvidenceClaimRow[] | null): EvidenceClaim[] {
-  return sortByOrder(rows).map((row) => ({
-    confidence: row.confidence,
-    id: row.external_id,
-    kind: row.kind,
-    retrievedAt: row.retrieved_at,
-    sourceLabel: row.source_label,
-    sourceType: row.source_type,
-    sourceUrl: row.source_url,
-    text: row.text,
-  }));
-}
-
-function mapContacts(rows: ContactRouteRow[] | null): ContactRoute[] {
-  return sortByOrder(rows).map((row) => ({
-    id: row.id,
-    source: row.source,
-    suggestedRole: row.suggested_role,
-    type: row.type,
-    value: row.value,
-    verification: row.verification,
-    verificationProvenance:
-      row.verification_provider && row.verification_source_url && row.verified_at
-        ? {
-            provider: row.verification_provider,
-            query: row.verification_query ?? "",
-            sourceTitle: row.verification_source_title ?? row.verification_source_url,
-            sourceUrl: row.verification_source_url,
-            verifiedAt: row.verified_at,
-          }
-        : null,
-  }));
-}
-
-function sortByOrder<T extends { sort_order: number }>(rows: T[] | null): T[] {
-  return [...(rows ?? [])].sort((first, second) => first.sort_order - second.sort_order);
+function cleanVerification(value: ContactRoute["verification"]) {
+  if (value === "source_confirmed") return "source_confirmed" as const;
+  if (value === "unknown") return "unknown" as const;
+  return "unverified" as const;
 }
 
 function dedupeDiscoveredLeadInputs(inputs: DiscoveredLeadInput[]) {
@@ -821,12 +573,31 @@ function normalizeCompanyName(companyName: string) {
   return companyName.trim().slice(0, 180) || "Unknown company";
 }
 
-function scoreToFit(score: number | null) {
-  if (typeof score !== "number") {
-    return 45;
-  }
+function normalizeCompanyKey(companyName: string) {
+  return companyName
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
 
-  return Math.max(35, Math.min(70, Math.round(score * 100)));
+function normalizedDomain(value: string) {
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function normalizeUrl(value: string) {
+  try {
+    const url = new URL(value);
+    url.hash = "";
+    return url.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return value.trim().toLowerCase();
+  }
 }
 
 function getSearchScore(result: SearchResult) {
@@ -835,6 +606,165 @@ function getSearchScore(result: SearchResult) {
 
 function sanitizeQualificationError(errorMessage: string) {
   return errorMessage.replace(/\s+/g, " ").trim().slice(0, 1000);
+}
+
+async function loadCampaignCompanyForQualification(
+  supabase: DatabaseClient,
+  workspaceId: string,
+  campaignCompanyId: string,
+) {
+  const { data, error } = await supabase
+    .from("campaign_companies")
+    .select("id,company_id,metadata")
+    .eq("workspace_id", workspaceId)
+    .eq("id", campaignCompanyId)
+    .single();
+  if (error)
+    throw new Error(`Could not load company for qualification: ${error.message}`);
+  return data;
+}
+
+async function persistCleanQualification(
+  supabase: DatabaseClient,
+  input: {
+    workspaceId: string;
+    campaignCompanyId: string;
+    status:
+      | "highly_relevant"
+      | "qualified"
+      | "possible"
+      | "insufficient_evidence"
+      | "not_relevant"
+      | "excluded";
+    score: number;
+    confidence: Confidence;
+    summary: string;
+    relationshipHypothesis: string;
+    positiveSignals: string[];
+    negativeSignals: string[];
+    missingEvidence: string[];
+    dimensions: Array<{
+      confidence: Confidence;
+      explanation: string;
+      label: string;
+      score: number;
+    }>;
+    evidence: Array<{
+      confidence: Confidence;
+      criterion: string;
+      evidenceKind: "fact" | "inference" | "unknown" | "conflict";
+      metadata: Record<string, unknown>;
+      sourceUrl: string | null;
+      statement: string;
+    }>;
+    input: unknown;
+  },
+) {
+  const inputHash = createHash("sha256")
+    .update(JSON.stringify(input.input))
+    .digest("hex");
+  const { data: existing, error: existingError } = await supabase
+    .from("qualification_results")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_company_id", input.campaignCompanyId)
+    .eq("input_hash", inputHash)
+    .maybeSingle();
+  if (existingError)
+    throw new Error(
+      `Could not check qualification idempotency: ${existingError.message}`,
+    );
+  if (existing) return existing.id;
+
+  const { data: result, error: resultError } = await supabase
+    .from("qualification_results")
+    .insert({
+      workspace_id: input.workspaceId,
+      campaign_company_id: input.campaignCompanyId,
+      status: input.status,
+      score: Math.max(0, Math.min(100, Math.round(input.score))),
+      confidence: input.confidence,
+      summary: input.summary,
+      relationship_hypothesis: input.relationshipHypothesis,
+      recommended_roles: [],
+      positive_signals: input.positiveSignals,
+      negative_signals: input.negativeSignals,
+      missing_evidence: input.missingEvidence,
+      schema_version: "company-qualification-v1",
+      prompt_version: "lead-evaluator-v1",
+      input_hash: inputHash,
+    })
+    .select("id")
+    .single();
+  if (resultError)
+    throw new Error(`Could not save qualification result: ${resultError.message}`);
+
+  if (input.dimensions.length) {
+    const { error } = await supabase.from("qualification_dimensions").insert(
+      input.dimensions.map((dimension) => ({
+        workspace_id: input.workspaceId,
+        qualification_result_id: result.id,
+        criterion: dimension.label,
+        score: Math.max(0, Math.min(100, Math.round(dimension.score))),
+        confidence: dimension.confidence,
+        explanation: dimension.explanation,
+      })),
+    );
+    if (error)
+      throw new Error(`Could not save qualification dimensions: ${error.message}`);
+  }
+
+  if (input.evidence.length) {
+    const { error } = await supabase.from("qualification_evidence").insert(
+      input.evidence.map((evidence) => ({
+        workspace_id: input.workspaceId,
+        qualification_result_id: result.id,
+        criterion: evidence.criterion,
+        evidence_kind: evidence.evidenceKind,
+        statement: evidence.statement,
+        source_url: evidence.sourceUrl,
+        confidence: evidence.confidence,
+        metadata: evidence.metadata,
+      })),
+    );
+    if (error) throw new Error(`Could not save qualification evidence: ${error.message}`);
+  }
+  return result.id;
+}
+
+async function updateCampaignCompanyQualificationState(
+  supabase: DatabaseClient,
+  workspaceId: string,
+  campaignCompanyId: string,
+  qualificationError: string | null,
+) {
+  const association = await loadCampaignCompanyForQualification(
+    supabase,
+    workspaceId,
+    campaignCompanyId,
+  );
+  const metadata =
+    association.metadata &&
+    typeof association.metadata === "object" &&
+    !Array.isArray(association.metadata)
+      ? association.metadata
+      : {};
+  const { error } = await supabase
+    .from("campaign_companies")
+    .update({
+      status: "needs_review",
+      last_evaluated_at: new Date().toISOString(),
+      metadata: {
+        ...metadata,
+        ...(qualificationError
+          ? { qualification_error: qualificationError }
+          : { qualification_error: null }),
+      },
+    })
+    .eq("workspace_id", workspaceId)
+    .eq("id", campaignCompanyId);
+  if (error)
+    throw new Error(`Could not update company qualification state: ${error.message}`);
 }
 
 function buildQualifiedDimensions(candidate: EvaluatedLeadCandidate) {
@@ -894,53 +824,6 @@ function buildFailedQualificationDimensions(errorMessage: string) {
   );
 }
 
-async function replaceLeadQualificationDimensions(
-  leadId: string,
-  dimensions: Array<{
-    confidence: Confidence;
-    explanation: string;
-    label: string;
-    score: number;
-  }>,
-) {
-  await replaceLeadChildren(
-    "lead_qualification_dimensions",
-    [leadId],
-    dimensions.map((dimension, index) => ({
-      confidence: dimension.confidence,
-      explanation: dimension.explanation,
-      label: dimension.label,
-      lead_id: leadId,
-      score: dimension.score,
-      sort_order: index,
-    })),
-  );
-}
-
-function isMissingQualificationColumnError(error: { message?: string } | null) {
-  const message = error?.message ?? "";
-  const mentionsQualificationColumn =
-    message.includes("qualification_status") || message.includes("qualification_error");
-  const isMissingColumn =
-    message.includes("does not exist") ||
-    message.includes("Could not find") ||
-    message.includes("schema cache");
-
-  return mentionsQualificationColumn && isMissingColumn;
-}
-
-function countRowsWithContactRoutes(
-  rows: Array<{
-    lead_contact_routes: Array<{ value: string; verification: string }> | null;
-  }>,
-) {
-  return rows.filter((row) =>
-    (row.lead_contact_routes ?? []).some(
-      (route) => Boolean(route.value) && route.verification === "source_confirmed",
-    ),
-  ).length;
-}
-
 function getOrigin(url: string) {
   try {
     return new URL(url).origin;
@@ -954,30 +837,4 @@ function slugify(input: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
-}
-
-async function replaceLeadChildren<Row extends { lead_id: string }>(
-  table: "lead_contact_routes" | "lead_evidence_claims" | "lead_qualification_dimensions",
-  leadIds: string[],
-  rows: Row[],
-) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { error: deleteError } = await supabase
-    .from(table)
-    .delete()
-    .in("lead_id", leadIds);
-
-  if (deleteError) {
-    throw new Error(`Could not refresh sample lead records: ${deleteError.message}`);
-  }
-
-  if (rows.length === 0) {
-    return;
-  }
-
-  const { error: insertError } = await supabase.from(table).insert(rows);
-
-  if (insertError) {
-    throw new Error(`Could not save sample lead records: ${insertError.message}`);
-  }
 }

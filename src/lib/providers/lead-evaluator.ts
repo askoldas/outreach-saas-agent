@@ -51,6 +51,7 @@ async function generateAndParseEvaluation(campaign: Campaign, result: SearchResu
       const content = await generateText(
         buildEvaluationMessages(campaign, result, attempt),
         {
+          role: "company_qualification",
           taskName: "lead qualification",
         },
       );
@@ -172,7 +173,7 @@ function parseEvaluation(content: string): RawEvaluationResponse {
     return { leads: [] };
   } catch {
     throw new Error(
-      "OpenRouter did not return the required JSON lead evaluation. The selected model may not support reliable structured output for this prompt; choose another OPENROUTER_MODEL or retry with a stronger model.",
+      "OpenRouter did not return the required JSON lead evaluation. The company_qualification route may not support reliable structured output for this prompt; review OPENROUTER_MODEL_COMPANY_QUALIFICATION.",
     );
   }
 }

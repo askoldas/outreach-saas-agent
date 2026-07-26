@@ -8,6 +8,7 @@ out/
 # Build and coverage output
 dist/
 build/
+.trigger/
 coverage/
 playwright-report/
 test-results/

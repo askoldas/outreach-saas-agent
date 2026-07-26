@@ -1,92 +1,49 @@
-# Background Workers
+# Background Execution
 
-Opptium discovery uses durable database-backed work instead of running Tavily
-inside a browser request or server action.
+Trigger.dev Cloud is Opptium's only durable background runtime. The former local
+polling worker and Railway deployment path have been retired because the clean
+Supabase baseline intentionally has no polling queue, leases, or claim RPC.
 
-## Why
+Current tasks:
 
-Lead discovery can take longer than a Vercel request should stay open. Tavily,
-contact checks, and future AI qualification can fail independently, hit provider
-limits, or need retries. A worker lets the app enqueue work quickly while a
-separate process claims and completes tasks from Supabase.
+- `execute-campaign`
+- `analyze-company-profile`
+- `discover-campaign-companies`
+- `enrich-company-contacts`
+- `generate-outreach-draft`
+- `verify-campaign-run`
 
-## Tables
+The application records durable domain and execution state in Supabase before
+dispatching a task. Trigger payloads contain stored execution identifiers, not
+client-provided workspace identifiers. Task services use the service-role client to
+resolve tenant ownership and frozen Campaign context from those records.
 
-`research_runs` is the user-visible unit of background work for a campaign. It
-stores status, progress, the current step, and any last error.
+Trigger.dev owns task scheduling, retries, concurrency, and runtime logs. Supabase
+remains authoritative for Campaign Runs and events, provider executions, AI requests,
+contact enrichments, qualification results, drafts, usage, and user-visible errors.
 
-`research_tasks` stores retryable units of work. Current task types are
-`search_web`, `evaluate_lead`, and `enrich_contacts`.
+For configuration, local development, deployment, and smoke testing, see
+`docs/TRIGGER_DEV.md`.
 
-`lead_sources` stores raw Tavily results and deterministic source classification
-before or alongside lead creation.
+`execute-campaign` owns the staged lifecycle. Its discovery child idempotently creates
+or reloads Market Analysis and Discovery Plan artifacts, saves raw Tavily candidates
+with query/path provenance, classifies candidates cheaply, and sends only promising
+candidates to evidence-aware qualification. Trigger retries reuse persisted planning
+artifacts and stable execution IDs.
 
-`ai_generations` records prompt version, model, input, output, and errors for AI
-tasks such as lead evaluation.
+Candidate classification is deterministic-first. Duplicate domains and obvious
+non-company sources are rejected locally. Plausible company results are sent in one
+schema-validated economical-model batch per iteration. Completed classification output
+is retained on the iteration execution's `ai_requests` record and reused on retry.
 
-## Claiming And Retries
+When the target has not been reached and the market is not exhausted, the parent starts
+the next bounded discovery iteration. Each iteration has its own idempotent provider
+execution, auditable refinement path, metrics, yield decision, and cumulative progress.
+The loop stops at the qualified-company target, market exhaustion, low-yield refinement
+ceiling, cancellation, or the five-iteration hard limit.
 
-Workers call `public.claim_next_research_task(worker_id text)`. The function uses
-`FOR UPDATE SKIP LOCKED` so multiple Railway workers cannot claim the same task.
-Claiming sets the task to `running`, increments `attempt_count`, and sets
-`locked_by`/`locked_until`.
-
-If a task throws, the worker marks it `retrying` until `max_attempts` is reached.
-After the final failure it marks the task `failed` and stores `error_message`.
-One failed task does not stop the worker loop.
-
-## Local Development
-
-Run the web app:
-
-```bash
-npm run dev
-```
-
-Run the worker in a second terminal:
-
-```bash
-npm run worker
-```
-
-Required local env vars:
-
-```bash
-NEXT_PUBLIC_SUPABASE_URL=
-NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
-TAVILY_API_KEY=
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=
-OPENROUTER_TIMEOUT_MS=120000
-WORKER_ID=local-worker
-WORKER_POLL_INTERVAL_MS=3000
-```
-
-`SUPABASE_SERVICE_ROLE_KEY` is only for server/worker processes. Do not expose it
-to browser code.
-
-## Current Flow
-
-1. User clicks `Discover leads`.
-2. The server action validates workspace/campaign access.
-3. It creates a `research_run` and initial `search_web` task.
-4. The UI polls `/api/campaigns/[id]/discovery-progress`.
-5. The worker claims the task, runs Tavily, and stores `lead_sources`.
-6. Candidate sources receive `evaluate_lead` tasks.
-7. `evaluate_lead` calls OpenRouter, validates strict JSON, logs
-   `ai_generations`, and creates or updates qualified/needs-review leads. If AI
-   fails, the lead is still saved for manual review.
-8. Saved leads receive `enrich_contacts` tasks.
-9. `enrich_contacts` performs a company-domain-scoped Tavily contact search,
-   extracts public routes from provider and saved evidence, performs a shallow
-   first-party website/contact-page check, and persists verification provenance.
-
-## Current Limitations
-
-- `search_web`, `evaluate_lead`, and `enrich_contacts` are implemented as worker
-  tasks.
-- Query generation uses frozen Campaign Strategy and Company Profile context with geography
-  hints. It is not intended to be a full country database.
-- Deep website crawling is not implemented. Contact enrichment uses Tavily
-  search evidence, stored evidence, and shallow public website/contact-page checks.
+Pause is a durable boundary rather than a display-only Campaign status. The parent checks
+persisted state before and after every child iteration, changes the run to
+`waiting_for_input/paused`, and exits without deleting completed results. Continue
+reactivates the Campaign, restores the same run to discovery planning, and dispatches an
+idempotent resume keyed by run and completed iteration.

@@ -6,7 +6,10 @@ import {
   type ReviewQuestion,
   type StructuredCompanyProfile,
 } from "../company-profile/structured-profile.ts";
-import { generateText } from "../providers/openrouter.ts";
+import { generateTextResult } from "../providers/openrouter.ts";
+import { parseCompleteJsonObject } from "./structured-json.ts";
+
+export { parseCompleteJsonObject } from "./structured-json.ts";
 
 export const companyProfileAnalysisPromptVersion = "company-profile-website-v3-grouped";
 
@@ -20,7 +23,7 @@ export async function analyzeCompanyProfile(input: {
   currentProfile: Record<string, unknown>;
   sources: Array<{ title: string; url: string; content: string }>;
 }) {
-  const rawOutput = await generateText(
+  const modelCall = await generateTextResult(
     [
       {
         role: "system",
@@ -52,12 +55,14 @@ export async function analyzeCompanyProfile(input: {
       },
     ],
     {
+      role: "profile_analysis",
       jsonMode: true,
-      maxCompletionTokens: 3_000,
+      maxCompletionTokens: 6_000,
       reasoningEffort: "none",
       taskName: "structured company profile website analysis",
     },
   );
+  const rawOutput = modelCall.data;
   const parsed = parseCompanyProfileAnalysis(rawOutput);
   const current = input.currentProfile.structured_profile
     ? parseStructuredCompanyProfile(input.currentProfile.structured_profile)
@@ -69,6 +74,7 @@ export async function analyzeCompanyProfile(input: {
       profile: { ...profile, readiness: calculateReadiness(profile) },
     },
     rawOutput,
+    modelCall,
   };
 }
 
@@ -141,52 +147,6 @@ function unwrapAnalysisRoot(value: unknown): unknown {
     current = row[wrapper];
   }
   return current;
-}
-
-export function parseCompleteJsonObject(rawOutput: string): unknown {
-  const normalized = rawOutput.trim().replace(/^\uFEFF/, "");
-  try {
-    return JSON.parse(normalized) as unknown;
-  } catch {
-    // NVIDIA reasoning models may put prose or reasoning before the JSON.
-  }
-
-  for (
-    let start = normalized.indexOf("{");
-    start >= 0;
-    start = normalized.indexOf("{", start + 1)
-  ) {
-    const candidate = balancedObjectAt(normalized, start);
-    if (!candidate) continue;
-    try {
-      return JSON.parse(candidate) as unknown;
-    } catch {
-      // A nested object may appear before the complete response object.
-    }
-  }
-  return undefined;
-}
-
-function balancedObjectAt(input: string, start: number) {
-  let depth = 0;
-  let inString = false;
-  let escaped = false;
-  for (let index = start; index < input.length; index += 1) {
-    const character = input[index];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (character === "\\") escaped = true;
-      else if (character === '"') inString = false;
-      continue;
-    }
-    if (character === '"') inString = true;
-    else if (character === "{") depth += 1;
-    else if (character === "}") {
-      depth -= 1;
-      if (depth === 0) return input.slice(start, index + 1);
-    }
-  }
-  return null;
 }
 
 function buildStructuredProfileFromGroupedAnalysis(

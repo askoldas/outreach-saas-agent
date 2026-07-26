@@ -8,7 +8,7 @@
 - `DECISIONS.md`: retained decision history and superseding ADRs.
 - `SECURITY_AND_COMPLIANCE.md`: tenant, provider, research, and outreach controls.
 - `TESTING.md`: required test layers.
-- `BACKGROUND_WORKERS.md` and `RAILWAY_WORKER_DEPLOYMENT.md`: worker operation.
+- `BACKGROUND_WORKERS.md` and `TRIGGER_DEV.md`: durable task operation.
 - `ROADMAP.md`: prioritized follow-up work.
 - `PUBLIC_WEBSITE_ROUTES.md`: public sitemap, route groups, auth modals, and claim boundaries.
 - `COLOR_SYSTEM.md`: canonical palette, semantic tokens, component mappings, and accessibility rules.

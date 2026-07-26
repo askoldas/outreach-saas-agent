@@ -1,6 +1,6 @@
 import type { Campaign, CompanyProfile } from "@/types/domain";
+import { CAMPAIGN_EXECUTION_LIMITS } from "@/lib/campaign-agent/execution-policy";
 
-const maxDiscoveryQueries = 12;
 const maxTermsPerFamily = 4;
 
 type CampaignSearchContext = Campaign & {
@@ -136,7 +136,7 @@ export function buildCampaignSearchQueries(campaign: CampaignSearchContext): str
 
   return unique(queries)
     .map((query) => ensureBusinessIntent(query, businessTerms))
-    .slice(0, maxDiscoveryQueries);
+    .slice(0, CAMPAIGN_EXECUTION_LIMITS.maxQueriesPerIteration);
 }
 
 function ensureBusinessIntent(query: string, businessTerms: string[]) {

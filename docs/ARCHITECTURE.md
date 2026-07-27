@@ -1,380 +1,182 @@
 # Architecture
 
-## 1. Architectural style
+## Runtime
 
-The current implementation starts as one conventional root Next.js application focused on the product interface.
+The approved target is Next.js on Vercel, Supabase as the product system of record and
+Trigger.dev Cloud for durable execution. The new empty Supabase project is defined by
+`docs/database/clean-baseline-design.md` and `supabase/baseline/`.
 
-It is an interface-first prototype using typed mock data. It demonstrates the intended workflow without real authentication, persistence, providers, queues, workers, or email sending.
+Opptium is one Next.js 16 application with Trigger.dev Cloud for durable execution.
+Supabase provides authentication, Postgres persistence, and RLS. The browser never
+receives service-role or provider credentials.
 
-Future production architecture may grow into separate runtime surfaces:
+The web layer handles authenticated composition and bounded mutations.
+Workspace-scoped repositories own database access. Thin Trigger tasks invoke typed
+server services using stored execution identifiers. Provider SDK behavior stays behind
+Tavily/OpenRouter adapters. Deterministic code owns authorization, transitions,
+validation, deduplication, cost estimates, cancellation, and user actions; AI is
+reserved for narrow schema-validated interpretation and generation.
 
-1. a web application for interactive user requests;
-2. a durable worker for long-running research workflows.
+Campaign creation is geography-first. A bounded `campaign_planning` call proposes an
+Offering and structured target client from the frozen Company Profile; user edits remain
+campaign-local. One Start action persists the proposal and confirmed brief, freezes
+profile/strategy context, creates a Campaign Run, and dispatches Trigger.dev.
+The campaign's preferred outreach language is a communication-generation setting.
+Discovery languages are a separate Strategy concern derived from target country codes,
+local official languages, and an English international-source fallback.
+Market adjustments create a new immutable Campaign Strategy only while no run is
+active. The strategy-save transaction synchronizes the Campaign read model and
+user-confirmed Campaign Brief so the next run receives one consistent target.
 
-Those surfaces should be extracted only when real runtime requirements appear. Until then, feature folders inside `src/` are the internal module boundary.
-
-## 2. Working technology direction
-
-The current interface prototype uses:
-
-- Next.js with the App Router for the dashboard and server endpoints;
-- TypeScript in strict mode;
-- CSS Modules and global design tokens;
-- centralized typed mock data.
-
-Later implementation may add:
-
-- PostgreSQL hosted through Supabase;
-- Supabase Auth for initial authentication;
-- a durable job platform or queue-backed worker for research workflows;
-- provider adapters for search, crawling, registries, enrichment, and language models;
-- Vercel for the web application, unless runtime constraints require another host.
-
-Provider choices that are not yet accepted remain replaceable. See `docs/DECISIONS.md`.
-
-## 3. System context
+The Campaign Run pipeline is staged:
 
 ```text
-User
-  |
-  v
-Web dashboard
-  |
-  +----> PostgreSQL / Auth / Storage
-  |
-  +----> Job dispatch
-             |
-             v
-        Research worker
-             |
-             +----> Search providers
-             +----> Public websites / permitted sources
-             +----> Registry and directory adapters
-             +----> LLM providers
-             +----> PostgreSQL checkpoints and results
+brief -> market analysis -> discovery planning -> raw discovery
+      -> candidate classification -> selective deep evaluation -> ready for review
+      -> optional enrichment -> outreach preparation
 ```
 
-The browser never calls research, crawling, model, or service-role database providers directly.
-
-## 4. Main components
-
-### 4.1 Web application
-
-The web application handles:
-
-- authentication and workspace selection;
-- offer creation and approval;
-- campaign creation and strategy review;
-- short server-side mutations;
-- lead browsing, filtering, and review;
-- draft review and external compose actions;
-- run progress and diagnostics display;
-- administrative settings later.
-
-Web requests should remain bounded. Starting a campaign creates a `research_run`, validates permission and quota, and dispatches background work.
-
-### 4.2 Research worker
-
-The worker executes long-running, resumable workflows.
-
-A research run is divided into persisted steps, for example:
-
-1. build or confirm search plan;
-2. execute discovery queries;
-3. normalize candidate identities;
-4. deduplicate candidates;
-5. fetch public company sources;
-6. extract structured company facts;
-7. find additional evidence and contact routes;
-8. qualify lead;
-9. prepare outreach readiness data;
-10. optionally generate drafts for eligible approved leads;
-11. finalize diagnostics and usage.
-
-Each step must be retry-safe. The worker should resume from persisted state rather than restart the entire run after a transient failure.
-
-### 4.3 Domain package
-
-The domain package owns deterministic rules and schemas shared across runtimes.
-
-Examples:
-
-- normalized domain identity;
-- campaign state transitions;
-- lead state transitions;
-- scoring aggregation;
-- confidence labels;
-- evidence claim types;
-- outreach eligibility;
-- deduplication outcomes.
-
-### 4.4 Database layer
-
-PostgreSQL is the system of record.
-
-It stores:
-
-- tenant and membership data;
-- user-approved seller information;
-- campaigns and their strategy versions;
-- workflow state and checkpoints;
-- normalized companies and campaign leads;
-- source documents and evidence claims;
-- qualification results;
-- public contacts;
-- outreach drafts;
-- activity and audit records;
-- provider execution and usage metadata;
-- suppression and compliance data when sending is introduced.
-
-The database layer exposes typed repositories or service functions. UI components and prompt code must not issue ad hoc queries throughout the codebase.
-
-### 4.5 AI task layer
-
-The AI layer contains narrow, schema-validated tasks rather than one open-ended autonomous agent.
-
-Examples:
-
-- analyze offer;
-- propose ideal customer segments;
-- plan campaign sources and queries;
-- extract company information from source material;
-- assess qualification dimensions;
-- suggest a relevant contact role;
-- draft evidence-based outreach.
-
-Workflow orchestration remains in application or worker code. Models do not decide authorization, spending, sending, or irreversible state changes.
-
-### 4.6 Provider adapters
-
-External dependencies are accessed through internal interfaces.
-
-Examples:
-
-```ts
-interface SearchProvider {
-  search(input: SearchRequest): Promise<SearchResultPage>;
-}
-
-interface PageFetcher {
-  fetch(input: FetchRequest): Promise<FetchResult>;
-}
-
-interface LanguageModelProvider {
-  generateStructured<T>(input: StructuredGenerationRequest<T>): Promise<ModelResult<T>>;
-}
-```
-
-The exact interfaces will be refined in code. The important rule is that domain workflows depend on internal contracts, not concrete SDK response shapes.
-
-## 5. Core workflow
-
-### 5.1 Offer analysis
-
-1. User submits seller information.
-2. Server stores the raw input.
-3. AI task proposes a normalized offer profile.
-4. Schema validation rejects malformed output.
-5. User reviews and approves claims.
-6. Approved version becomes available to campaigns.
-
-AI-proposed claims cannot silently become approved seller claims.
-
-### 5.2 Campaign planning
-
-1. User selects an approved offer and market constraints.
-2. System creates a draft campaign.
-3. AI proposes segments, local terms, source types, and qualification criteria.
-4. User reviews and starts the campaign.
-5. System freezes a strategy version for the research run.
-
-Later edits create a new strategy version; they do not rewrite historical run inputs.
-
-### 5.3 Lead discovery and research
-
-1. Worker generates bounded search tasks from the frozen strategy.
-2. Search adapters return candidates and source URLs.
-3. Candidate identities are normalized.
-4. Existing campaign leads are checked before insert.
-5. Allowed sources are fetched with rate limiting.
-6. Structured facts and evidence claims are extracted.
-7. Qualification runs against campaign criteria.
-8. Lead state becomes `needs_review` or an explicit failure state.
-
-### 5.4 Outreach preparation
-
-1. User approves a lead.
-2. System checks that the offer version and evidence are sufficient.
-3. Draft task receives only approved seller claims and selected prospect evidence.
-4. Generated output is validated and stored with prompt/model metadata.
-5. User edits, approves, copies, or opens the draft in an external email client.
-
-The platform does not infer that external sending succeeded.
-
-## 6. Data ownership and tenancy
-
-Every tenant-owned aggregate is linked to a workspace directly or through an unambiguous parent.
-
-Authorization sequence:
-
-1. authenticate user;
-2. resolve workspace membership;
-3. verify role and operation;
-4. execute a workspace-scoped query;
-5. rely on RLS as defense in depth.
-
-Workers use trusted credentials but must still pass an explicit workspace context and write workspace identifiers to every tenant-owned record.
-
-## 7. Idempotency
-
-Idempotency is required for all background actions.
-
-Suggested keys:
-
-- one discovery task per `research_run + strategy_query`;
-- one source fetch per `normalized_url + freshness_window`;
-- one campaign lead per `campaign + normalized_company_identity`;
-- one qualification per `lead + criteria_version + evidence_version`;
-- one draft generation per `lead + offer_version + evidence_selection + prompt_version`.
-
-Retries should return or update the existing result instead of producing duplicates.
-
-## 8. Versioning
-
-Version these product assets:
-
-- approved offer profiles;
-- campaign strategies;
-- qualification criteria;
-- prompt templates;
-- structured AI schemas where compatibility changes;
-- outreach drafts;
-- evidence snapshots or evidence selections used in decisions.
-
-Historical records should preserve which versions produced a result.
-
-## 9. Failure handling
-
-Failures must be categorized rather than collapsed into one generic error.
-
-Suggested categories:
-
-- validation failure;
-- permission failure;
-- quota or billing limit;
-- provider authentication failure;
-- provider rate limit;
-- transient provider failure;
-- blocked or disallowed source;
-- page fetch failure;
-- extraction failure;
-- schema-invalid AI output;
-- insufficient evidence;
-- workflow cancellation;
-- internal error.
-
-Users need concise status messages. Detailed diagnostics belong in run records and protected logs.
-
-A partial run may still produce useful leads. One failed source must not invalidate unrelated successful work.
-
-## 10. Observability
-
-Use structured events carrying identifiers such as:
-
-- request ID;
-- workspace ID;
-- campaign ID;
-- research run ID;
-- lead ID;
-- workflow step;
-- provider category and adapter;
-- attempt number;
-- duration;
-- normalized outcome;
-- usage units and estimated cost when available.
-
-Do not log full secrets, authentication headers, unrestricted source bodies, or complete outreach content by default.
-
-The product dashboard should surface operational diagnostics relevant to users:
-
-- progress;
-- counts by state;
-- failed and retried tasks;
-- provider limitations;
-- incomplete research;
-- estimated usage.
-
-## 11. Caching and freshness
-
-Caching should reduce provider cost without presenting stale facts as current.
-
-Store:
-
-- normalized URL;
-- retrieval timestamp;
-- content hash;
-- fetch status;
-- source freshness policy;
-- last successful extraction;
-- last observed change where detectable.
-
-Company identity may be shared internally across campaigns, but tenant-specific qualification, notes, drafts, and decisions must remain isolated.
-
-Any cross-tenant reuse of public source data requires a deliberate privacy and product decision. Do not implement it accidentally through missing workspace filters.
-
-## 12. File and document ingestion
-
-Document upload is a later MVP extension.
-
-When introduced:
-
-1. upload to workspace-scoped storage;
-2. validate type and size;
-3. scan or isolate before processing where supported;
-4. extract text asynchronously;
-5. retain provenance to file and page or section;
-6. never treat extracted marketing claims as approved until user review.
-
-## 13. Email integration evolution
-
-### MVP
-
-- copy draft;
-- `mailto:` or supported external compose link;
-- manual status update by the user.
-
-### Later
-
-- OAuth-based Gmail or Microsoft integration;
-- create draft in mailbox;
-- explicit send action;
-- delivery state where available;
-- reply detection;
-- follow-up scheduling;
-- suppression and compliance controls.
-
-Sending must remain a separate bounded subsystem and must not be embedded into the research worker.
-
-## 14. Deployment boundaries
-
-Initial deployment units:
-
-- `web`: Next.js application;
-- `research-worker`: durable job execution;
-- `database`: Supabase/PostgreSQL;
-- external provider services.
-
-A separate API service is not required initially. Add one only when integration, runtime, or scaling constraints clearly justify it.
-
-## 15. Scaling approach
-
-Scale by workload category rather than splitting by domain entity:
-
-- web traffic scales independently;
-- research concurrency is controlled by queue and provider rate limits;
-- page fetching has separate concurrency limits;
-- model calls have budget and retry controls;
-- database indexes follow measured query patterns;
-- large exports or imports become background jobs.
-
-Do not optimize for massive bulk outreach before validating lead quality and user workflow.
+Every raw candidate retains query/path/source provenance. Deterministic URL/domain and
+source rules remove obvious exclusions and duplicates before expensive inspection.
+The Discovery workspace exposes this stored provenance and the concise classification
+decision for recent raw candidates; it never exposes model chain-of-thought.
+
+Long-term bounded modules are Company Profile Intelligence, Campaign Strategist, Discovery Engine, Company Research, Identity Resolution, Qualification, Contact Discovery/Enrichment, Outreach Composer, and a deterministic orchestrator. These remain feature/service boundaries inside the current repository rather than speculative microservices.
+
+The initial deterministic `execute-campaign` Trigger workflow owns one Campaign Run.
+It resolves the stored discovery execution, durably waits for the discovery and
+qualification child task, and then records an explicit optional-enrichment gate.
+Campaign workspaces retain a recent run ledger so repeated executions remain distinct
+and inspectable by status, phase, result counts, timestamps, and recorded cost. Run
+selection remains campaign- and workspace-scoped, and historical Market Analysis and
+Discovery artifacts can be opened without changing the current campaign state.
+User-visible Campaign Run events are rendered as a concise timeline of persisted stage
+changes, gates, pauses, refinements, and failures; internal-only events and raw details
+remain hidden.
+Contact enrichment and draft generation remain user-triggered until approval-driven
+continuations are implemented.
+
+The Campaign execution policy is deterministic application code shared by discovery
+and future adaptive planning. Initial ceilings are five discovery iterations, ten
+queries per iteration, fifty results per query, and five hundred inspected companies.
+The deterministic discovery parent may run up to five sequential iterations with a
+conservative eight results per query. Each later iteration has its own stable child
+execution and changes source family across local directories, associations, event
+exhibitors, and partner directories. Persisted domains prevent duplicate candidates
+from receiving another deep evaluation. Tavily requests have a fixed worker-safe timeout.
+
+The provider-neutral Campaign Agent core is implemented as one injected typed loop in
+`src/lib/campaign-agent/loop.ts`. It owns plan, act, evaluate, refine, gate, and
+completion transitions while deterministic code clamps every plan and observation.
+The OpenRouter planner adapter returns a strictly validated plan through the logical
+`campaign_planning` role. Stable loop states can be resumed and are stored as
+workspace-scoped Campaign Run checkpoints. These pieces remain behind
+`CAMPAIGN_AGENT_ENABLED=false`; current production execution remains the deterministic
+parent workflow. When enabled, the first integration performs one planned,
+provider-backed discovery/qualification iteration, evaluates its persisted result
+deterministically, and writes loop checkpoints. Every adaptive iteration owns a child
+provider execution linked to the orchestration execution, its own Trigger idempotency
+key, and its own usage settlement. The loop may refine up to the deterministic
+five-iteration ceiling and completes the orchestration-only parent separately.
+Planner calls are written to `ai_requests` against the corresponding iteration
+execution with logical role, prompt/schema version, actual model, fallback state,
+tokens, provider cost, latency timestamps, and request hash. A planner or orchestration
+failure fails the parent, closes pending iteration executions, fails the Campaign Run,
+and appends one user-visible failure event.
+
+Company Profile is persisted as one stable workspace record with immutable numbered
+versions. Campaign creation selects the current version and atomically stores an
+immutable JSON snapshot through database triggers. Application routes, repositories,
+and Trigger services use only Company Profiles, snapshots, and immutable Strategy
+versions.
+
+Website analysis freezes the current profile-version identifier into a durable task.
+The Trigger service discovers public website evidence through Tavily, sends only the
+frozen profile plus retrieved sources to a schema-validated OpenRouter extractor, and
+saves a new immutable `website_analysis` version through a service-role-only database
+function.
+
+Authenticated progress endpoints expose only the latest workspace-scoped durable run and task aggregates. A shared polling surface renders pending/running state, current step, percentage, task completion, failures, and the last persisted error for Company Profile analysis and campaign operations. Polling stops at a terminal state and refreshes the server-rendered result. Synchronous Strategy generation exposes its pending and error state directly in the Strategy workspace.
+
+Strategy generation and refinement are server-authorized OpenRouter operations grounded in the immutable campaign profile snapshot, canonical campaign brief, and current Strategy version. The complete structured response is schema validated before the existing version RPC creates a new immutable Strategy. AI generation logs retain the prompt version, instruction, frozen inputs, raw response, structured output, and saved Strategy version identifier. Strategy-generation usage is recorded as its own operation.
+
+Campaign Strategy follows the same immutable-version principle. Each campaign owns
+numbered structured versions; saving creates a new version and supersedes only editable
+predecessors. Campaign Run creation freezes the selected version and marks it used.
+Discovery and qualification load that frozen version.
+
+Campaign-local Leads and Outreach pages use workspace-and-campaign-scoped clean
+repository queries. Campaign companies join immutable qualification dimensions,
+evidence, and reusable public contact methods. Recipient recommendations are
+deterministic projections over approved companies; user selection is persisted in
+`campaign_contacts`.
+
+Historical export downloads are generated on demand from the immutable JSON payload rather than mutable campaign rows. The download route re-establishes the authenticated current workspace, queries the export by both workspace and record identifier, emits CSV locally, and disables shared caching. No provider or public object URL is involved.
+
+Approved-company contact enrichment is a durable Trigger operation. Tavily receives a
+company-domain-scoped contact query; returned public evidence is parsed deterministically
+and combined with saved evidence and shallow first-party page checks.
+
+Draft generation is queued only for approved companies with selected recipients. Each
+durable task captures the exact profile snapshot and Strategy version identifiers. The
+Trigger service loads those frozen inputs with evidence and the selected public route,
+validates structured OpenRouter output, logs generation provenance, and upserts one
+reviewable primary draft per Campaign company.
+
+Deterministic domain modules own validation, recipient recommendation, export shaping,
+estimates, and state boundaries. Authentication, tenant isolation, persisted
+repositories, ordered migrations, provider adapters, and Trigger.dev are the retained
+foundations.
+
+Tenant isolation is verified at the database boundary with pgTAP against a disposable local Supabase stack. The suite impersonates separate authenticated owners, exercises campaign profile/strategy creation and the persisted outreach workflow, and asserts that cross-workspace reads and writes are blocked by RLS. CI starts a fresh database, applies ordered migrations, runs these tests, and discards it.
+
+AI-guided interaction is an orchestration layer above canonical objects. Validated
+`AiGuidedResponse` values may contain one focused question and allowlisted proposed
+changes. Server actions re-authorize the workspace, validate the proposal again, verify
+the base Company Profile or Strategy version, and create a new persistent version before
+recording an applied-change audit. Guided drafts and scoped conversations are separately
+discardable; replaying messages is never required to reconstruct business state.
+
+The reusable guided workspace owns selection/custom-input rendering and a live object
+summary. Company and Campaign contextual drawers receive only their active structured
+context. The initial campaign wizard persists a workspace-scoped draft and freezes the
+selected Offering plus campaign-only overrides at creation.
+
+Schema retirement was guarded by a service-role-only readiness audit and completed by migration `20260719000600`. Discovery, qualification, Strategy pages, and draft generation fail closed when canonical frozen context is missing.
+
+## Model routing boundary
+
+AI business services depend on logical roles declared in
+`src/lib/ai/model-roles.ts`. `model-registry.ts` owns initial paid defaults,
+`model-router.ts` resolves environment overrides/fallback/timeout policy, and the
+OpenRouter adapter owns one transport attempt, failure classification, and usage
+metadata. Trigger.dev owns durable retry/backoff. Attempt failures remain diagnostic;
+only task-level final-failure hooks persist terminal execution and Campaign Run state.
+
+Provider-backed services persist JSON-safe results into the logical
+`provider_executions` metadata before downstream domain writes. A retry with the same
+stable input hash reuses that result instead of calling OpenRouter, Tavily, or contact
+providers again. Completed executions also retain a compact result reference for
+idempotent task replay. Profile analysis versions are unique per logical execution,
+and completed AI audit rows are unique per execution, role, request hash, and status.
+
+Raw discovery candidates have a deterministic per-iteration identity. Overlapping
+queries upsert one candidate and append separate `discovery_candidate_evidence`
+records, preserving every source path and query. Canonical company resolution is a
+service-role database function that prefers normalized domains, falls back to exact
+name/country only when no domain exists, and removes race-created orphan rows.
+
+This boundary is provider-independent above the transport layer and is intentionally
+not coupled to an agent framework. Prompts, prompt versions, schema parsers, and
+business decisions remain in their existing AI service modules.
+
+Campaign pause and continue controls operate on durable orchestration. Pause is observed
+at iteration boundaries and preserves completed artifacts. Continue resumes the same
+Campaign Run through a stable Trigger idempotency key; it does not create a replacement
+run or repeat completed paid child tasks.
+
+The Campaign workspace follows the persisted workflow rather than a generic three-tab
+shell: Overview shows stage, counters, blockers, and controls; Market Analysis shows the
+versioned operational analysis; Discovery shows paths, iterations, classifications, and
+filtered-candidate reasons; Companies presents progressive qualification review;
+Contacts and Outreach retain the explicit post-approval workflows.

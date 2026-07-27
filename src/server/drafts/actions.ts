@@ -1,14 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import type { DraftStatus } from "@/types/domain";
-import { importSampleDrafts, updateDraft } from "./repository";
+import { updateDraft } from "./repository";
 import { createActivityEvent } from "@/server/activity/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 
 type UpdateDraftReviewInput = {
   body: string;
+  campaignId?: string;
   draftId: string;
   status: DraftStatus;
   subject: string;
@@ -49,6 +49,7 @@ export async function updateDraftReviewAction(input: UpdateDraftReviewInput) {
   revalidatePath("/dashboard");
   revalidatePath("/drafts");
   revalidatePath(`/drafts/${input.draftId}`);
+  if (input.campaignId) revalidatePath(`/campaigns/${input.campaignId}/outreach`);
 
   return {
     message:
@@ -58,18 +59,4 @@ export async function updateDraftReviewAction(input: UpdateDraftReviewInput) {
           ? "Draft rejected"
           : "Draft edits saved",
   };
-}
-
-export async function importSampleDraftsAction() {
-  const { currentWorkspace } = await getWorkspaceContext();
-
-  if (!currentWorkspace) {
-    redirect("/onboarding/workspace");
-  }
-
-  await importSampleDrafts(currentWorkspace.id);
-
-  revalidatePath("/dashboard");
-  revalidatePath("/drafts");
-  redirect("/drafts?message=sample-drafts-imported");
 }

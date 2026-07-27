@@ -6,7 +6,7 @@ import {
   discoverCampaignLeadsAction,
   updateCampaignStatusAction,
 } from "@/server/campaigns/actions";
-import type { CampaignStatus, DiscoveryProgress, DiscoveryReport } from "@/types/domain";
+import type { CampaignStatus, ResearchProgress } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
@@ -24,22 +24,14 @@ export function CampaignControls({
 }>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [isDiscovering, setIsDiscovering] = useState(status === "running");
   const [message, setMessage] = useState("");
   const [currentStatus, setCurrentStatus] = useState(status);
-  const [runReport, setRunReport] = useState<DiscoveryReport | null>(null);
-  const [progress, setProgress] = useState<DiscoveryProgress | null>({
-    contactEnrichedCount: 0,
-    desiredLeadCount,
-    leadCount: initialLeadCount,
-    qualificationAttemptedCount: 0,
-    qualifiedCount: 0,
-  });
+  const [progress, setProgress] = useState<ResearchProgress | null>(null);
   const [progressError, setProgressError] = useState("");
-  const isBusy = isPending || isDiscovering;
-  const finalReviewedCount = runReport
-    ? runReport.aiQualificationSuccesses.length + runReport.aiQualificationFailures.length
-    : 0;
+  const isWorking = isPending || isDiscovering;
+  const displayStatus =
+    progress?.status === "waiting_for_input" ? "needs input" : currentStatus;
 
   async function refreshProgress() {
     const response = await fetch(
@@ -49,14 +41,18 @@ export function CampaignControls({
 
     if (!response.ok) {
       const payload = (await response.json().catch(() => ({}))) as { error?: string };
-      throw new Error(
-        payload.error ?? `Progress request failed with ${response.status}`,
-      );
+      throw new Error(payload.error ?? `Progress request failed with ${response.status}`);
     }
 
-    const nextProgress = (await response.json()) as DiscoveryProgress;
+    const nextProgress = (await response.json()) as ResearchProgress;
     setProgress(nextProgress);
     setProgressError("");
+
+    if (shouldStopPolling(nextProgress)) {
+      setIsDiscovering(false);
+      synchronizeStatus(nextProgress, setCurrentStatus);
+      router.refresh();
+    }
 
     return nextProgress;
   }
@@ -86,8 +82,15 @@ export function CampaignControls({
             );
           }
 
-          setProgress((await nextProgress.json()) as DiscoveryProgress);
+          const payload = (await nextProgress.json()) as ResearchProgress;
+          setProgress(payload);
           setProgressError("");
+
+          if (shouldStopPolling(payload)) {
+            setIsDiscovering(false);
+            synchronizeStatus(payload, setCurrentStatus);
+            router.refresh();
+          }
         }
       } catch (error) {
         if (!cancelled) {
@@ -107,7 +110,7 @@ export function CampaignControls({
       cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [campaignId, isDiscovering]);
+  }, [campaignId, isDiscovering, router]);
 
   function updateStatus(
     nextStatus: Extract<CampaignStatus, "completed" | "paused" | "running">,
@@ -120,6 +123,13 @@ export function CampaignControls({
         });
 
         setCurrentStatus(nextStatus);
+        if (nextStatus === "running") {
+          setProgress(null);
+          setProgressError("");
+          setIsDiscovering(true);
+        } else if (nextStatus === "paused" || nextStatus === "completed") {
+          setIsDiscovering(false);
+        }
         setMessage(result.message);
         router.refresh();
       } catch (error) {
@@ -128,20 +138,27 @@ export function CampaignControls({
     });
   }
 
+  function stopCampaign() {
+    if (
+      !window.confirm(
+        "Stop this campaign run? Completed discovery results will be preserved.",
+      )
+    )
+      return;
+    updateStatus("completed");
+  }
+
   async function discoverLeads() {
     setIsDiscovering(true);
-    setRunReport(null);
-    setProgress({
-      contactEnrichedCount: 0,
-      desiredLeadCount,
-      leadCount: initialLeadCount,
-      qualificationAttemptedCount: 0,
-      qualifiedCount: 0,
-    });
+    setCurrentStatus("running");
+    setProgress(null);
     setProgressError("");
-    setMessage("Discovery running. Searching, saving, qualifying, and checking contacts...");
+    setMessage("Discovery queued. Waiting for the worker...");
 
     try {
+      const result = await discoverCampaignLeadsAction(campaignId);
+      setMessage(result.message);
+
       try {
         await refreshProgress();
       } catch (error) {
@@ -150,28 +167,11 @@ export function CampaignControls({
         );
       }
 
-      const result = await discoverCampaignLeadsAction(campaignId);
-      let finalProgress: DiscoveryProgress | null = null;
-
-      try {
-        finalProgress = await refreshProgress();
-      } catch (error) {
-        setProgressError(
-          error instanceof Error ? error.message : "Could not refresh progress",
-        );
-      }
-
-      setRunReport(result.report);
-      if (finalProgress) {
-        setProgress(finalProgress);
-      }
-      setMessage(result.message);
       startTransition(() => {
         router.refresh();
       });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Could not discover leads");
-    } finally {
       setIsDiscovering(false);
     }
   }
@@ -179,69 +179,110 @@ export function CampaignControls({
   return (
     <div className={styles.stack}>
       <div className={styles.filters}>
-        <Button disabled={isBusy} variant="primary" onClick={discoverLeads}>
-          Discover leads
+        <Button
+          disabled={
+            isPending ||
+            isDiscovering ||
+            (currentStatus !== "planning" && currentStatus !== "completed")
+          }
+          variant="primary"
+          onClick={discoverLeads}
+        >
+          {currentStatus === "planning"
+            ? "Start campaign and discover leads"
+            : "Discover more leads"}
         </Button>
-        <Button disabled={isBusy} onClick={() => updateStatus("paused")}>
+        <Button
+          disabled={isPending || currentStatus !== "running"}
+          onClick={() => updateStatus("paused")}
+        >
           Pause
         </Button>
-        <Button disabled={isBusy} onClick={() => updateStatus("running")}>
+        <Button
+          disabled={isPending || currentStatus !== "paused"}
+          onClick={() => updateStatus("running")}
+        >
           Continue
         </Button>
-        <Button disabled={isBusy} onClick={() => updateStatus("completed")}>
-          Complete
+        <Button
+          disabled={
+            isPending || (currentStatus !== "running" && currentStatus !== "paused")
+          }
+          onClick={stopCampaign}
+        >
+          Stop campaign
         </Button>
       </div>
       <Badge tone="accent">
-        {isBusy ? message || "Working..." : message || `Status: ${currentStatus}`}
+        {isWorking ? message || "Working..." : message || `Status: ${displayStatus}`}
       </Badge>
-      {progressError ? <Badge tone="warning">Progress polling: {progressError}</Badge> : null}
-      {isDiscovering || runReport ? (
+      {progressError ? (
+        <Badge tone="warning">Progress polling: {progressError}</Badge>
+      ) : null}
+      {isDiscovering || progress ? (
         <div className={styles.stack}>
           <ProgressRow
-            label="Leads saved"
-            value={
-              progress?.leadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              0
-            }
-            total={
-              progress?.desiredLeadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              desiredLeadCount
-            }
+            label="Run progress"
+            value={progress?.progress ?? 0}
+            total={100}
             pending={isDiscovering}
           />
           <ProgressRow
-            label="AI reviewed"
-            value={
-              progress?.qualificationAttemptedCount ??
-              finalReviewedCount
-            }
-            total={
-              progress?.leadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              initialLeadCount
-            }
+            label="Tasks completed"
+            value={progress?.completedTasks ?? 0}
+            total={progress?.totalTasks ?? 1}
             pending={isDiscovering}
           />
           <ProgressRow
-            label="Contact enrichment"
-            value={
-              progress?.contactEnrichedCount ??
-              runReport?.contactDiscovery.filter((item) => item.routesFound > 0).length ??
-              0
-            }
-            total={
-              progress?.leadCount ??
-              runReport?.leadsSavedBeforeAiQualification.length ??
-              initialLeadCount
-            }
+            label="Tasks failed"
+            value={progress?.failedTasks ?? 0}
+            total={progress?.totalTasks ?? 1}
             pending={isDiscovering}
           />
+          <span className={styles.secondaryText}>
+            {progress?.currentStep ?? "Queued"}{" "}
+            {progress?.runId ? `(${progress.runId.slice(0, 8)})` : ""}
+            {progress?.lastError ? ` - ${progress.lastError}` : ""}
+          </span>
+          {progress?.currentIteration ? (
+            <span className={styles.secondaryText}>
+              Discovery iteration {progress.currentIteration} / 5
+            </span>
+          ) : null}
+          <span className={styles.secondaryText}>
+            Qualified-company target: {progress?.companiesQualified ?? initialLeadCount} /{" "}
+            {desiredLeadCount}
+          </span>
+          <span className={styles.secondaryText}>
+            {progress?.candidatesDiscovered ?? 0} candidates discovered ·{" "}
+            {progress?.candidatesUnique ?? 0} unique ·{" "}
+            {progress?.candidatesClassified ?? 0} classified ·{" "}
+            {progress?.companiesEvaluated ?? 0} evaluated ·{" "}
+            {progress?.companiesQualified ?? 0} qualified
+          </span>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function synchronizeStatus(
+  progress: ResearchProgress,
+  setStatus: (status: CampaignStatus) => void,
+) {
+  if (progress.currentStep === "Campaign paused") setStatus("paused");
+  else if (progress.status === "completed" || progress.status === "cancelled")
+    setStatus("completed");
+}
+
+function shouldStopPolling(progress: ResearchProgress) {
+  return (
+    progress.status === "completed" ||
+    progress.status === "failed" ||
+    progress.status === "cancelled" ||
+    progress.status === "waiting_for_input" ||
+    progress.currentStep === "Campaign paused" ||
+    progress.currentStep === "Waiting for your targeting clarification"
   );
 }
 

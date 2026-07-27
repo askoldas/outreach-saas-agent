@@ -1,353 +1,90 @@
-# Architecture Decision Register
-
-## 1. Purpose
-
-This file records decisions that shape implementation. Codex must treat `accepted` decisions as binding until a later decision explicitly supersedes them.
-
-Statuses:
-
-- `proposed`: working direction, still open to change;
-- `accepted`: implementation should follow it;
-- `superseded`: replaced by a later decision;
-- `rejected`: considered and intentionally not selected;
-- `deferred`: not required for the current milestone.
-
-When changing an accepted decision, add a new entry explaining the reason and mark the previous entry as superseded. Do not silently rewrite history.
-
----
-
-## D-001: Horizontal product core
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-The product supports arbitrary B2B products and services. Medical sales is the first validation scenario only.
-
-Shared entities, prompts, scoring dimensions, UI components, and provider interfaces must remain sector-neutral.
-
-### Consequences
-
-- cross-sector fixtures are required;
-- medical-specific criteria belong in campaign data, not shared code;
-- generic names such as `offer`, `campaign`, `lead`, and `qualification` are preferred;
-- any niche optimization must enter through configurable strategy, source adapters, or optional modules.
-
----
-
-## D-002: Human approval before external outreach
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-The MVP researches leads and prepares drafts but does not automatically send outreach.
-
-Users may copy a draft or open a prefilled external email compose window. That action does not prove sending.
-
-### Consequences
-
-- no bulk-send endpoint in the MVP;
-- no automatic follow-up execution;
-- outreach drafts and sent messages remain distinct concepts;
-- integrated sending requires a future decision and separate security/compliance controls.
-
----
-
-## D-003: Modular TypeScript monorepo
-
-**Status:** superseded  
-**Date:** 2026-06-17
-
-### Decision
-
-Use a TypeScript monorepo organized into a web application, shared packages, and a separately deployable research worker.
-
-### Superseded by
-
-D-017 begins the MVP implementation as a single root Next.js application. Separate packages and workers remain possible later when real runtime requirements justify extraction.
-
-### Consequences
-
-- start modular rather than with many microservices;
-- enforce package dependency direction;
-- share domain and provider contracts across runtimes;
-- split services later only when deployment or scaling requirements justify it.
-
----
-
-## D-004: Next.js dashboard as primary interface
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Use a custom web dashboard as the primary user interface.
-
-Chat or Telegram may become optional notification or command surfaces later, but they are not the main interface for campaign lists, lead review, evidence, drafts, and status management.
-
-### Consequences
-
-- the product is designed around pages, forms, tables, filters, detail views, and activity history;
-- workflow state must be persistently visible outside a chat transcript;
-- the web application should be deployable on Vercel unless later constraints require a change.
-
----
-
-## D-005: Long-running research outside web requests
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Discovery, crawling, enrichment, qualification, and batch draft preparation run through durable background execution, not normal request-response handlers.
-
-### Consequences
-
-- research runs and checkpoints are persisted;
-- tasks are retry-safe and idempotent;
-- the worker can deploy separately from the web app;
-- selecting the concrete durable-job provider remains a separate proposed decision.
-
----
-
-## D-006: PostgreSQL through Supabase as initial system of record
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Use PostgreSQL hosted through Supabase for the initial application database, with Supabase Auth for initial authentication and row-level security as defense in depth.
-
-### Consequences
-
-- all schema changes use ordered migrations;
-- tenant ownership and RLS begin with the first migration;
-- service-role credentials remain server-side;
-- provider portability is less important than correct PostgreSQL modeling at this stage;
-- storage may use Supabase when document upload is introduced.
-
----
-
-## D-007: Evidence-backed prospect claims
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Prospect facts, inferences, unknowns, and conflicts are distinct data concepts. Qualification and outreach preserve references to supporting evidence.
-
-### Consequences
-
-- factual prospect claims require sources;
-- AI inference cannot be presented as confirmed fact;
-- the UI exposes evidence and uncertainty;
-- outreach generation receives selected evidence rather than unrestricted research notes.
-
----
-
-## D-008: Narrow AI tasks, not one unrestricted agent
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Implement AI capabilities as versioned, schema-validated tasks within deterministic workflows.
-
-### Consequences
-
-- prompts are task-specific product assets;
-- model output never directly authorizes access, billing, deletion, or sending;
-- workflow state is stored in the database, not model memory;
-- task results are validated before persistence;
-- model providers remain replaceable.
-
----
-
-## D-009: Provider adapters
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Search, crawling, registries, enrichment, models, queues, and future email integrations are accessed through internal provider contracts.
-
-### Consequences
-
-- provider SDK payloads do not become domain entities;
-- adapters normalize errors and usage metadata;
-- test fakes can replace live providers;
-- changing a provider should not require rewriting core campaign logic.
-
----
-
-## D-010: n8n is optional, not the core runtime
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Do not build the SaaS around n8n workflows. A future n8n connector may expose events or integrations, but the core product state and research orchestration remain in the application and durable worker.
-
-### Consequences
-
-- product behavior is versioned with application code;
-- customers do not need n8n accounts;
-- workflow state is represented by product entities;
-- n8n-specific nodes and credential models do not leak into the domain.
-
----
-
-## D-011: Package manager
-
-**Status:** accepted  
-**Date:** 2026-06-17
-
-### Decision
-
-Use `pnpm` for the root Next.js application.
-
-### Rationale
-
-It provides a locked dependency graph and efficient local installs without requiring a monorepo workspace.
-
-### Consequences
-
-- the root `package.json` declares the pnpm version;
-- the committed `pnpm-lock.yaml` is the install source of truth;
-- no `pnpm-workspace.yaml` is required in the current single-app phase.
-
----
-
-## D-012: Monorepo task orchestration
-
-**Status:** rejected  
-**Date:** 2026-06-17
-
-### Proposal
-
-Use Turborepo for build, lint, type-check, and test task orchestration.
-
-### Alternatives
-
-- plain `pnpm` recursive scripts;
-- Nx.
-
-### Decision
-
-Do not use Turborepo in the current interface-first single-app phase.
-
-### Consequences
-
-- root scripts call Next.js, TypeScript, ESLint, and Prettier directly;
-- task orchestration can be reconsidered if multiple runtime packages or CI cache needs appear.
-
----
-
-## D-017: Single root Next.js application for MVP interface
-
-**Status:** accepted  
-**Date:** 2026-06-18
-
-### Decision
-
-Begin implementation as one conventional Next.js application in the repository root.
-
-The first build target is a polished, responsive SaaS dashboard prototype using typed mock data. Internal organization uses `src/app`, `src/components`, `src/features`, `src/data/mock`, `src/lib`, and `src/types`.
-
-### Rationale
-
-The project currently needs a credible product interface and workflow prototype more than separate runtime packages. A root application reduces setup overhead, keeps iteration fast, and avoids speculative packages, workers, providers, and infrastructure.
-
-### Consequences
-
-- do not create `apps/`, `packages/`, `workers/`, Turborepo, Supabase, provider SDKs, queues, or future API routes in this phase;
-- feature folders are the internal module boundary;
-- mock data must be centralized and fictional;
-- backend services, shared packages, and a separate worker may be extracted later when persistence, authorization, provider adapters, or durable execution create real pressure;
-- the horizontal product requirement and human approval before outreach remain binding.
-
----
-
-## D-013: Durable job platform
-
-**Status:** proposed  
-**Date:** 2026-06-17
-
-### Proposal
-
-Evaluate Trigger.dev and Inngest for the first durable research worker. A direct queue and worker implementation remains an alternative.
-
-### Required capabilities
-
-- long-running step execution;
-- retries and backoff;
-- idempotency support;
-- cancellation;
-- concurrency controls;
-- observability;
-- local development;
-- separate worker deployment or equivalent durable execution;
-- acceptable cost and vendor terms.
-
-### Acceptance condition
-
-Create a focused decision before Milestone 5 implementation. Do not select only because a provider has a convenient demo.
-
----
-
-## D-014: Initial search provider
-
-**Status:** proposed  
-**Date:** 2026-06-17
-
-### Proposal
-
-Begin with one search API behind `SearchProvider`, selected based on result quality, source URLs, regional coverage, rate limits, cost, and terms. Tavily is an initial candidate because it was used in the earlier prototype discussion, but it is not accepted as a permanent dependency.
-
-### Acceptance condition
-
-Evaluate with the medical test campaign and at least one unrelated campaign. Preserve the adapter boundary regardless of selection.
-
----
-
-## D-015: Initial language-model provider
-
-**Status:** proposed  
-**Date:** 2026-06-17
-
-### Proposal
-
-Support one production-capable model adapter first, with a fake deterministic adapter for tests. OpenAI direct or OpenRouter may be evaluated, but the shared task layer should use internal model profiles rather than provider-specific names.
-
-### Acceptance condition
-
-Evaluate structured-output reliability, multilingual quality, cost, latency, data terms, and observability. Record the concrete selection when implementing Milestone 3.
-
----
-
-## D-016: Cross-tenant reuse of public research
-
-**Status:** deferred  
-**Date:** 2026-06-17
-
-### Decision
-
-Do not initially share normalized source content, company records, or contact enrichment across workspaces, even when the underlying data is public.
-
-### Rationale
-
-Tenant isolation, provenance, deletion, freshness, licensing, and product expectations should be clear before introducing a shared knowledge layer.
-
-### Consequences
-
-The MVP may perform duplicate public research across tenants. Optimize later through an explicit reviewed decision.
+# Architecture Decisions
+
+Only decisions that govern the current implementation are retained here. Migration history and completed refactor passes are recorded in `OPPTIUM_REFACTOR_PLAN.md`.
+
+## Product and safety
+
+- Opptium is a horizontal B2B platform. Sector-specific assumptions belong in Company Profile or Campaign Strategy data, not shared code.
+- The product ends at human-reviewed drafts and CSV export. It does not send email, create mailbox drafts, run follow-ups, or infer that exported outreach was sent.
+- Prospect facts require evidence. Facts, inferences, unknowns, and conflicts remain distinct.
+
+## Runtime and persistence
+
+- Use one root Next.js application with Trigger.dev Cloud for durable execution.
+- Supabase PostgreSQL and Auth are the system of record. Tenant-owned data is workspace-scoped and protected by RLS.
+- Long-running discovery, analysis, enrichment, qualification, and batch draft generation run as retry-safe Trigger.dev tasks, never inside normal web request lifetimes.
+- Campaign Agent progress is persisted as structured Campaign Run checkpoints. Model
+  conversation history is not authoritative workflow state.
+- Adaptive Campaign Agent iterations must use separate provider execution and usage
+  records. Reusing a completed paid execution for another iteration is prohibited.
+- Every successful Campaign Agent planning call is linked to its iteration execution
+  through an `ai_requests` audit record before provider-backed discovery begins.
+- Ordered migrations are append-only. Applied migrations are not rewritten.
+- The new project starts from `supabase/baseline/`. Files under
+  `supabase/migrations-legacy/` reconstruct only the locked legacy schema and must not
+  be applied to the new project.
+
+## Canonical product model
+
+- The user-facing and persistence model is Company Profile → Campaign → immutable Campaign Strategy → Research → Leads → Approved Companies → Contacts → Drafts → Export.
+- Campaign creation freezes an immutable Company Profile snapshot. Research runs freeze the exact Strategy version they use.
+- The former Offer table and duplicated campaign strategy columns were retired by guarded migration `20260719000600`; application fallbacks to them are prohibited.
+- Draft tasks freeze Company Profile and Strategy references and may use only saved lead evidence and the selected public recipient route.
+- Campaign creation asks geography first, then uses `campaign_planning` to propose an
+  Offering and target client. The original proposal and confirmed brief are persisted
+  separately; campaign adjustments never mutate Company Profile.
+- Preferred outreach language controls generated messages only. Discovery languages are
+  derived independently from the target market and persisted on Campaign Strategy.
+- Market adjustments are immutable Campaign Strategy revisions. Saving a revision
+  atomically synchronizes the Campaign targeting fields and confirmed brief; active runs
+  remain frozen and must be paused before a revision can be saved.
+- Market analysis means understanding where and how to search. Discovery collects raw
+  candidates. Classification cheaply removes obvious bad candidates. Evaluation deeply
+  judges fit with evidence. Only promising and policy-selected possible candidates may
+  be evaluated.
+- Discovery is bounded to five iterations, ten queries per iteration, and fifty results
+  per query. Continuation is deterministic; there is no unrestricted agent loop.
+
+## Providers and AI
+
+- Tavily is the current public-search and contact-enrichment provider; OpenRouter is the current model gateway. Both remain behind internal adapters.
+- Paid task-specific model configuration replaces free models as the production
+  direction. Phase 1 records the registry without changing current AI transport.
+- AI work is narrow, prompt-versioned, schema-validated, and provenance-logged. Model output cannot authorize access, spending, deletion, or sending.
+- Deterministic code owns authorization, validation, state transitions, deduplication, recipient recommendation, usage estimates, and CSV shaping.
+- AI guidance is scoped to one active Company, Offering, or Campaign. Guided drafts and conversations are not sources of truth; validated proposals require deterministic, version-checked application to canonical objects.
+- Provider calls are excluded from deterministic browser CI; adapter, schema, Trigger
+  service, and saved-fixture boundaries provide coverage.
+
+## Testing and delivery
+
+- The default gates are formatting, lint, strict type checking, unit/contract tests, and production build.
+- Disposable Supabase tests verify migrations, RLS, tenant isolation, and persisted workflow invariants.
+- Playwright against disposable Supabase covers the locked journey through authenticated historical export download.
+- `pnpm` is the package manager. The application remains deployable on Vercel and uses
+  Trigger.dev Cloud for durable execution. Railway is not part of the approved MVP
+  stack.
+
+## Explicitly deferred
+
+- Paid-operation budget reservations, configurable monetary campaign ceilings, and
+  remaining-budget gates are deferred. Existing hard execution-volume ceilings remain
+  mandatory.
+- Paid enrichment vendors, deep crawling, document uploads, production billing, CRM integrations, and cross-tenant reuse of public research.
+- Contact enrichment remains an optional/deferred stage until an external contact data
+  provider is connected. Discovery and qualification must remain usable without it.
+- Any sending or mailbox integration requires a new accepted decision plus compliance, suppression, consent, and audit design.
+
+## Task-specific paid models
+
+- OpenRouter remains the provider-neutral gateway.
+- Business functions select a `ModelRole`, never a raw model ID.
+- The initial high-impact default is `anthropic/claude-sonnet-4.6`.
+- The initial economical and critical-fallback model is `openai/gpt-5-mini`.
+- Free models and moving aliases are prohibited in production routing.
+- Fallback is explicit and auditable; it is not used to override a valid business
+  result.
+- OpenRouter-reported USD cost is retained as provider cost. Product credits and any
+  future customer billing remain separate.
+- The current transport and schema parsers remain in place. Vercel AI SDK can later
+  replace transport without changing the logical role registry.

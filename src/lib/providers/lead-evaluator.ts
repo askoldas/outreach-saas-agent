@@ -48,9 +48,13 @@ async function generateAndParseEvaluation(campaign: Campaign, result: SearchResu
 
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
-      const content = await generateText(buildEvaluationMessages(campaign, result, attempt), {
-        taskName: "lead qualification",
-      });
+      const content = await generateText(
+        buildEvaluationMessages(campaign, result, attempt),
+        {
+          role: "company_qualification",
+          taskName: "lead qualification",
+        },
+      );
 
       return parseEvaluation(content);
     } catch (error) {
@@ -63,7 +67,11 @@ async function generateAndParseEvaluation(campaign: Campaign, result: SearchResu
     : new Error("AI lead qualification failed.");
 }
 
-function buildEvaluationMessages(campaign: Campaign, result: SearchResult, attempt: number) {
+function buildEvaluationMessages(
+  campaign: Campaign,
+  result: SearchResult,
+  attempt: number,
+) {
   return [
     {
       role: "system" as const,
@@ -144,7 +152,8 @@ function mapEvaluatedLead(
 }
 
 function parseEvaluation(content: string): RawEvaluationResponse {
-  const json = content.match(/\{[\s\S]*\}/)?.[0] ?? content.match(/\[[\s\S]*\]/)?.[0] ?? content;
+  const json =
+    content.match(/\{[\s\S]*\}/)?.[0] ?? content.match(/\[[\s\S]*\]/)?.[0] ?? content;
 
   try {
     const parsed = JSON.parse(json) as RawEvaluationResponse | RawEvaluatedLead[];
@@ -164,7 +173,7 @@ function parseEvaluation(content: string): RawEvaluationResponse {
     return { leads: [] };
   } catch {
     throw new Error(
-      "OpenRouter did not return the required JSON lead evaluation. The selected model may not support reliable structured output for this prompt; choose another OPENROUTER_MODEL or retry with a stronger model.",
+      "OpenRouter did not return the required JSON lead evaluation. The company_qualification route may not support reliable structured output for this prompt; review OPENROUTER_MODEL_COMPANY_QUALIFICATION.",
     );
   }
 }

@@ -3,24 +3,29 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
+import { BrandLogo } from "@/components/brand/BrandLogo";
 import type { Workspace } from "@/server/workspaces/types";
 import styles from "./AppShell.module.css";
 
 const navItems = [
-  { href: "/dashboard", label: "Overview" },
-  { href: "/offers", label: "Offers" },
+  { href: "/company-profile", label: "Your Company" },
   { href: "/campaigns", label: "Campaigns" },
   { href: "/leads", label: "Leads" },
-  { href: "/drafts", label: "Outreach drafts" },
+  { href: "/sequences", label: "Sequences" },
+] as const;
+
+const footerItems = [
+  { href: "/usage", label: "Usage & Credits" },
   { href: "/settings", label: "Settings" },
+  { href: "/help", label: "Help" },
 ] as const;
 
 const titleByPath = [
-  { prefix: "/dashboard", title: "Overview", context: "Pipeline health" },
-  { prefix: "/offers", title: "Offers", context: "Seller knowledge" },
+  { prefix: "/company-profile", title: "Your Company", context: "Seller knowledge" },
   { prefix: "/campaigns", title: "Campaigns", context: "Market strategy" },
-  { prefix: "/leads", title: "Leads", context: "Review queue" },
-  { prefix: "/drafts", title: "Outreach drafts", context: "Human approval" },
+  { prefix: "/leads", title: "Leads", context: "Companies and contacts" },
+  { prefix: "/sequences", title: "Sequences", context: "Prepared outreach" },
+  { prefix: "/usage", title: "Usage & Credits", context: "Cost visibility" },
   { prefix: "/settings", title: "Settings", context: "Workspace controls" },
 ] as const;
 
@@ -38,13 +43,13 @@ export function AppShell({
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const page = useMemo(
-    () => titleByPath.find((item) => pathname.startsWith(item.prefix)) ?? titleByPath[0],
+    () =>
+      titleByPath.find((item) => pathname.startsWith(item.prefix)) ?? {
+        title: "Opptium",
+        context: "Workspace",
+      },
     [pathname],
   );
-
-  if (pathname.startsWith("/auth")) {
-    return <main className={styles.authPage}>{children}</main>;
-  }
 
   return (
     <div className={styles.shell}>
@@ -128,7 +133,7 @@ export function AppShell({
             >
               N
             </button>
-            <form action="/auth/sign-out" method="post">
+            <form action="/logout" method="post">
               <button className={styles.avatarButton} type="submit" aria-label="Sign out">
                 {getInitials(userEmail)}
               </button>
@@ -152,9 +157,8 @@ function SidebarContent({
 }>) {
   return (
     <div className={styles.sidebarInner}>
-      <Link className={styles.wordmark} href="/dashboard" onClick={onNavigate}>
-        <span>OSA</span>
-        <strong>Outreach Agent</strong>
+      <Link className={styles.wordmark} href="/campaigns" onClick={onNavigate}>
+        <BrandLogo className={styles.logo} priority />
       </Link>
       <nav className={styles.nav}>
         {navItems.map((item) => {
@@ -172,12 +176,28 @@ function SidebarContent({
           );
         })}
       </nav>
+      <nav className={styles.footerNav} aria-label="Workspace navigation">
+        {footerItems.map((item) => {
+          const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+          return (
+            <Link
+              key={item.href}
+              className={active ? styles.utilityActive : styles.utilityLink}
+              href={item.href}
+              onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </nav>
       <div className={styles.sidebarNote}>
         <span>{currentWorkspace ? "Workspace" : "Setup needed"}</span>
         <p>
           {currentWorkspace
             ? `${currentWorkspace.name} owns tenant data for this session.`
-            : "Create a workspace before replacing mock business records."}
+            : "Create a workspace to begin configuring Company Profile knowledge."}
         </p>
       </div>
     </div>

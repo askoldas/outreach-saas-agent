@@ -1,0 +1,12 @@
+{
+  "promptVersion": "company-profile-website-v3-grouped",
+  "inputSchema": "structured public website sources plus current profile",
+  "expectedOutputSchema": "CompanyProfileAnalysis",
+  "requiredEvidencePreservation": ["source URL", "explicit commercial facts"],
+  "requiredStatusConstraints": ["draft", "needs_input", "ready"],
+  "prohibitedUnsupportedClaims": [
+    "invented certifications",
+    "invented customers",
+    "invented metrics"
+  ]
+}

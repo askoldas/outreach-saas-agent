@@ -4,16 +4,12 @@
   min-height: 100vh;
 }
 
-.authPage {
-  min-height: 100vh;
-}
-
 .sidebar {
   position: sticky;
   top: 0;
   height: 100vh;
-  color: #f8fbfb;
-  background: var(--color-sidebar);
+  color: var(--color-surface-brand-text);
+  background: var(--color-surface-brand);
 }
 
 .sidebarInner {
@@ -30,28 +26,25 @@
   min-height: 44px;
   margin-bottom: var(--space-8);
 }
-
-.wordmark span {
-  display: grid;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border: 1px solid rgb(255 255 255 / 0.18);
-  border-radius: var(--radius-md);
-  background: rgb(255 255 255 / 0.09);
-  color: #dff3f1;
-  font-size: 0.8rem;
-  font-weight: 800;
-}
-
-.wordmark strong {
-  font-size: 1rem;
-  letter-spacing: 0;
+.logo {
+  width: 132px;
+  height: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
 }
 
 .nav {
   display: grid;
   gap: var(--space-2);
+}
+
+.footerNav {
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-5);
+  margin-top: auto;
+  border-top: 1px solid rgb(255 255 255 / 0.12);
 }
 
 .navLink,
@@ -63,29 +56,52 @@
   border-radius: var(--radius-sm);
   color: var(--color-sidebar-muted);
   font-weight: 650;
+  font-size: 1rem;
 }
 
 .navActive {
-  color: #ffffff;
+  color: var(--color-text-inverse);
   background: rgb(255 255 255 / 0.12);
   box-shadow: inset 3px 0 0 var(--color-accent);
 }
 
 .navLink:hover {
-  color: #ffffff;
+  color: var(--color-text-inverse);
   background: rgb(255 255 255 / 0.08);
+}
+
+.utilityLink,
+.utilityActive {
+  display: flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--color-sidebar-muted);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.utilityActive {
+  color: var(--color-surface-brand-text);
+  background: rgb(255 255 255 / 0.07);
+}
+
+.utilityLink:hover {
+  color: var(--color-surface-brand-text);
+  background: rgb(255 255 255 / 0.05);
 }
 
 .sidebarNote {
   padding: var(--space-4);
-  margin-top: auto;
+  margin-top: var(--space-4);
   border: 1px solid rgb(255 255 255 / 0.12);
   border-radius: var(--radius-md);
   background: rgb(255 255 255 / 0.06);
 }
 
 .sidebarNote span {
-  color: #dff3f1;
+  color: var(--color-surface-brand-text);
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 0.08em;
@@ -112,7 +128,7 @@
   min-height: 78px;
   padding: 0 var(--space-6);
   border-bottom: 1px solid var(--color-line);
-  background: rgb(246 242 236 / 0.88);
+  background: rgb(247 249 250 / 88%);
   backdrop-filter: blur(14px);
 }
 
@@ -184,7 +200,7 @@
 }
 
 .workspaceLink {
-  color: var(--color-accent-strong);
+  color: var(--color-link);
 }
 
 .smallButton {
@@ -203,8 +219,8 @@
 }
 
 .avatarButton {
-  background: var(--color-sidebar);
-  color: #ffffff;
+  background: var(--color-brand);
+  color: var(--color-brand-contrast);
 }
 
 .menuButton {
@@ -236,15 +252,15 @@
   position: absolute;
   inset: 0;
   border: 0;
-  background: rgb(23 33 38 / 0.42);
+  background: rgb(13 48 66 / 42%);
 }
 
 .drawer {
   position: relative;
   width: min(84vw, 310px);
   height: 100%;
-  color: #ffffff;
-  background: var(--color-sidebar);
+  color: var(--color-surface-brand-text);
+  background: var(--color-surface-brand);
   box-shadow: var(--shadow-md);
 }
 

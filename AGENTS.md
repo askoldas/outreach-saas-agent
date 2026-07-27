@@ -4,11 +4,11 @@ This file defines repository-wide instructions for Codex and other coding agents
 
 ## 1. Mission
 
-Build a horizontal, multi-tenant SaaS that helps businesses turn their products or services into researched B2B prospecting campaigns.
+Build Opptium, a horizontal, multi-tenant SaaS that turns Company Profile knowledge and a natural-language campaign brief into researched B2B prospecting work.
 
 The system must:
 
-1. understand a seller's offer;
+1. maintain reusable seller knowledge in a Company Profile;
 2. help define an ideal customer and campaign;
 3. choose suitable public research sources;
 4. discover and deduplicate candidate companies;
@@ -37,7 +37,7 @@ Treat accepted decisions in `docs/DECISIONS.md` as binding. When implementation 
 
 ## 3. Current phase
 
-The repository is currently in an interface-first prototype phase. Build inside the single root Next.js application unless a later accepted decision explicitly extracts another runtime or package.
+The repository is a persisted MVP implemented as one root Next.js application plus a separately runnable durable worker. Keep feature and worker boundaries inside this repository unless a later accepted decision explicitly extracts another package.
 
 When no application scaffold or command exists yet, do not invent commands in documentation or claim that checks were run.
 
@@ -74,8 +74,8 @@ Avoid broad refactors during feature work unless the refactor is required for co
 ### Required boundaries
 
 - `Workspace` owns tenant data.
-- `Offer` describes what the customer sells.
-- `Campaign` describes a market-search objective for one offer.
+- `CompanyProfile` is the user-facing source of reusable seller knowledge.
+- `Campaign` describes a market-search objective and freezes the relevant Company Profile/strategy version.
 - `Lead` is a candidate company inside a campaign.
 - `Source` stores evidence used for claims.
 - `Qualification` stores scored conclusions and reasoning.
@@ -136,8 +136,8 @@ Avoid broad refactors during feature work unless the refactor is required for co
 
 ## 11. Outreach safety
 
-- The MVP prepares drafts; the user approves and sends externally.
-- A compose-in-email-client action is allowed, but it must not falsely mark a message as sent.
+- The product prepares drafts for review and CSV export outside Opptium.
+- Mailbox compose, sending, follow-ups, and reply detection are outside the locked MVP boundary.
 - Sending integrations added later require explicit user action, audit records, suppression handling, and compliance review.
 - Respect opt-outs and suppression lists.
 - Do not generate deceptive identities, fake familiarity, or unsupported personalization.

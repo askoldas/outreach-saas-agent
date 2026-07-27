@@ -1,0 +1,135 @@
+{
+  "minimumPrecision": 0.9,
+  "minimumRecall": 0.85,
+  "cases": [
+    {
+      "id": "industrial-company",
+      "expectedEligible": true,
+      "query": "industrial automation Latvia",
+      "title": "North Controls",
+      "url": "https://north-controls.example/",
+      "content": "We manufacture industrial control systems for factories."
+    },
+    {
+      "id": "medical-company",
+      "expectedEligible": true,
+      "query": "medical equipment Italy",
+      "title": "Medica Instruments",
+      "url": "https://medica-instruments.example/about-us",
+      "content": "Manufacturer of diagnostic equipment for hospitals."
+    },
+    {
+      "id": "software-contact",
+      "expectedEligible": true,
+      "query": "B2B software Estonia",
+      "title": "Comply Cloud",
+      "url": "https://comply-cloud.example/contact",
+      "content": "Contact our enterprise compliance software team."
+    },
+    {
+      "id": "consultancy-home",
+      "expectedEligible": true,
+      "query": "engineering consultancy Sweden",
+      "title": "Nordic Engineering",
+      "url": "https://nordic-engineering.example/",
+      "content": "Engineering consultancy for industrial companies."
+    },
+    {
+      "id": "directory",
+      "expectedEligible": false,
+      "query": "manufacturers directory",
+      "title": "European Manufacturers",
+      "url": "https://www.europages.com/companies/manufacturers.html",
+      "content": "Browse suppliers and manufacturers."
+    },
+    {
+      "id": "association",
+      "expectedEligible": false,
+      "query": "association members",
+      "title": "Medical Association Members",
+      "url": "https://medtech-association.example/members",
+      "content": "Association member list and resources."
+    },
+    {
+      "id": "news",
+      "expectedEligible": false,
+      "query": "investment news",
+      "title": "Factory investment",
+      "url": "https://industry-news.example/news/factory-investment",
+      "content": "Article covering a factory investment."
+    },
+    {
+      "id": "social",
+      "expectedEligible": false,
+      "query": "software firms",
+      "title": "Example Software",
+      "url": "https://www.linkedin.com/company/example-software",
+      "content": "Company profile on LinkedIn."
+    },
+    {
+      "id": "job",
+      "expectedEligible": false,
+      "query": "automation hiring",
+      "title": "Automation Engineer",
+      "url": "https://automation.example/careers/engineer",
+      "content": "Job opening. Join our team."
+    },
+    {
+      "id": "marketplace",
+      "expectedEligible": false,
+      "query": "industrial sensors",
+      "title": "Industrial Sensor",
+      "url": "https://www.amazon.example/industrial-sensor",
+      "content": "Add to cart from a marketplace seller."
+    },
+    {
+      "id": "registry",
+      "expectedEligible": false,
+      "query": "registered manufacturers",
+      "title": "Company register",
+      "url": "https://registry.example.gov/company/123",
+      "content": "Government company registry record."
+    },
+    {
+      "id": "pdf",
+      "expectedEligible": false,
+      "query": "market report",
+      "title": "Industry report",
+      "url": "https://reports.example/industry.pdf",
+      "content": "Market participant report."
+    },
+    {
+      "id": "wikipedia-company-article",
+      "expectedEligible": false,
+      "query": "pharmacy chains Lithuania",
+      "title": "Euroapotheca",
+      "url": "https://en.wikipedia.org/wiki/Euroapotheca",
+      "content": "An encyclopedia article describing the pharmacy group."
+    },
+    {
+      "id": "company-data-profile",
+      "expectedEligible": false,
+      "query": "pharmaceutical distributor Lithuania",
+      "title": "Example Pharma company profile",
+      "url": "https://rocketreach.co/example-pharma-profile",
+      "content": "Company contact and employee database profile."
+    },
+    {
+      "id": "map-listing",
+      "expectedEligible": false,
+      "query": "Camelia pharmacy Lithuania",
+      "title": "Camelia Vaistine",
+      "url": "https://yandex.com/maps/org/camelia/",
+      "content": "Map listing for a pharmacy branch."
+    }
+  ],
+  "directoryCases": [
+    {
+      "id": "directory-external-links",
+      "sourceUrl": "https://www.europages.com/companies/automation.html",
+      "query": "automation manufacturers Europe",
+      "content": "Alpha https://alpha-controls.example/about\nBeta https://beta-medical.example/contact\nDuplicate https://alpha-controls.example/products\nSocial https://linkedin.com/company/alpha",
+      "expectedDomains": ["alpha-controls.example", "beta-medical.example"]
+    }
+  ]
+}

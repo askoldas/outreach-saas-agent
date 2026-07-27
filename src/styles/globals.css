@@ -1,28 +1,99 @@
 :root {
   color-scheme: light;
-  --color-bg: #f6f2ec;
-  --color-bg-soft: #fbf8f3;
-  --color-surface: #ffffff;
-  --color-surface-tint: #f8fbfb;
-  --color-sidebar: #172126;
-  --color-sidebar-muted: #9fb0b7;
-  --color-ink: #1f292e;
-  --color-muted: #65737c;
-  --color-subtle: #8b989f;
-  --color-line: #dce3e2;
-  --color-line-strong: #c8d4d2;
-  --color-accent: #107f83;
-  --color-accent-strong: #0b6265;
-  --color-accent-soft: #dff3f1;
-  --color-blue: #2563eb;
-  --color-warning: #b7791f;
-  --color-warning-soft: #fff4d7;
-  --color-danger: #b42318;
-  --color-danger-soft: #fde8e5;
-  --color-success: #177245;
-  --color-success-soft: #e0f4e9;
-  --shadow-sm: 0 1px 2px rgb(31 41 46 / 0.06);
-  --shadow-md: 0 14px 35px rgb(31 41 46 / 0.08);
+
+  /* Primitive cyan palette */
+  --cyan-700: #075f78;
+  --cyan-600: #087f9c;
+  --cyan-500: #0b9abd;
+  --cyan-300: #70bdd0;
+  --cyan-200: #b8eef4;
+  --cyan-100: #ddf2f6;
+
+  /* Primitive jade palette */
+  --jade-700: #248a64;
+  --jade-600: #31ad7c;
+  --jade-500: #43c995;
+  --jade-300: #8be2c2;
+  --jade-100: #e1f8ef;
+
+  /* Neutral palette */
+  --neutral-950: #0d3042;
+  --neutral-900: #13242c;
+  --neutral-600: #63747c;
+  --neutral-500: #87969c;
+  --neutral-300: #b8ccd1;
+  --neutral-200: #d6e1e5;
+  --neutral-100: #eff3f5;
+  --neutral-50: #f7f9fa;
+  --white: #ffffff;
+
+  /* Foundation */
+  --color-canvas: var(--neutral-50);
+  --color-surface: var(--white);
+  --color-surface-muted: var(--neutral-100);
+  --color-surface-raised: #f3f8f9;
+  --color-border: var(--neutral-200);
+  --color-border-strong: var(--neutral-300);
+  --color-text: var(--neutral-900);
+  --color-text-muted: var(--neutral-600);
+  --color-text-subtle: var(--neutral-500);
+  --color-text-inverse: var(--white);
+
+  /* Primary brand */
+  --color-brand: var(--cyan-600);
+  --color-brand-hover: var(--cyan-700);
+  --color-brand-active: #064f65;
+  --color-brand-bright: var(--cyan-500);
+  --color-brand-light: var(--cyan-300);
+  --color-brand-soft: var(--cyan-100);
+  --color-brand-contrast: var(--white);
+  /* Secondary brand accent */
+  --color-accent: var(--jade-500);
+  --color-accent-hover: var(--jade-600);
+  --color-accent-strong: var(--jade-700);
+  --color-accent-light: var(--jade-300);
+  --color-accent-soft: var(--jade-100);
+  --color-accent-contrast: var(--neutral-900);
+
+  /* Interactive states */
+  --color-link: var(--cyan-600);
+  --color-link-hover: var(--cyan-700);
+  --color-focus: var(--cyan-500);
+  --color-selected-background: var(--cyan-100);
+  --color-selected-border: var(--cyan-300);
+  --color-selected-text: var(--cyan-700);
+  /* Semantic states */
+  --color-success: #258267;
+  --color-success-soft: var(--jade-100);
+  --color-warning: #c27a16;
+  --color-warning-soft: #fff0d6;
+  --color-danger: #c5444f;
+  --color-danger-soft: #fbe7e9;
+  --color-info: var(--cyan-600);
+  --color-info-soft: var(--cyan-100);
+
+  /* Strong branded surfaces */
+  --color-surface-brand: var(--cyan-700);
+  --color-surface-brand-text: var(--white);
+  --color-surface-brand-muted-text: #c9e0e6;
+
+  --shadow-sm: 0 1px 2px rgb(13 48 66 / 5%), 0 2px 6px rgb(13 48 66 / 4%);
+  --shadow-md: 0 8px 24px rgb(13 48 66 / 8%);
+  --shadow-lg: 0 18px 48px rgb(13 48 66 / 12%);
+  --focus-ring: 0 0 0 3px rgb(11 154 189 / 24%);
+
+  /* Transitional aliases retained for existing component modules. */
+  --color-bg: var(--color-canvas);
+  --color-bg-soft: var(--color-surface-muted);
+  --color-surface-tint: var(--color-surface-raised);
+  --color-sidebar: var(--color-surface-brand);
+  --color-sidebar-muted: var(--color-surface-brand-muted-text);
+  --color-ink: var(--color-text);
+  --color-muted: var(--color-text-muted);
+  --color-subtle: var(--color-text-subtle);
+  --color-line: var(--color-border);
+  --color-line-strong: var(--color-border-strong);
+  --color-blue: var(--color-info);
   --radius-sm: 8px;
   --radius-md: 12px;
   --radius-lg: 18px;
@@ -36,6 +107,27 @@
   --font-sans:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
+  --text-caption: 0.75rem;
+  --text-table: 0.875rem;
+  --text-ui: 0.875rem;
+  --text-body: 0.9375rem;
+  --text-section-title: 1.125rem;
+  --text-page-title: 1.75rem;
+  --leading-caption: 1rem;
+  --leading-table: 1.25rem;
+  --leading-ui: 1.25rem;
+  --leading-body: 1.375rem;
+  --leading-section-title: 1.5rem;
+  --leading-page-title: 2.125rem;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --table-row-height: 3rem;
+  --table-cell-padding-x: 0.75rem;
+  --table-cell-padding-y: 0.5rem;
+  --control-height-compact: 2.25rem;
+  --control-height-default: 2.5rem;
 }
 
 * {
@@ -44,18 +136,19 @@
 
 html {
   min-width: 320px;
-  background: var(--color-bg);
+  color: var(--color-text);
+  background: var(--color-canvas);
   text-size-adjust: 100%;
 }
 
 body {
   min-height: 100vh;
   margin: 0;
-  color: var(--color-ink);
-  background: var(--color-bg);
+  color: var(--color-text);
+  background: var(--color-canvas);
   font-family: var(--font-sans);
-  font-size: 15px;
-  line-height: 1.5;
+  font-size: var(--text-body);
+  line-height: var(--leading-body);
 }
 
 button,
@@ -71,16 +164,16 @@ a {
 }
 
 a {
-  color: inherit;
+  color: var(--color-link);
   text-decoration: none;
 }
 
-button:focus-visible,
-a:focus-visible,
-input:focus-visible,
-select:focus-visible,
-textarea:focus-visible {
-  outline: 3px solid rgb(16 127 131 / 0.35);
+a:hover {
+  color: var(--color-link-hover);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-focus);
   outline-offset: 2px;
 }
 

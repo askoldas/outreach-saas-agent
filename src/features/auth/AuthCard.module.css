@@ -4,8 +4,8 @@
   min-height: 100vh;
   padding: var(--space-6);
   background:
-    radial-gradient(circle at top left, rgb(16 127 131 / 0.12), transparent 34rem),
-    var(--color-bg);
+    radial-gradient(circle at top left, rgb(11 154 189 / 12%), transparent 34rem),
+    var(--color-canvas);
 }
 
 .card {
@@ -22,15 +22,10 @@
 }
 
 .wordmark {
-  display: inline-grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
+  display: block;
+  width: 146px;
+  height: auto;
   margin-bottom: var(--space-4);
-  border-radius: var(--radius-md);
-  background: var(--color-sidebar);
-  color: #ffffff;
-  font-weight: 900;
 }
 
 .header h1,
@@ -78,6 +73,6 @@
 }
 
 .footerText a {
-  color: var(--color-accent-strong);
+  color: var(--color-link);
   font-weight: 800;
 }

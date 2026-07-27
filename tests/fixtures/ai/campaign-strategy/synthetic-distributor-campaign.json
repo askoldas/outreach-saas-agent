@@ -1,0 +1,8 @@
+{
+  "promptVersion": "campaign-strategy-v1",
+  "inputSchema": "campaign, frozen company profile, current strategy, instruction",
+  "expectedOutputSchema": "CampaignStrategyVersion",
+  "requiredEvidencePreservation": ["seller profile constraints", "campaign geography"],
+  "requiredStatusConstraints": ["ready"],
+  "prohibitedUnsupportedClaims": ["new seller capabilities", "unsupported target facts"]
+}

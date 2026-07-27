@@ -83,15 +83,28 @@ Cover:
 Keep the first suite small and focused on critical journeys:
 
 1. sign in and create a workspace;
-2. create and approve an offer;
-3. create and start a campaign with mocked providers;
+2. create and version a Company Profile;
+3. create a campaign and review its Strategy with provider adapters isolated;
 4. inspect a lead, evidence, and qualification;
 5. approve a lead and generate a draft;
 6. edit and approve a draft;
 7. open an external compose action without a false sent state;
 8. verify a user cannot access another workspace by changing a URL.
 
-Use browser tests only where browser and server behavior need to be tested together.
+Playwright provides the browser layer. The executable journey uses a disposable local
+Supabase stack and verifies unauthenticated routing, account sign-up/sign-in, workspace
+creation, Company Profile versioning, campaign creation, and Strategy review. It then
+uses the CI-only service-role boundary to seed synthetic worker-completed enrichment and
+draft records before exercising recipient acceptance, draft editing, export recording,
+and authenticated historical CSV download. Provider calls remain outside the default
+browser suite; Tavily and OpenRouter are tested at their adapter and worker boundaries.
+
+Run it after starting local Supabase and exporting its URL and keys:
+
+```bash
+pnpm exec playwright install chromium
+pnpm test:e2e
+```
 
 ## 3. AI task tests
 
@@ -160,6 +173,17 @@ Do not use large snapshots as a substitute for meaningful assertions, especially
 
 ## 7. Migration testing
 
+The new-project baseline is generated from `supabase/baseline/*.sql` with
+`node scripts/build-clean-baseline.mjs`. A normal local reset reads only
+`supabase/migrations/20260725000100_opptium_clean_baseline.sql`. Historical migration
+contracts read `supabase/migrations-legacy/` and do not imply those files should be
+applied to the new project.
+
+Before linked or remote database commands, run
+`node scripts/assert-safe-supabase-target.mjs`. It must fail unless the hosted URL
+and the Supabase CLI link both match the approved clean project
+`aqhuzmqzeipubxrxadyj`.
+
 For every migration change:
 
 1. apply all migrations to an empty database;
@@ -211,7 +235,7 @@ Once the scaffold exists, pull requests should run:
 - unit tests;
 - database migration and integration tests;
 - production build;
-- a minimal end-to-end suite when runtime cost is acceptable;
+- the minimal Playwright campaign-workflow suite against disposable Supabase;
 - dependency and secret scanning.
 
 The exact commands must be added only after the tools are installed and should remain synchronized with `package.json` and CI.
@@ -228,3 +252,26 @@ A change is complete when:
 - security and tenant impact were considered;
 - user-facing and architecture documentation is updated when needed;
 - checks actually run are reported accurately.
+
+Campaign workflow coverage additionally protects geography-before-proposal, strict
+Campaign Brief and market-plan schemas, raw candidate provenance before qualification,
+duplicate/exclusion classification gates, progressive counters, and bounded target,
+iteration, query, result, and marginal-yield stopping rules.
+
+Campaign navigation contract coverage verifies the responsive Overview, Market Analysis,
+Discovery, Companies, Contacts, and Outreach sections and ensures the Campaign root is a
+real stage overview rather than a redirect.
+
+The labeled synthetic discovery evaluation can be run independently with
+`pnpm test:discovery-quality`. It enforces minimum precision and recall for deterministic
+source eligibility and checks directory extraction against expected company domains.
+Add a fixture whenever a production-safe false positive or false negative is converted
+into a synthetic regression case.
+
+The same command also runs the permanent Olainfarm/Lithuania benchmark fixture. Its
+order-independent evaluator reports expected-company recall, accepted-company precision,
+raw and deduplicated candidate counts, duplicate rate, false positives/negatives, provider
+cost and request efficiency, plus coverage by category, country, discovery language, and
+source path. Candidate traces distinguish companies that were never discovered from those
+deduplicated or rejected during classification or qualification. The checked-in trace is
+deterministic; captured production-safe traces can be evaluated with the same framework.

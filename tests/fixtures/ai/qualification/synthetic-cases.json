@@ -1,0 +1,20 @@
+{
+  "promptVersion": "lead-evaluator-v1",
+  "inputSchema": "campaign, seller profile, public company evidence",
+  "expectedOutputSchema": "LeadEvaluation",
+  "requiredEvidencePreservation": ["source URL", "fit and disqualifying signals"],
+  "requiredStatusConstraints": ["qualified", "needs_review", "disqualified"],
+  "cases": [
+    "obvious strong fit",
+    "obvious non-fit",
+    "insufficient evidence",
+    "conflicting evidence",
+    "missing website",
+    "weak generic company description"
+  ],
+  "prohibitedUnsupportedClaims": [
+    "invented company activity",
+    "invented contact",
+    "invented private data"
+  ]
+}

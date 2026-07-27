@@ -1,313 +1,43 @@
-# Product Definition
+# Opptium Product Definition
 
-## 1. Product summary
+Opptium is a horizontal AI-assisted B2B prospecting and outbound-preparation platform. The locked journey is Company Profile → Campaign → Research → Leads → Approved Companies → Contacts → Outreach Drafts → Export.
 
-Outreach SaaS Agent is a horizontal AI-assisted B2B prospecting workspace.
+Company Profile holds reusable seller identity, products/services, capabilities, customer types, markets, differentiators, proof, approved claims, limitations, and sources. Missing information produces non-blocking warnings. Campaign creation starts with a natural-language brief and may use the full profile or focus on one proposition.
 
-A customer describes a product or service, chooses a target market, and receives a structured campaign containing researched companies, evidence-based qualification, public contact routes, and personalized outreach drafts for human review.
+Strategy is structured, editable, and stored as immutable numbered versions. Schema-validated AI refinement proposes a complete structured revision and is never itself the source of truth. A strategy used for research is frozen; later changes create a new version.
 
-The product is not an autonomous salesperson and does not promise to close deals. Its job is to reduce the manual work required to identify, understand, prioritize, and approach suitable business prospects.
+Research discovers, deduplicates, researches, and qualifies companies through durable work. Review begins only when the result set is stable. Fit Score is 0–100 with a descriptive band and separate confidence. Contactability and evidence quality are visible but do not change commercial fit.
 
-## 2. Product promise
+Lead review is campaign-local with Ready, Approved, Rejected, Excluded, and Research Issues views. Rows expand inline to show evidence, dimensions, public contacts, warnings, and notes. Approval records commercial relevance only; it does not spend enrichment credits or generate drafts.
 
-> Describe what you sell, choose a market, and receive researched B2B prospects with clear qualification evidence and ready-to-review outreach.
+Deep contact enrichment is explicit after approval and displays a credit estimate. Opptium recommends one primary recipient with fallbacks. Draft generation is explicit and batch-oriented, grounded in Company Profile knowledge, frozen strategy, prospect evidence, and recipient context.
 
-## 3. Horizontal product requirement
+The MVP ends at Outreach CSV and Lead Research CSV export. Automatic sending, mailbox draft creation, follow-ups, reply detection, CRM integrations, production billing, paid enrichment vendors, deep crawling, and document uploads are excluded.
 
-The product must support many B2B offers without sector-specific code paths in the shared core.
+The Usage page reports descriptive workspace funnel metrics from persisted product
+events. Response rate and willingness-to-pay are not inferred because the application
+does not send outreach or collect commercial research responses.
 
-Supported examples include:
+Current implementation status is maintained in `OPPTIUM_REFACTOR_PLAN.md`.
 
-- physical products;
-- wholesale and distribution;
-- industrial manufacturing capabilities;
-- professional services;
-- software and SaaS;
-- consulting and training;
-- maintenance and repair services;
-- subcontracting and partnership offers.
+## AI-guided setup
 
-Medical equipment and services are the first realistic test scenario. They must validate the generic system rather than define it.
+Company setup and Campaign creation use a hybrid guided model: one focused commercial
+decision, recommended structured choices, an Other/natural-language path, and a live
+summary of the persistent object. AI interpretations are rendered as validated proposed
+changes and materially important values require explicit Apply. The conversation is not
+the source of truth; Company Profile versions, campaign overrides, and Strategy versions
+remain authoritative and directly editable.
 
-## 4. Target users
+Company setup adapts around detected offerings and unresolved review questions. Campaign
+setup begins with a selected Offering, then captures objective, segment, markets, buyer
+personas, qualification, exclusions, and a reviewable discovery strategy. Campaign
+overrides do not mutate the master Company Profile.
 
-Initial users are small and medium B2B sales teams, founders, export managers, independent sales representatives, agencies, and manufacturers entering new markets.
+A completed Campaign setup consumes its guided draft. Opening Create campaign again
+starts at Offering selection and never silently reuses the prior Campaign's market,
+segment, or review step. Incomplete drafts may still be resumed.
 
-The first versions should work especially well for users who currently research prospects manually through search engines, directories, company websites, spreadsheets, and email drafts.
+Website analysis now classifies and groups related commercial items before review. Company setup normally asks a small set of decisions about offering structure, active prospecting propositions, markets, relationship types, commercial requirements, and genuine source conflicts. Optional wording and additional proof do not block publishing. “Improve profile structure” creates a new draft while retaining published campaigns and user-defined prospecting preferences.
 
-## 5. Core objects from the user's perspective
-
-### Workspace
-
-The customer's company account, team, billing context, settings, and data boundary.
-
-### Offer
-
-A reusable description of a product or service the customer wants to sell. A workspace may maintain several offers.
-
-### Campaign
-
-A specific prospecting objective combining one offer with geography, target customer characteristics, exclusions, language, and a desired outcome.
-
-### Lead
-
-A candidate company discovered for a campaign.
-
-### Research
-
-Collected public evidence about the lead and its likely fit.
-
-### Qualification
-
-A scored conclusion explaining whether and why the lead appears suitable.
-
-### Contact
-
-A public business contact route or publicly available professional contact relevant to the campaign.
-
-### Outreach draft
-
-A generated message grounded in approved seller information and prospect evidence. It remains a draft until the user takes an explicit external sending action.
-
-## 6. Main user journey
-
-### 6.1 Create workspace
-
-The user creates an account and a company workspace.
-
-Minimum information:
-
-- company name;
-- website, when available;
-- operating countries;
-- default language;
-- short company description.
-
-### 6.2 Add an offer
-
-The user may:
-
-- enter a product or service manually;
-- provide a relevant web page;
-- paste marketing or technical copy;
-- upload a brochure or catalogue later in the product roadmap.
-
-The system proposes a normalized Offer Profile containing:
-
-- concise summary;
-- category;
-- business problems solved;
-- main capabilities or features;
-- customer value;
-- likely buyer types;
-- likely use cases;
-- differentiators;
-- proof points and approved claims;
-- limitations and exclusions;
-- useful keywords and synonyms.
-
-The user reviews and approves the profile before it is used for outreach.
-
-### 6.3 Create campaign
-
-The user selects an offer and defines:
-
-- target country, region, or market;
-- desired company types;
-- relevant industries;
-- company size preferences, when known;
-- campaign objective, such as direct buyers, distributors, resellers, partners, or subcontracting clients;
-- exclusions;
-- desired lead count;
-- campaign and outreach language.
-
-### 6.4 Review proposed strategy
-
-Before discovery begins, the platform proposes:
-
-- target segments;
-- search terminology and local-language variants;
-- likely source categories;
-- qualification criteria;
-- exclusion criteria;
-- expected data limitations.
-
-The strategy is visible and editable. The user should understand how the campaign will search and qualify prospects.
-
-### 6.5 Run discovery and research
-
-The platform performs durable background work to:
-
-1. discover candidate companies;
-2. normalize and deduplicate them;
-3. visit allowed public sources;
-4. extract relevant facts;
-5. assess fit;
-6. find public contact routes;
-7. record diagnostics and source evidence.
-
-### 6.6 Review leads
-
-The user sees leads in a dashboard with filters, status, scores, warnings, evidence, and outreach readiness.
-
-Each lead should answer:
-
-- What does this company do?
-- Why might it fit this offer?
-- What evidence supports that conclusion?
-- What is uncertain or missing?
-- How can it be contacted publicly?
-- What outreach angle is appropriate?
-
-### 6.7 Approve or reject
-
-The user can approve, reject, archive, or request further research.
-
-Rejected leads should retain a reason so future searches can improve and avoid repeated unsuitable results.
-
-### 6.8 Prepare outreach
-
-For approved leads, the system produces:
-
-- suggested subject lines;
-- a primary email draft;
-- a shorter alternative;
-- an optional follow-up draft;
-- a summary of the evidence used;
-- warnings when personalization rests on inference rather than confirmed fact.
-
-### 6.9 External sending
-
-The MVP does not send email automatically.
-
-The user may copy the draft or open a prefilled compose window in an email client. This action does not prove delivery and must not mark the message as sent automatically.
-
-## 7. Lead lifecycle
-
-Recommended initial statuses:
-
-- `discovered`
-- `researching`
-- `needs_review`
-- `qualified`
-- `rejected`
-- `approved`
-- `draft_ready`
-- `contacted_manual`
-- `replied`
-- `converted`
-- `archived`
-
-These statuses may evolve. Transitions should be explicit and auditable rather than inferred from UI state.
-
-## 8. Qualification model
-
-The platform should evaluate leads across reusable dimensions:
-
-- industry fit;
-- need or use-case fit;
-- company-type fit;
-- geographic fit;
-- commercial plausibility;
-- contactability;
-- evidence quality;
-- exclusion risk.
-
-Each dimension should contain:
-
-- score;
-- confidence;
-- short explanation;
-- supporting source references;
-- distinction between confirmed facts and inference.
-
-A total score is useful for sorting, but the user must be able to inspect the contributing reasons.
-
-## 9. Evidence model
-
-The platform must distinguish:
-
-- `fact`: directly supported by a source;
-- `inference`: a reasoned conclusion based on one or more facts;
-- `unknown`: required information was not found;
-- `conflict`: sources disagree or appear outdated.
-
-No prospect-specific factual claim should appear in outreach unless it is supported by stored evidence.
-
-## 10. MVP scope
-
-### Included
-
-- authentication and workspace creation;
-- reusable offer profiles;
-- campaign creation;
-- AI-assisted campaign strategy;
-- at least one web-search provider;
-- public company-site research;
-- lead normalization and deduplication;
-- evidence storage;
-- reusable qualification scoring;
-- public general contact discovery;
-- lead review dashboard;
-- outreach draft generation;
-- manual approval;
-- copy and open-in-email-client actions;
-- CSV export;
-- run diagnostics and basic usage tracking.
-
-### Excluded
-
-- automatic bulk sending;
-- autonomous follow-up execution;
-- CRM replacement;
-- LinkedIn account automation;
-- scraping behind authentication;
-- automatic negotiation;
-- voice agent;
-- browser extension;
-- complex workflow builder;
-- white-label agency mode;
-- advanced billing tiers before product validation.
-
-## 11. Quality bar
-
-A useful result is not merely a company name and email address.
-
-A lead is ready for review when the system provides:
-
-- a normalized company identity;
-- a working source trail;
-- a concise business description;
-- a clear fit explanation;
-- visible uncertainty;
-- a usable contact route or an explicit absence of one;
-- no duplicate within the campaign;
-- no unsupported personalization.
-
-## 12. Success indicators
-
-Early product validation should measure:
-
-- percentage of discovered candidates accepted as relevant;
-- percentage of qualified leads with sufficient evidence;
-- duplicate rate;
-- percentage with a usable public contact route;
-- time saved compared with manual research;
-- user edits required before outreach is usable;
-- approval and rejection reasons;
-- cost per reviewed lead;
-- provider and workflow failure rates.
-
-Reply, meeting, and conversion rates matter later, but they are influenced by the seller's offer, reputation, deliverability, and sales process. The platform should not claim sole credit for them.
-
-## 13. Non-goals
-
-The product is not:
-
-- a fully autonomous sales representative;
-- an unrestricted web scraper;
-- a source of guaranteed verified personal data;
-- a mass-email spam system;
-- a replacement for legal or compliance review;
-- a universal CRM;
-- a medical-only sales product.
+Responsibility boundary: Company Profile explains the stable business and can be used immediately after successful analysis. It does not require prospecting markets, buyer-persona confirmation, campaign qualification, or messaging decisions. Campaign creation owns the selected offering, objective, relationship type, target markets, segment, buyer roles, qualification, exclusions, and discovery strategy. Campaign choices remain campaign-local unless the user explicitly selects “Save as offering defaults”; operating-market facts are never overwritten.

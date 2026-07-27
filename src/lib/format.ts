@@ -4,7 +4,6 @@ import type {
   DraftStatus,
   EvidenceKind,
   LeadStatus,
-  OfferStatus,
 } from "@/types/domain";
 
 export function statusLabel(value: string) {
@@ -29,10 +28,9 @@ export function confidenceTone(confidence: Confidence) {
 }
 
 export function statusTone(
-  status: OfferStatus | CampaignStatus | LeadStatus | DraftStatus | EvidenceKind,
+  status: CampaignStatus | LeadStatus | DraftStatus | EvidenceKind,
 ) {
   switch (status) {
-    case "active":
     case "approved":
     case "completed":
     case "draft_ready":

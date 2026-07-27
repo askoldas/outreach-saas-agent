@@ -2,7 +2,7 @@
   "name": "outreach-saas-agent",
   "version": "0.1.0",
   "private": true,
-  "description": "Interface-first prototype for a horizontal AI-assisted B2B prospecting platform.",
+  "description": "AI-assisted B2B prospecting and outbound-preparation platform.",
   "packageManager": "pnpm@10.13.1",
   "engines": {
     "node": ">=22.18.0"
@@ -11,6 +11,17 @@
     "dev": "next dev",
     "build": "next build",
     "lint": "eslint .",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
+    "test:discovery-quality": "node --experimental-strip-types --test src/lib/discovery/quality-evaluation.test.ts src/lib/discovery/benchmark.test.ts",
+    "test:e2e": "playwright test",
+    "test:db": "supabase test db",
+    "db:baseline:build": "node scripts/build-clean-baseline.mjs",
+    "db:safety-check": "node scripts/assert-safe-supabase-target.mjs",
+    "db:types": "node scripts/generate-supabase-types.mjs",
+    "trigger:dev": "trigger dev",
+    "trigger:deploy": "trigger deploy",
+    "trigger:deploy:check": "trigger deploy --dry-run",
+    "trigger:smoke": "node scripts/run-trigger-smoke-test.mjs",
     "typecheck": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
@@ -18,18 +29,21 @@
   "dependencies": {
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.2",
+    "@trigger.dev/sdk": "4.5.7",
     "next": "16.2.9",
     "react": "19.2.7",
     "react-dom": "19.2.7"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",
+    "@playwright/test": "^1.61.1",
     "@types/node": "^24.10.1",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "eslint": "^9.39.1",
     "eslint-config-next": "16.2.9",
     "prettier": "^3.6.2",
+    "trigger.dev": "4.5.7",
     "typescript": "^5.9.3"
   }
 }

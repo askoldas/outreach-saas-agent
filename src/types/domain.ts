@@ -1,12 +1,3 @@
-export type OfferType =
-  | "product"
-  | "service"
-  | "software"
-  | "distribution"
-  | "manufacturing"
-  | "partnership";
-
-export type OfferStatus = "draft" | "active" | "archived";
 export type CampaignStatus = "planning" | "running" | "paused" | "completed";
 export type LeadStatus =
   | "needs_review"
@@ -24,6 +15,7 @@ export type LeadQualificationStatus =
   | "failed"
   | "needs_manual_review"
   | "non_ai_manual_review";
+export type ContactDiscoveryStatus = "not_run" | "pending" | "completed";
 
 export type DiscoveryReportResult = {
   query: string;
@@ -75,30 +67,32 @@ export type DiscoveryProgress = {
   qualifiedCount: number;
 };
 
-export type Offer = {
-  id: string;
-  name: string;
-  type: OfferType;
-  summary: string;
-  status: OfferStatus;
-  approvedVersion: string;
-  lastUpdated: string;
-  campaignCount: number;
-  problems: string[];
-  capabilities: string[];
-  customerValue: string[];
-  buyerTypes: string[];
-  differentiators: string[];
-  limitations: string[];
-  keywords: string[];
-  aiProposals: string[];
-  missingInfo: string[];
+export type ResearchProgress = {
+  candidatesDiscovered?: number;
+  candidatesUnique?: number;
+  candidatesClassified?: number;
+  companiesEvaluated?: number;
+  companiesQualified?: number;
+  currentIteration?: number;
+  completedTasks: number;
+  currentStep: string;
+  failedTasks: number;
+  lastError: string;
+  progress: number;
+  runId: string;
+  status:
+    | "cancelled"
+    | "completed"
+    | "failed"
+    | "pending"
+    | "running"
+    | "waiting_for_input";
+  totalTasks: number;
 };
 
 export type Campaign = {
   id: string;
   name: string;
-  offerId: string;
   objective: string;
   geography: string;
   industryTerms: string[];
@@ -109,9 +103,11 @@ export type Campaign = {
   awaitingReview: number;
   status: CampaignStatus;
   lastActivity: string;
-  language: string;
+  preferredOutreachLanguage: string;
+  discoveryLanguages: string[];
   warnings: string[];
   latestDiscoveryReport: DiscoveryReport | null;
+  strategyVersion?: number;
   strategy: {
     terms: string[];
     localizedTerms: string[];
@@ -141,11 +137,19 @@ export type EvidenceClaim = {
 };
 
 export type ContactRoute = {
+  id?: string;
   type: string;
   value: string;
   suggestedRole: string;
   verification: "source_confirmed" | "unverified" | "unknown";
   source: string;
+  verificationProvenance?: {
+    provider: string;
+    query: string;
+    sourceTitle: string;
+    sourceUrl: string;
+    verifiedAt: string;
+  } | null;
 };
 
 export type Lead = {
@@ -162,10 +166,12 @@ export type Lead = {
   fitScore: number;
   confidence: Confidence;
   contactability: Confidence;
+  contactDiscoveryStatus: ContactDiscoveryStatus;
   qualificationError: string;
   qualificationStatus: LeadQualificationStatus;
   status: LeadStatus;
   summary: string;
+  userNotes: string;
   qualification: QualificationDimension[];
   evidence: EvidenceClaim[];
   contacts: ContactRoute[];
@@ -185,6 +191,8 @@ export type OutreachDraft = {
   sellerClaims: string[];
   evidenceUsed: string[];
   warnings: string[];
+  promptVersion?: string | null;
+  generatedAt?: string | null;
 };
 
 export type ActivityItem = {
@@ -193,3 +201,105 @@ export type ActivityItem = {
   label: string;
   description: string;
 };
+
+export type ReviewState = "ready" | "approved" | "rejected" | "excluded" | "issues";
+export type FitLabel = "Strong fit" | "Good fit" | "Possible fit" | "Weak fit";
+export type StrategyState = "draft" | "ready" | "used" | "superseded";
+export type CampaignStrategyVersion = {
+  id: string | null;
+  version: number;
+  status: StrategyState;
+  targetGeography: string;
+  companyTypes: string[];
+  industries: string[];
+  characteristics: string[];
+  relevanceReasons: string[];
+  opportunityAssumptions: string[];
+  qualificationCriteria: string[];
+  positiveSignals: string[];
+  exclusions: string[];
+  contactRoles: string[];
+  contactDepartments: string[];
+  acceptableContactRoutes: string[];
+  searchLanguages: string[];
+  sourceCategories: string[];
+  searchTerms: string[];
+  localizedTerms: string[];
+  limitations: string[];
+  targetCompanyCount: number;
+  refinementSummary: string[];
+};
+export type EnrichmentState =
+  | "not_started"
+  | "queued"
+  | "in_progress"
+  | "contacts_ready"
+  | "not_found"
+  | "issue";
+export type RecipientType =
+  | "named_person"
+  | "department"
+  | "sales"
+  | "general"
+  | "form"
+  | "none";
+
+export type CompanyProfile = {
+  id: string | null;
+  version: number;
+  companyName: string;
+  website: string | null;
+  summary: string;
+  productsAndServices: string[];
+  capabilities: string[];
+  customerTypes: string[];
+  differentiators: string[];
+  proofPoints: string[];
+  marketsAndLanguages: string[];
+  claims: string[];
+  limitations: string[];
+  sources: string[];
+  warnings: string[];
+  lastAnalyzed: string | null;
+  provenance: "workspace" | "legacy_offer" | "manual" | "website_analysis";
+  structuredProfile: StructuredCompanyProfile | null;
+  extractedFacts: ExtractedProfileFact[];
+  reviewQuestions: ReviewQuestion[];
+  profileStatus: "draft" | "needs_input" | "ready" | "published";
+  readinessScore: number;
+};
+
+export type RecommendedRecipient = {
+  leadId: string;
+  contactRouteId: string | null;
+  company: string;
+  name: string;
+  role: string;
+  route: string;
+  type: RecipientType;
+  verification: "verified" | "source_confirmed" | "unverified";
+  reason: string;
+};
+
+export type ExportRecord = {
+  id: string;
+  campaignId: string;
+  type: "outreach_csv" | "lead_research_csv";
+  fileName: string;
+  rowCount: number;
+  createdAt: string;
+  creator: string;
+};
+export type UsageEvent = {
+  id: string;
+  campaignId: string | null;
+  operation: string;
+  estimatedUnits: number;
+  actualUnits: number;
+  createdAt: string;
+};
+import type {
+  ExtractedProfileFact,
+  ReviewQuestion,
+  StructuredCompanyProfile,
+} from "@/lib/company-profile/structured-profile";

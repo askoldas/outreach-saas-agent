@@ -2,7 +2,19 @@ import { createServerClient } from "@supabase/ssr";
 import { type NextRequest, NextResponse } from "next/server";
 import { getSupabaseConfig } from "./config";
 
-const authPrefix = "/auth";
+const authRoutes = new Set(["/login", "/signup"]);
+const protectedPrefixes = [
+  "/dashboard",
+  "/campaigns",
+  "/leads",
+  "/sequences",
+  "/company-profile",
+  "/usage",
+  "/settings",
+  "/help",
+  "/onboarding",
+  "/workspaces",
+];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -27,18 +39,21 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
   const { pathname, search } = request.nextUrl;
-  const isAuthRoute = pathname.startsWith(authPrefix);
+  const isAuthRoute = authRoutes.has(pathname);
+  const isProtectedRoute = protectedPrefixes.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
+  );
 
-  if (!user && !isAuthRoute) {
+  if (!user && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/auth/sign-in";
+    redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("next", `${pathname}${search}`);
     return NextResponse.redirect(redirectUrl);
   }
 
   if (user && isAuthRoute) {
     const redirectUrl = request.nextUrl.clone();
-    redirectUrl.pathname = "/dashboard";
+    redirectUrl.pathname = "/campaigns";
     redirectUrl.search = "";
     return NextResponse.redirect(redirectUrl);
   }

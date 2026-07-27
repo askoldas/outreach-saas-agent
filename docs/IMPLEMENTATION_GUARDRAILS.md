@@ -11,7 +11,7 @@ This file is a compact checklist for feature work. Detailed rules live in the li
 - Source provenance for prospect claims.
 - Durable background execution for long-running research.
 - Provider-neutral interfaces.
-- Versioned offer, strategy, prompt, and qualification inputs.
+- Versioned Company Profile, Strategy, prompt, and qualification inputs.
 - Explicit workflow state and audit history.
 
 ## Never introduce silently

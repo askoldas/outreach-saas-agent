@@ -1,0 +1,179 @@
+.workspace {
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+}
+.header {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.45rem 1rem;
+  padding: 1rem 1.1rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.header > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+.eyebrow {
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.progress {
+  grid-column: 1 / -1;
+  height: 0.25rem;
+  overflow: hidden;
+  border-radius: 1rem;
+  background: var(--color-surface-muted);
+}
+.progress span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent);
+}
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(16rem, 0.38fr);
+}
+.decision,
+.summary {
+  padding: 1.1rem;
+}
+.decision {
+  display: grid;
+  gap: 1rem;
+}
+.summary {
+  display: grid;
+  align-content: start;
+  gap: 0.75rem;
+  border-left: 1px solid var(--color-border);
+  background: var(--color-surface-muted);
+}
+.optionContent {
+  display: grid;
+  gap: 0.2rem;
+}
+.optionContent > span {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-weight: 650;
+}
+.optionContent small {
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+.statusRow {
+  display: grid;
+  gap: 0.2rem;
+  padding-bottom: 0.65rem;
+  border-bottom: 1px solid var(--color-border);
+}
+.statusRow > span {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+}
+.statusRow > small {
+  width: fit-content;
+  color: var(--color-text-muted);
+  text-transform: capitalize;
+}
+.statusRow > small[data-state="saved"],
+.statusRow > small[data-state="applied"] {
+  color: var(--color-success);
+}
+.statusRow > small[data-state="needs_review"] {
+  color: var(--color-warning);
+}
+.drawerDock {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+.drawer {
+  position: fixed;
+  z-index: 30;
+  top: 4.5rem;
+  right: 1rem;
+  bottom: 1rem;
+  width: min(25rem, calc(100vw - 2rem));
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 1rem;
+  padding: 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-lg);
+}
+.drawer header,
+.drawer label {
+  display: grid;
+  gap: 0.3rem;
+}
+.drawer textarea {
+  min-height: 7rem;
+  resize: vertical;
+  padding: 0.75rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-canvas);
+  color: inherit;
+}
+.quickActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+.quickActions button {
+  padding: 0.45rem 0.65rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface-muted);
+  color: inherit;
+  cursor: pointer;
+}
+.note {
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+.error {
+  color: var(--color-danger);
+}
+.success {
+  color: var(--color-success);
+}
+.proposal {
+  display: grid;
+  gap: 0.65rem;
+  padding: 0.75rem;
+  border: 1px solid var(--color-selected-border);
+  border-radius: var(--radius-md);
+  background: var(--color-selected-background);
+}
+.proposal > div:not(.proposalActions) {
+  display: grid;
+  gap: 0.15rem;
+}
+.proposal > div > span {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+.proposalActions {
+  display: flex;
+  gap: 0.5rem;
+}
+@media (max-width: 800px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+  .summary {
+    border-top: 1px solid var(--color-border);
+    border-left: 0;
+  }
+}

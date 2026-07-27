@@ -1361,6 +1361,7 @@ export type Database = {
       };
       company_profile_versions: {
         Row: {
+          analysis_execution_id: string | null;
           analysis_model_config_id: string | null;
           analysis_prompt_version: string | null;
           company_name: string;
@@ -1380,6 +1381,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          analysis_execution_id?: string | null;
           analysis_model_config_id?: string | null;
           analysis_prompt_version?: string | null;
           company_name?: string;
@@ -1399,6 +1401,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          analysis_execution_id?: string | null;
           analysis_model_config_id?: string | null;
           analysis_prompt_version?: string | null;
           company_name?: string;
@@ -1418,6 +1421,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "company_profile_versions_analysis_execution_id_fkey";
+            columns: ["analysis_execution_id"];
+            isOneToOne: false;
+            referencedRelation: "provider_executions";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "company_profile_versions_company_profile_id_fkey";
             columns: ["company_profile_id"];
@@ -2980,6 +2990,42 @@ export type Database = {
           target_workspace_id: string;
         };
         Returns: {
+          analysis_model_config_id: string | null;
+          analysis_prompt_version: string | null;
+          company_name: string;
+          company_profile_id: string;
+          created_at: string;
+          created_by: string | null;
+          extracted_facts: Json;
+          id: string;
+          profile_status: string;
+          provenance: string;
+          readiness_score: number;
+          review_questions: Json;
+          structured_profile: Json;
+          summary: string;
+          version: number;
+          website_url: string | null;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_profile_versions";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      save_analyzed_company_profile_version: {
+        Args: {
+          analysis_execution_id_value: string;
+          facts_data?: Json;
+          profile_data: Json;
+          provenance_value?: string;
+          questions_data?: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          analysis_execution_id: string | null;
           analysis_model_config_id: string | null;
           analysis_prompt_version: string | null;
           company_name: string;

@@ -5,12 +5,22 @@ import {
 } from "@/lib/ai/company-profile-analysis";
 import { extractWebPages, searchWeb } from "@/lib/providers/tavily";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import {
+  loadProviderResult,
+  storeProviderResult,
+} from "@/server/execution/provider-result-cache";
+
+type GeneratedProfileAnalysis = Awaited<ReturnType<typeof analyzeCompanyProfile>>;
+type ProfileProviderResult = {
+  generated: GeneratedProfileAnalysis;
+  sources: Array<{ title: string; url: string; content: string }>;
+};
 
 export async function executeCompanyProfileAnalysis(providerExecutionId: string) {
   const supabase = createServiceRoleClient();
   const { data: execution, error: executionError } = await supabase
     .from("provider_executions")
-    .select("id,workspace_id,idempotency_key,metadata")
+    .select("id,workspace_id,idempotency_key,metadata,status")
     .eq("id", providerExecutionId)
     .eq("operation", "company_profile_analysis")
     .single();
@@ -18,6 +28,16 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
     throw new Error(
       `Could not load profile analysis execution: ${executionError.message}`,
     );
+  const completedProfileVersionId = stringValue(
+    execution.metadata,
+    "outputProfileVersionId",
+  );
+  if (execution.status === "completed" && completedProfileVersionId)
+    return {
+      profileVersionId: completedProfileVersionId,
+      providerExecutionId,
+      sourceCount: numberValue(execution.metadata, "sourceCount"),
+    };
 
   const profileVersionId = stringValue(execution.metadata, "profileVersionId");
   if (!profileVersionId)
@@ -42,40 +62,59 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
     error_message: null,
   });
 
-  const origin = new URL(profile.website_url).origin;
-  const host = new URL(origin).hostname.replace(/^www\./, "");
+  const requestHash = hash({
+    profileVersionId,
+    profile: profile.structured_profile,
+    promptVersion: companyProfileAnalysisPromptVersion,
+    websiteUrl: profile.website_url,
+  });
   let sources: Array<{ title: string; url: string; content: string }> = [];
 
   try {
-    let results = await searchWeb(
-      `${host} company products services capabilities customers markets about`,
-      8,
-      { includeDomains: [host], includeRawContent: true },
+    const cached = await loadProviderResult<ProfileProviderResult>(
+      providerExecutionId,
+      requestHash,
     );
-    if (!results.some((item) => item.content.trim())) {
-      results = await extractWebPages([profile.website_url]);
-    }
-    sources = results
-      .filter((item) => item.content.trim())
-      .slice(0, 6)
-      .map((item) => ({
-        title: item.title,
-        url: item.url,
-        content: item.content.trim().slice(0, 12_000),
-      }));
-    if (sources.length === 0)
-      throw new Error(
-        "Website analysis could not extract readable public content from this website.",
+    let generated: GeneratedProfileAnalysis;
+    if (cached) {
+      ({ generated, sources } = cached);
+    } else {
+      const origin = new URL(profile.website_url).origin;
+      const host = new URL(origin).hostname.replace(/^www\./, "");
+      let results = await searchWeb(
+        `${host} company products services capabilities customers markets about`,
+        8,
+        { includeDomains: [host], includeRawContent: true },
       );
-
-    const generated = await analyzeCompanyProfile({
-      currentProfile: asRecord(profile.structured_profile),
-      sources,
-    });
+      if (!results.some((item) => item.content.trim())) {
+        results = await extractWebPages([profile.website_url]);
+      }
+      sources = results
+        .filter((item) => item.content.trim())
+        .slice(0, 6)
+        .map((item) => ({
+          title: item.title,
+          url: item.url,
+          content: item.content.trim().slice(0, 12_000),
+        }));
+      if (sources.length === 0)
+        throw new Error(
+          "Website analysis could not extract readable public content from this website.",
+        );
+      generated = await analyzeCompanyProfile({
+        currentProfile: asRecord(profile.structured_profile),
+        sources,
+      });
+      await storeProviderResult(providerExecutionId, requestHash, {
+        generated,
+        sources,
+      } satisfies ProfileProviderResult);
+    }
     const { data: saved, error: saveError } = await supabase.rpc(
-      "save_clean_company_profile_version",
+      "save_analyzed_company_profile_version",
       {
         target_workspace_id: execution.workspace_id,
+        analysis_execution_id_value: execution.id,
         profile_data: generated.analysis.profile,
         facts_data: generated.analysis.facts,
         questions_data: generated.analysis.reviewQuestions,
@@ -86,42 +125,43 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
       throw new Error(`Could not save analyzed Company Profile: ${saveError.message}`);
 
     const completedAt = new Date().toISOString();
-    const requestHash = hash({
-      profileVersionId,
-      sourceUrls: sources.map((source) => source.url),
-      promptVersion: companyProfileAnalysisPromptVersion,
-    });
-    const { error: requestError } = await supabase.from("ai_requests").insert({
-      workspace_id: execution.workspace_id,
-      provider_execution_id: execution.id,
-      role: "profile_analysis",
-      provider: "openrouter",
-      selected_model: generated.modelCall.requestedModel,
-      fallback_model: generated.modelCall.fallbackUsed
-        ? generated.modelCall.actualModel
-        : null,
-      fallback_used: generated.modelCall.fallbackUsed,
-      prompt_version: companyProfileAnalysisPromptVersion,
-      schema_version: "company-profile-v2",
-      request_hash: requestHash,
-      status: "completed",
-      input_units: generated.modelCall.inputTokens,
-      output_units: generated.modelCall.outputTokens,
-      actual_cost: generated.modelCall.providerReportedCost ?? 0,
-      currency: generated.modelCall.providerCurrency ?? "USD",
-      metadata: {
-        actualModel: generated.modelCall.actualModel,
-        fallbackReason: generated.modelCall.fallbackReason,
-        inputProfileVersionId: profileVersionId,
-        latencyMs: generated.modelCall.latencyMs,
-        outputProfileVersionId: saved,
-        providerRequestId: generated.modelCall.providerRequestId,
-        sourceCount: sources.length,
-        totalTokens: generated.modelCall.totalTokens,
+    const { error: requestError } = await supabase.from("ai_requests").upsert(
+      {
+        workspace_id: execution.workspace_id,
+        provider_execution_id: execution.id,
+        role: "profile_analysis",
+        provider: "openrouter",
+        selected_model: generated.modelCall.requestedModel,
+        fallback_model: generated.modelCall.fallbackUsed
+          ? generated.modelCall.actualModel
+          : null,
+        fallback_used: generated.modelCall.fallbackUsed,
+        prompt_version: companyProfileAnalysisPromptVersion,
+        schema_version: "company-profile-v2",
+        request_hash: requestHash,
+        status: "completed",
+        input_units: generated.modelCall.inputTokens,
+        output_units: generated.modelCall.outputTokens,
+        actual_cost: generated.modelCall.providerReportedCost ?? 0,
+        currency: generated.modelCall.providerCurrency ?? "USD",
+        metadata: {
+          actualModel: generated.modelCall.actualModel,
+          fallbackReason: generated.modelCall.fallbackReason,
+          inputProfileVersionId: profileVersionId,
+          latencyMs: generated.modelCall.latencyMs,
+          outputProfileVersionId: saved.id,
+          providerRequestId: generated.modelCall.providerRequestId,
+          sourceCount: sources.length,
+          totalTokens: generated.modelCall.totalTokens,
+        },
+        started_at: startedAt,
+        completed_at: completedAt,
       },
-      started_at: startedAt,
-      completed_at: completedAt,
-    });
+      {
+        ignoreDuplicates: true,
+        onConflict: "provider_execution_id,role,request_hash,status",
+      },
+    );
     if (requestError)
       throw new Error(`Could not log profile analysis: ${requestError.message}`);
 
@@ -133,7 +173,7 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
         entry_type: "settlement",
         idempotency_key: execution.idempotency_key,
         credits: 5,
-        metadata: { profileVersionId: saved, sourceCount: sources.length },
+        metadata: { profileVersionId: saved.id, sourceCount: sources.length },
       },
       { onConflict: "workspace_id,entry_type,idempotency_key" },
     );
@@ -151,13 +191,13 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
       provider_currency: generated.modelCall.providerCurrency,
       metadata: {
         ...asRecord(execution.metadata),
-        outputProfileVersionId: saved,
+        outputProfileVersionId: saved.id,
         sourceCount: sources.length,
       },
     });
 
     return {
-      profileVersionId: saved as string,
+      profileVersionId: saved.id,
       providerExecutionId,
       sourceCount: sources.length,
     };
@@ -188,4 +228,9 @@ function asRecord(value: unknown): Record<string, unknown> {
 function stringValue(value: unknown, key: string) {
   const record = asRecord(value);
   return typeof record[key] === "string" ? record[key] : "";
+}
+
+function numberValue(value: unknown, key: string) {
+  const field = asRecord(value)[key];
+  return typeof field === "number" ? field : 0;
 }

@@ -5,20 +5,29 @@ import {
   type DraftGenerationInput,
 } from "@/lib/ai/draft-generation";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import {
+  loadProviderResult,
+  storeProviderResult,
+} from "@/server/execution/provider-result-cache";
+
+type GeneratedDraft = Awaited<ReturnType<typeof generateGroundedDraft>>;
 
 export async function executeDraftGeneration(providerExecutionId: string) {
   const supabase = createServiceRoleClient();
   const { data: execution, error: executionError } = await supabase
     .from("provider_executions")
-    .select("id,workspace_id,campaign_run_id,idempotency_key,metadata")
+    .select("id,workspace_id,campaign_run_id,idempotency_key,metadata,status")
     .eq("id", providerExecutionId)
     .eq("operation", "draft_generation")
     .single();
   if (executionError)
     throw new Error(`Could not load draft execution: ${executionError.message}`);
 
+  const completedDraftId = optionalMetadata(execution.metadata, "draftId");
   const campaignId = requiredMetadata(execution.metadata, "campaignId");
   const campaignCompanyId = requiredMetadata(execution.metadata, "campaignCompanyId");
+  if (execution.status === "completed" && completedDraftId)
+    return { draftId: completedDraftId, campaignCompanyId };
   const campaignContactId = requiredMetadata(execution.metadata, "campaignContactId");
   const profileSnapshotId = requiredMetadata(execution.metadata, "profileSnapshotId");
   const strategyVersionId = requiredMetadata(execution.metadata, "strategyVersionId");
@@ -45,7 +54,14 @@ export async function executeDraftGeneration(providerExecutionId: string) {
       evidenceIds: input.evidenceIds,
       promptVersion: draftPromptVersion,
     });
-    const generated = await generateGroundedDraft(input.context);
+    let generated = await loadProviderResult<GeneratedDraft>(
+      providerExecutionId,
+      requestHash,
+    );
+    if (!generated) {
+      generated = await generateGroundedDraft(input.context);
+      await storeProviderResult(providerExecutionId, requestHash, generated);
+    }
     const completedAt = new Date().toISOString();
     const modelConfigId = await resolveModelConfigId(execution.workspace_id);
     const { data: draft, error: draftError } = await supabase
@@ -81,36 +97,42 @@ export async function executeDraftGeneration(providerExecutionId: string) {
     if (draftError)
       throw new Error(`Could not save generated draft: ${draftError.message}`);
 
-    const { error: requestError } = await supabase.from("ai_requests").insert({
-      workspace_id: execution.workspace_id,
-      campaign_run_id: execution.campaign_run_id,
-      provider_execution_id: execution.id,
-      model_config_id: modelConfigId,
-      role: "outreach_generation",
-      provider: "openrouter",
-      selected_model:
-        generated.modelCall.actualModel ?? generated.modelCall.requestedModel,
-      fallback_model: generated.modelCall.fallbackUsed
-        ? generated.modelCall.actualModel
-        : null,
-      fallback_used: generated.modelCall.fallbackUsed,
-      prompt_version: draftPromptVersion,
-      schema_version: "outreach-draft-v1",
-      request_hash: requestHash,
-      status: "completed",
-      input_units: generated.modelCall.inputTokens,
-      output_units: generated.modelCall.outputTokens,
-      actual_cost: generated.modelCall.providerReportedCost ?? 0,
-      currency: generated.modelCall.providerCurrency ?? "USD",
-      metadata: {
-        campaignCompanyId,
-        campaignContactId,
-        draftId: draft.id,
-        providerRequestId: generated.modelCall.providerRequestId,
+    const { error: requestError } = await supabase.from("ai_requests").upsert(
+      {
+        workspace_id: execution.workspace_id,
+        campaign_run_id: execution.campaign_run_id,
+        provider_execution_id: execution.id,
+        model_config_id: modelConfigId,
+        role: "outreach_generation",
+        provider: "openrouter",
+        selected_model:
+          generated.modelCall.actualModel ?? generated.modelCall.requestedModel,
+        fallback_model: generated.modelCall.fallbackUsed
+          ? generated.modelCall.actualModel
+          : null,
+        fallback_used: generated.modelCall.fallbackUsed,
+        prompt_version: draftPromptVersion,
+        schema_version: "outreach-draft-v1",
+        request_hash: requestHash,
+        status: "completed",
+        input_units: generated.modelCall.inputTokens,
+        output_units: generated.modelCall.outputTokens,
+        actual_cost: generated.modelCall.providerReportedCost ?? 0,
+        currency: generated.modelCall.providerCurrency ?? "USD",
+        metadata: {
+          campaignCompanyId,
+          campaignContactId,
+          draftId: draft.id,
+          providerRequestId: generated.modelCall.providerRequestId,
+        },
+        started_at: startedAt,
+        completed_at: completedAt,
       },
-      started_at: startedAt,
-      completed_at: completedAt,
-    });
+      {
+        ignoreDuplicates: true,
+        onConflict: "provider_execution_id,role,request_hash,status",
+      },
+    );
     if (requestError)
       throw new Error(`Could not log draft generation: ${requestError.message}`);
 
@@ -332,6 +354,11 @@ function requiredMetadata(value: unknown, key: string) {
   if (typeof field !== "string" || !field)
     throw new Error(`Draft execution is missing ${key}.`);
   return field;
+}
+
+function optionalMetadata(value: unknown, key: string) {
+  const field = asRecord(value)[key];
+  return typeof field === "string" && field ? field : null;
 }
 
 function hash(value: unknown) {

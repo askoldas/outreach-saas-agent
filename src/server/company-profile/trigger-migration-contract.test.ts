@@ -27,6 +27,6 @@ test("Company Profile analysis dispatches through Trigger.dev with clean executi
   assert.match(task, /executeCompanyProfileAnalysis/);
   assert.match(service, /\.from\("ai_requests"\)/);
   assert.match(service, /\.from\("usage_ledger"\)/);
-  assert.match(service, /save_clean_company_profile_version/);
+  assert.match(service, /save_analyzed_company_profile_version/);
   assert.doesNotMatch(service, /ai_generations|usage_events|research_tasks/);
 });

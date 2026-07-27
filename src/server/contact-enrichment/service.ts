@@ -7,13 +7,17 @@ import {
   type EnrichedContactRoute,
 } from "@/lib/providers/contact-enrichment";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import {
+  loadProviderResult,
+  storeProviderResult,
+} from "@/server/execution/provider-result-cache";
 import type { ContactRoute } from "@/types/domain";
 
 export async function executeContactEnrichment(providerExecutionId: string) {
   const supabase = createServiceRoleClient();
   const { data: execution, error: executionError } = await supabase
     .from("provider_executions")
-    .select("id,workspace_id,campaign_run_id,idempotency_key,metadata")
+    .select("id,workspace_id,campaign_run_id,idempotency_key,metadata,status")
     .eq("id", providerExecutionId)
     .eq("operation", "contact_enrichment")
     .single();
@@ -24,6 +28,11 @@ export async function executeContactEnrichment(providerExecutionId: string) {
   const enrichmentId = stringValue(execution.metadata, "contactEnrichmentId");
   if (!campaignCompanyId || !enrichmentId)
     throw new Error("Contact execution is missing its clean entity references.");
+  if (execution.status === "completed")
+    return {
+      campaignCompanyId,
+      routeCount: numberValue(execution.metadata, "routeCount"),
+    };
 
   const { data: association, error: associationError } = await supabase
     .from("campaign_companies")
@@ -82,22 +91,38 @@ export async function executeContactEnrichment(providerExecutionId: string) {
       text: sourceText,
       website: company.website_url,
     });
-    const [providerRoutes, websiteResult] = await Promise.all([
-      enrichCompanyContacts({
-        company: company.name,
-        website: company.website_url,
-      }),
-      discoverContactRoutes({
-        content: sourceText,
-        score: null,
-        title: company.name,
-        url: company.website_url,
-      }).catch(() => ({ routes: [] })),
-    ]);
+    const inputHash = hash({
+      company: company.name,
+      sourceText,
+      website: company.website_url,
+    });
+    let providerResult = await loadProviderResult<{
+      providerRoutes: EnrichedContactRoute[];
+      websiteRoutes: ContactRoute[];
+    }>(providerExecutionId, inputHash);
+    if (!providerResult) {
+      const [providerRoutes, websiteResult] = await Promise.all([
+        enrichCompanyContacts({
+          company: company.name,
+          website: company.website_url,
+        }),
+        discoverContactRoutes({
+          content: sourceText,
+          score: null,
+          title: company.name,
+          url: company.website_url,
+        }).catch(() => ({ routes: [] })),
+      ]);
+      providerResult = {
+        providerRoutes,
+        websiteRoutes: websiteResult.routes,
+      };
+      await storeProviderResult(providerExecutionId, inputHash, providerResult);
+    }
     const routes = dedupeRoutes([
       ...evidenceRoutes,
-      ...websiteResult.routes,
-      ...providerRoutes,
+      ...providerResult.websiteRoutes,
+      ...providerResult.providerRoutes,
     ]);
     for (const route of routes)
       await persistRoute({
@@ -353,3 +378,13 @@ function stringValue(value: unknown, key: string) {
   const record = asRecord(value);
   return typeof record[key] === "string" ? record[key] : "";
 }
+
+function numberValue(value: unknown, key: string) {
+  const field = asRecord(value)[key];
+  return typeof field === "number" ? field : 0;
+}
+
+function hash(value: unknown) {
+  return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+}
+import { createHash } from "node:crypto";

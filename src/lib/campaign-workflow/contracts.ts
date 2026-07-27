@@ -95,8 +95,12 @@ export function parseConfirmedCampaignBrief(
   validOfferingIds: ReadonlySet<string>,
 ): ConfirmedCampaignBrief {
   const row = object(value, "confirmed brief");
+  const brief = parseBrief(row, validOfferingIds);
+  if (!brief.targetSegments.some((segment) => segment.status === "confirmed")) {
+    throw new Error("Confirm at least one organization target before discovery.");
+  }
   return {
-    ...parseBrief(row, validOfferingIds),
+    ...brief,
     desiredQualifiedCompanies: integer(
       row.desiredQualifiedCompanies,
       "desiredQualifiedCompanies",

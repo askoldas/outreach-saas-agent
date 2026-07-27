@@ -72,9 +72,12 @@ test("qualification persists the actual model selected by OpenRouter", async () 
   );
 });
 
-test("current AI prompt versions remain unchanged", async () => {
+test("current AI prompt versions match the approved structured contracts", async () => {
   const expectations = new Map([
-    ["company-profile-analysis.ts", "company-profile-website-v3-grouped"],
+    ["company-profile-analysis.ts", "company-profile-website-v4-b2b-context"],
+    ["offering-proposals.ts", "profile-offering-proposals-v1"],
+    ["target-segment-proposals.ts", "campaign-target-segments-v1"],
+    ["structured-change-interpretation.ts", "structured-additive-changes-v1"],
     ["strategy-generation.ts", "campaign-strategy-v1"],
     ["lead-evaluation.ts", "lead-evaluator-v1"],
     ["draft-generation.ts", "grounded-outreach-draft-v1"],

@@ -83,9 +83,7 @@ export function CampaignBriefForm({
   const [result, setResult] = useState<ProposalResult | null>(null);
   const [proposal, setProposal] = useState<CampaignBriefProposal | null>(null);
   const [selectedOfferingId, setSelectedOfferingId] = useState("");
-  const [selectedTargetSegmentIds, setSelectedTargetSegmentIds] = useState<string[]>(
-    [],
-  );
+  const [selectedTargetSegmentIds, setSelectedTargetSegmentIds] = useState<string[]>([]);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [name, setName] = useState("");
   const [offeringTitle, setOfferingTitle] = useState("");
@@ -110,9 +108,9 @@ export function CampaignBriefForm({
       ? "Add at least one company type to continue."
       : !selectedTargetSegmentIds.length
         ? "Include at least one organization target to continue."
-      : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
-        ? "Answer the clarification above to continue."
-        : "";
+        : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
+          ? "Answer the clarification above to continue."
+          : "";
   const confirmedBrief = useMemo<ConfirmedCampaignBrief | null>(() => {
     if (!proposal) return null;
     return {
@@ -155,9 +153,7 @@ export function CampaignBriefForm({
             }
           : {}),
         geographies: countryCodes,
-        status: selectedTargetSegmentIds.includes(segment.id)
-          ? "confirmed"
-          : "rejected",
+        status: selectedTargetSegmentIds.includes(segment.id) ? "confirmed" : "rejected",
       })),
       desiredQualifiedCompanies,
     };

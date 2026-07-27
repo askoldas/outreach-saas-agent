@@ -11,6 +11,10 @@ const company = readFileSync(
   "utf8",
 );
 const drawer = readFileSync(new URL("./ContextualAiDrawer.tsx", import.meta.url), "utf8");
+const suggestionCards = readFileSync(
+  new URL("./SuggestionCards.tsx", import.meta.url),
+  "utf8",
+);
 const discoverPage = readFileSync(
   new URL("../../app/(app)/campaigns/[id]/leads/page.tsx", import.meta.url),
   "utf8",
@@ -52,6 +56,19 @@ test("contextual AI is scoped and cannot silently apply proposals", () => {
   assert.match(drawer, /applyGuidedProposalAction/);
   assert.match(drawer, /baseVersion/);
   assert.match(drawer, /Suggestions are not saved until/);
+  assert.match(drawer, /selectedChangeIds/);
+  assert.match(drawer, /Apply selected/);
+  assert.match(drawer, /Apply all/);
+  assert.match(drawer, /Cancel/);
+});
+
+test("Offering and Target suggestions use structured selectable cards", () => {
+  assert.match(campaign, /OfferingSuggestionCard/);
+  assert.match(campaign, /TargetSuggestionCard/);
+  assert.match(suggestionCards, /View evidence and why suggested/);
+  assert.match(suggestionCards, /View why suggested and discovery feasibility/);
+  assert.match(suggestionCards, /Remove from Campaign/);
+  assert.match(suggestionCards, /Include target/);
 });
 
 test("campaign progress remains controllable from the Discover page", () => {

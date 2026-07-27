@@ -11,7 +11,8 @@ import { parseCompleteJsonObject } from "./structured-json.ts";
 
 export { parseCompleteJsonObject } from "./structured-json.ts";
 
-export const companyProfileAnalysisPromptVersion = "company-profile-website-v3-grouped";
+export const companyProfileAnalysisPromptVersion =
+  "company-profile-website-v4-b2b-context";
 
 export type CompanyProfileAnalysis = {
   facts: ExtractedProfileFact[];
@@ -33,13 +34,16 @@ export async function analyzeCompanyProfile(input: {
           "An offering must be a meaningful proposition with its own customers, value proposition, and potential campaign. Product ranges, dosage forms, skills, methods, features, and delivery steps are not automatically offerings.",
           "Attach product categories and supporting capabilities to offerings. For a complex manufacturer, prefer roughly 3-5 coherent offerings over 12-15 fragments.",
           "Keep customer types, buyer industries, customer needs, relationship types, existing markets, and potential markets separate.",
+          "Record current consumer audiences as factual customer groups, but never turn consumers, families, private customers, end users, or demographic groups into company-discovery targets.",
+          "Separate what the company currently sells, what it can deliver, who currently buys, and which organization-based B2B applications are plausible but unconfirmed.",
+          "A B2B application must identify a searchable organization, partner, distributor, reseller, supplier, contractor, or public institution. Distinguish that buyer organization from decision makers and end users.",
+          "Proposed B2B packaging must be marked as requiring confirmation and must not invent unsupported capabilities, commercial terms, or delivery commitments.",
           "Keep company and offering differentiators separate from categorized credibility proof. Company metrics are never case studies.",
           "Separate verified claims, strategic direction, commercial constraints, regulatory limitations, and unverified or conflicting information.",
           "Separate headquarters, operating markets, export markets, prospecting markets, supported company languages, and outreach languages. Never infer user strategy fields such as prospecting markets or outreach languages from website presence.",
           "Do not invent customers, metrics, certifications, buyer roles, prospecting preferences, claims, or commercial constraints.",
-          "Questions are only for genuine conflicts, low-confidence commercial inference, ambiguous grouping, search/qualification/persona/claim impact, user strategy, or information unavailable from the website.",
-          "After successful analysis, generate no mandatory questions unless no usable offering can be produced or a critical source conflict makes the company identity or structure unusable.",
-          "Never ask profile-stage questions about target markets, buyer personas, campaign relationship types, qualification strategy, messaging, or per-item standalone status. At most propose one optional grouped offering review plus genuine source conflicts.",
+          "Ask zero to three high-impact clarification questions only when an answer materially changes the offering, business model, organization target, delivery constraint, or discovery feasibility. Sort highest impact first.",
+          "Prefer selectable answers. Questions must be skippable and cannot block provisional offering suggestions. Do not ask for target markets, messaging, or facts that later research can establish.",
           "Safe explicit proof may be approved for outreach; inferred or conflicting proof must not be approved.",
           "Produce a concise commercially useful overview covering company kind, propositions, business models, general customers, markets, and commercial significance.",
           "Return JSON only and use stable lowercase slug IDs unique within each collection.",
@@ -97,7 +101,16 @@ export function parseCompanyProfileAnalysis(rawOutput: string): CompanyProfileAn
   const suppliedQuestions = Array.isArray(value.reviewQuestions)
     ? parseQuestions(value.reviewQuestions)
     : [];
-  const reviewQuestions = generateMeaningfulReviewQuestions(profile, suppliedQuestions);
+  const reviewQuestions = [
+    ...businessContextReviewQuestions(profile),
+    ...generateMeaningfulReviewQuestions(profile, suppliedQuestions),
+  ]
+    .filter(
+      (question, index, all) =>
+        all.findIndex((candidate) => candidate.id === question.id) === index,
+    )
+    .sort((left, right) => questionRank(left) - questionRank(right))
+    .slice(0, 3);
   return {
     facts,
     profile: {
@@ -286,6 +299,7 @@ function buildStructuredProfileFromGroupedAnalysis(
       existingMarkets: optionalStrings(marketData.operatingMarkets),
       potentialMarkets: optionalStrings(landscape.potentialMarkets),
     },
+    businessContext: buildBusinessContext(value, capabilityObjects),
     differentiators: differentiatorRows.map((item, index) => ({
       id: indexedStableId(
         isRecord(item) ? String(item.title ?? "Differentiator") : String(item),
@@ -809,6 +823,190 @@ function parseQuestions(value: unknown): ReviewQuestion[] {
   });
 }
 
+function buildBusinessContext(
+  value: Record<string, unknown>,
+  capabilities: StructuredCompanyProfile["capabilities"],
+): StructuredCompanyProfile["businessContext"] {
+  const context = isRecord(value.businessContext) ? value.businessContext : {};
+  const landscape = isRecord(value.customerLandscape) ? value.customerLandscape : {};
+  const suppliedGroups = Array.isArray(context.currentCustomerGroups)
+    ? context.currentCustomerGroups
+    : optionalStrings(landscape.customerTypes).map((name) => ({ name }));
+  const currentCustomerGroups = suppliedGroups.map((item, index) => {
+    const row = isRecord(item) ? item : { name: String(item) };
+    const name = required(row.name, "currentCustomerGroup.name");
+    return {
+      id: indexedStableId(name, "customer_group", index),
+      name,
+      kind: customerGroupKind(row.kind, name),
+      evidence: optionalStrings(row.evidence),
+      confidence: oneOf(
+        row.confidence ?? "medium",
+        ["high", "medium", "low"] as const,
+        "currentCustomerGroup.confidence",
+      ),
+    };
+  });
+  const capabilityIds = new Set(capabilities.map((capability) => capability.id));
+  const potentialB2BApplications = (
+    Array.isArray(context.potentialB2BApplications)
+      ? context.potentialB2BApplications
+      : []
+  ).map((item, index) => {
+    if (!isRecord(item)) throw new Error("Invalid potential B2B application.");
+    const name = required(item.name, "potentialB2BApplication.name");
+    return {
+      id: indexedStableId(name, "b2b_application", index),
+      name,
+      description: required(item.description, "potentialB2BApplication.description"),
+      supportedByCapabilityIds: optionalStrings(item.supportedByCapabilityIds).filter(
+        (candidate) => capabilityIds.has(candidate),
+      ),
+      confidence: oneOf(
+        item.confidence ?? "low",
+        ["high", "medium", "low"] as const,
+        "potentialB2BApplication.confidence",
+      ),
+      requiresConfirmation: true,
+    };
+  });
+  const unresolvedQuestions = (
+    Array.isArray(context.unresolvedQuestions) ? context.unresolvedQuestions : []
+  )
+    .map((item, index) => {
+      if (!isRecord(item)) throw new Error("Invalid business-context question.");
+      const question = required(item.question, "businessContext.question");
+      return {
+        id: indexedStableId(question, "clarification", index),
+        question,
+        reason: required(item.reason, "businessContext.question.reason"),
+        impact: oneOf(
+          item.impact,
+          [
+            "offering_definition",
+            "business_model",
+            "target_segment",
+            "delivery_constraint",
+            "discovery_feasibility",
+          ] as const,
+          "businessContext.question.impact",
+        ),
+        answerType: oneOf(
+          item.answerType,
+          ["single_select", "multi_select", "short_text", "boolean"] as const,
+          "businessContext.question.answerType",
+        ),
+        ...(Array.isArray(item.options)
+          ? {
+              options: item.options.slice(0, 6).map((option, optionIndex) => {
+                if (!isRecord(option)) throw new Error("Invalid question option.");
+                const label = required(option.label, "question.option.label");
+                return {
+                  id: indexedStableId(label, "option", optionIndex),
+                  label,
+                  ...(typeof option.description === "string"
+                    ? { description: option.description.trim() }
+                    : {}),
+                };
+              }),
+            }
+          : {}),
+        required: item.required === true,
+        skippable: true,
+        priority:
+          typeof item.priority === "number" && Number.isFinite(item.priority)
+            ? Math.max(0, Math.round(item.priority))
+            : 0,
+      };
+    })
+    .sort((left, right) => right.priority - left.priority)
+    .slice(0, 3);
+  return {
+    businessModel: oneOf(
+      context.businessModel ??
+        inferAudienceBusinessModel(currentCustomerGroups.map((group) => group.kind)),
+      ["b2b", "b2c", "b2g", "mixed", "unclear"] as const,
+      "businessContext.businessModel",
+    ),
+    currentCustomerGroups,
+    potentialB2BApplications,
+    unresolvedQuestions,
+  };
+}
+
+function customerGroupKind(value: unknown, name: string) {
+  const allowed = [
+    "consumer",
+    "business",
+    "public_institution",
+    "partner",
+    "distributor",
+    "reseller",
+    "supplier",
+    "contractor",
+    "other",
+  ] as const;
+  if (typeof value === "string" && allowed.includes(value as (typeof allowed)[number]))
+    return value as (typeof allowed)[number];
+  const normalized = name.toLowerCase();
+  if (/consumer|individual|private customer|famil|household/.test(normalized))
+    return "consumer";
+  if (/public|government|municip|school|hospital|institution/.test(normalized))
+    return "public_institution";
+  if (/distributor|wholesal/.test(normalized)) return "distributor";
+  if (/reseller|retailer/.test(normalized)) return "reseller";
+  if (/partner/.test(normalized)) return "partner";
+  if (/business|company|companies|organization|employer/.test(normalized))
+    return "business";
+  return "other";
+}
+
+function inferAudienceBusinessModel(kinds: string[]) {
+  const consumer = kinds.includes("consumer");
+  const government = kinds.includes("public_institution");
+  const business = kinds.some((kind) =>
+    ["business", "partner", "distributor", "reseller", "supplier", "contractor"].includes(
+      kind,
+    ),
+  );
+  if ([consumer, government, business].filter(Boolean).length > 1) return "mixed";
+  if (consumer) return "b2c";
+  if (government) return "b2g";
+  if (business) return "b2b";
+  return "unclear";
+}
+
+function businessContextReviewQuestions(
+  profile: StructuredCompanyProfile,
+): ReviewQuestion[] {
+  return (profile.businessContext?.unresolvedQuestions ?? []).map((question) => ({
+    id: question.id,
+    category:
+      question.impact === "target_segment"
+        ? "customer"
+        : question.impact === "delivery_constraint"
+          ? "constraint"
+          : "offering",
+    title: question.question,
+    description: question.reason,
+    inputType:
+      question.answerType === "short_text"
+        ? "text"
+        : question.answerType === "boolean"
+          ? "confirm"
+          : question.answerType,
+    ...(question.options ? { options: question.options } : {}),
+    required: question.required,
+    stage: question.required ? "profile_blocking" : "profile_optional",
+    priority: question.required ? "blocking" : "important",
+    status: "unanswered",
+  }));
+}
+
+function questionRank(question: ReviewQuestion) {
+  return question.priority === "blocking" ? 0 : question.priority === "important" ? 1 : 2;
+}
+
 export const structuredAnalysisShape = {
   facts: [
     {
@@ -978,6 +1176,42 @@ const groupedCompactAnalysisShape = {
     customerNeeds: ["string"],
     relationshipTypes: ["string"],
     potentialMarkets: ["string"],
+  },
+  businessContext: {
+    businessModel: "b2b|b2c|b2g|mixed|unclear",
+    currentCustomerGroups: [
+      {
+        id: "stable_slug",
+        name: "factual current customer group",
+        kind: "consumer|business|public_institution|partner|distributor|reseller|supplier|contractor|other",
+        evidence: ["short supplied evidence"],
+        confidence: "high|medium|low",
+      },
+    ],
+    potentialB2BApplications: [
+      {
+        id: "stable_slug",
+        name: "organization-buyable application",
+        description: "what an organization could buy and why",
+        supportedByCapabilityIds: ["capability_slug"],
+        confidence: "high|medium|low",
+        requiresConfirmation: true,
+      },
+    ],
+    unresolvedQuestions: [
+      {
+        id: "stable_slug",
+        question: "one high-impact question",
+        reason: "why the answer materially changes a proposal",
+        impact:
+          "offering_definition|business_model|target_segment|delivery_constraint|discovery_feasibility",
+        answerType: "single_select|multi_select|short_text|boolean",
+        options: [{ id: "stable_slug", label: "selectable answer" }],
+        required: false,
+        skippable: true,
+        priority: 1,
+      },
+    ],
   },
   markets: {
     headquarters: "string",

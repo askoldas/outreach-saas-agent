@@ -484,3 +484,8 @@ export const campaignStrategyV2Schema = z
   });
 
 export type CampaignStrategyV2 = z.infer<typeof campaignStrategyV2Schema>;
+export type CampaignObjectiveV2 = z.infer<typeof campaignObjectiveV2Schema>;
+export type CampaignGeographyV2 = z.infer<typeof campaignGeographyV2Schema>;
+export type CampaignOfferingReferenceV2 = z.infer<
+  typeof campaignOfferingReferenceV2Schema
+>;

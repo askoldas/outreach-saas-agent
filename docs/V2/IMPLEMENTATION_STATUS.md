@@ -24,7 +24,7 @@ behavior and deterministic tests are implemented.
 | WP-05 — Company Intelligence V3 workflow                 | complete    | V3 persistence, six narrow task contracts, guarded sequential Trigger orchestration, audited/resumable stages, atomic normalized draft compilation, and lifecycle fixtures added.     |
 | WP-06 — Company Profile V3 UI                            | complete    | Rollout-routed V3 review, V1 compatibility fallback, clarification and explicit review decisions, atomic core editing, immutable publishing, and an authenticated browser flow added. |
 | WP-07 — Campaign Strategy V2 contracts                   | complete    | Strict objective, geography, frozen offering, variant, archetype, signal, rubric, rule, source-plan, coverage, stopping, semantic-segment, strategy, and V1 adapter contracts added.  |
-| WP-08 — Campaign Strategy V2 persistence and compiler    | not_started | Compiler, persistence, confirmation, and audit remain.                                                                                                                                |
+| WP-08 — Campaign Strategy V2 persistence and compiler    | complete    | Deterministic context and strategy compilers, bounded market/strategy task contracts, normalized draft persistence, immutable confirmation, versioning, diffs, and audit added.       |
 | WP-09 — Campaign creation and Strategy V2 UI             | not_started | V2 routing, wizard, review, and E2E coverage remain.                                                                                                                                  |
 | WP-10 — Scoped memory V2                                 | not_started | Scope precedence, promotion, conflicts, and application events remain.                                                                                                                |
 | WP-11 — Discovery provider contracts                     | not_started | Provider capabilities, registry, router, normalized records, and tests remain.                                                                                                        |
@@ -181,8 +181,26 @@ behavior and deterministic tests are implemented.
   copy legacy raw search terms, keeps inferred exclusions soft and campaign scoped, and
   cannot be confirmed until the user explicitly reviews the objective and geography.
 
+## WP-08 delivery record
+
+- The deterministic campaign context compiler freezes one published Company
+  Intelligence version, selects only referenced offerings, filters confirmed rules by
+  applicability, separates facts from hypotheses and unknowns, and produces a canonical
+  input hash.
+- Market interpretation and strategy compilation now have narrow, strict, versioned
+  output contracts. Market facts require evidence, factor weights total 100, archetype
+  keys are unique, and neither contract emits provider-specific queries or candidate
+  scores.
+- Migration 8 adds workspace-scoped Campaign inputs, strategy drafts, objectives,
+  archetypes, rubrics and factors, campaign rules, source plans, market findings, diffs,
+  and audit events. The complete strategy remains one JSON snapshot written atomically
+  with its normalized records.
+- Confirmation is an admin-only transaction. It requires reviewed objective and
+  geography, rejects unreconciled legacy imports, creates a new immutable version,
+  copies normalized child records, updates the active Campaign reference, and records
+  the confirming user and audit event.
+
 ## Next package entry point
 
-Begin WP-08 with Campaign Strategy V2 persistence and the deterministic context/compiler
-boundary. V1 remains the default path until its successor packages are complete and the
-V2 rollout is explicitly enabled.
+Begin WP-09 with the Campaign creation and Strategy V2 review UI. V1 remains the default
+path until its successor packages are complete and the V2 rollout is explicitly enabled.

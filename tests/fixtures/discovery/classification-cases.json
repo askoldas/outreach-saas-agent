@@ -97,6 +97,30 @@
       "title": "Industry report",
       "url": "https://reports.example/industry.pdf",
       "content": "Market participant report."
+    },
+    {
+      "id": "wikipedia-company-article",
+      "expectedEligible": false,
+      "query": "pharmacy chains Lithuania",
+      "title": "Euroapotheca",
+      "url": "https://en.wikipedia.org/wiki/Euroapotheca",
+      "content": "An encyclopedia article describing the pharmacy group."
+    },
+    {
+      "id": "company-data-profile",
+      "expectedEligible": false,
+      "query": "pharmaceutical distributor Lithuania",
+      "title": "Example Pharma company profile",
+      "url": "https://rocketreach.co/example-pharma-profile",
+      "content": "Company contact and employee database profile."
+    },
+    {
+      "id": "map-listing",
+      "expectedEligible": false,
+      "query": "Camelia pharmacy Lithuania",
+      "title": "Camelia Vaistine",
+      "url": "https://yandex.com/maps/org/camelia/",
+      "content": "Map listing for a pharmacy branch."
     }
   ],
   "directoryCases": [

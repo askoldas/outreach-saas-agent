@@ -41,16 +41,37 @@ export type ClassifiedSearchResults = {
 };
 
 const directoryHosts = [
+  "biddetail.com",
   "clutch.co",
+  "companydata.com",
   "crunchbase.com",
   "dnb.com",
   "europages.",
+  "globaltenders.com",
+  "infobel.com",
+  "imoniukatalogai.lt",
+  "jumsinfo.lt",
   "kompass.",
+  "needl.co",
   "paginebianche.it",
   "paginegialle.it",
+  "rekvizitai.",
+  "rocketreach.co",
   "sortlist.",
   "themanifest.com",
+  "tendersinfo.com",
+  "tendersontime.com",
+  "zoominfo.com",
   "yell.com",
+];
+
+const referenceAndListingHosts = [
+  "allconferencealert.com",
+  "conferencealert.com",
+  "mwm.ai",
+  "panorama.lt",
+  "wikipedia.org",
+  "yandex.com",
 ];
 
 const registryHosts = [
@@ -153,6 +174,15 @@ export function classifySearchResult(
       reasons: ["Social profile, not a company website"],
       riskFlags: ["social_profile"],
       sourceType: "social_profile",
+    };
+  }
+
+  if (matchesHost(hostname, referenceAndListingHosts)) {
+    return {
+      confidence: "high",
+      reasons: ["Reference or listing page, not the represented company's website"],
+      riskFlags: ["third_party_company_mention"],
+      sourceType: "irrelevant",
     };
   }
 

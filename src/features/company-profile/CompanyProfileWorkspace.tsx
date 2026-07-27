@@ -203,7 +203,7 @@ export function CompanyProfileWorkspace({
       <Card>
         <CardHeader
           title="Offerings"
-          eyebrow={`${data.offerings.length} detected commercial offering${data.offerings.length === 1 ? "" : "s"}`}
+          eyebrow={`${data.offerings.length} structured commercial offering${data.offerings.length === 1 ? "" : "s"}`}
         />
         <div className={`${shared.cardBody} ${shared.stack}`}>
           {data.offerings.length ? (
@@ -225,7 +225,7 @@ export function CompanyProfileWorkspace({
                     tone={
                       offering.status === "confirmed"
                         ? "success"
-                        : offering.status === "excluded"
+                        : offering.status === "excluded" || offering.status === "rejected"
                           ? "danger"
                           : "warning"
                     }
@@ -333,7 +333,7 @@ export function CompanyProfileWorkspace({
                   </form>
                   <form action={updateOfferingStatusAction} className={styles.actions}>
                     <input type="hidden" name="offeringId" value={offering.id} />
-                    {offering.status === "excluded" ? (
+                    {offering.status === "excluded" || offering.status === "rejected" ? (
                       <Button
                         type="submit"
                         name="intent"
@@ -360,7 +360,7 @@ export function CompanyProfileWorkspace({
                     >
                       Convert to capability
                     </Button>
-                    {offering.status !== "excluded" ? (
+                    {offering.status !== "excluded" && offering.status !== "rejected" ? (
                       <Button
                         type="submit"
                         name="intent"
@@ -376,8 +376,8 @@ export function CompanyProfileWorkspace({
             ))
           ) : (
             <p>
-              No offerings were confidently detected. Re-run analysis or add concise
-              website content before continuing.
+              No offerings are available yet. Re-run analysis or add concise website
+              content before continuing.
             </p>
           )}
         </div>

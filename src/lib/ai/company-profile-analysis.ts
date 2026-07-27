@@ -262,7 +262,7 @@ function buildStructuredProfileFromGroupedAnalysis(
       supportingProofIds: [],
       adaptiveFields: {},
       priority: index === 0 ? "primary" : "secondary",
-      status: "detected",
+      status: "inferred",
       sourceReferences,
     };
   });
@@ -436,7 +436,7 @@ function buildStructuredProfileFromCompactAnalysis(
       supportingProofIds: [],
       adaptiveFields: {},
       priority: index === 0 ? "primary" : "secondary",
-      status: "detected",
+      status: "inferred",
       sourceReferences,
     })),
     status: "draft",
@@ -513,7 +513,9 @@ export function generateLegacyReviewQuestions(
   profile: StructuredCompanyProfile,
 ): ReviewQuestion[] {
   const questions: ReviewQuestion[] = [];
-  for (const offering of profile.offerings.filter((item) => item.status === "detected")) {
+  for (const offering of profile.offerings.filter(
+    (item) => item.status === "detected" || item.status === "inferred",
+  )) {
     questions.push({
       id: `confirm_${offering.id}`,
       category: "offering",
@@ -582,7 +584,11 @@ export function generateMeaningfulReviewQuestions(
       priority: "blocking",
       status: "unanswered",
     });
-  } else if (profile.offerings.some((item) => item.status === "detected")) {
+  } else if (
+    profile.offerings.some(
+      (item) => item.status === "detected" || item.status === "inferred",
+    )
+  ) {
     questions.push({
       id: "review_offering_structure",
       stage: "profile_optional",
@@ -618,7 +624,11 @@ export function generatePreviousMeaningfulReviewQuestions(
   supplied: ReviewQuestion[] = [],
 ): ReviewQuestion[] {
   const questions: ReviewQuestion[] = [];
-  if (profile.offerings.some((item) => item.status === "detected")) {
+  if (
+    profile.offerings.some(
+      (item) => item.status === "detected" || item.status === "inferred",
+    )
+  ) {
     questions.push({
       id: "review_offering_structure",
       category: "offering",
@@ -1117,7 +1127,7 @@ export const structuredAnalysisShape = {
         supportingProofIds: [],
         adaptiveFields: {},
         priority: "primary|secondary|inactive",
-        status: "detected|confirmed|excluded",
+        status: "suggested|confirmed|inferred|proposed|rejected",
         sourceReferences: [],
       },
     ],

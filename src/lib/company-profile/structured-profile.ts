@@ -187,7 +187,14 @@ export type Offering = {
   supportingProofIds: string[];
   adaptiveFields: Record<string, string | string[]>;
   priority: "primary" | "secondary" | "inactive";
-  status: "detected" | "confirmed" | "excluded";
+  status:
+    | "suggested"
+    | "confirmed"
+    | "inferred"
+    | "proposed"
+    | "rejected"
+    | "detected"
+    | "excluded";
   sourceReferences: SourceReference[];
 };
 
@@ -450,7 +457,10 @@ export function calculateReadiness(
   >,
 ): ProfileReadiness {
   const active = profile.offerings.filter(
-    (item) => item.status !== "excluded" && item.priority !== "inactive",
+    (item) =>
+      item.status !== "excluded" &&
+      item.status !== "rejected" &&
+      item.priority !== "inactive",
   );
   const scores = {
     companyUnderstanding:
@@ -618,7 +628,19 @@ function parseOffering(value: unknown): Offering {
       ? (value.adaptiveFields as Record<string, string | string[]>)
       : {},
     priority: enumValue(value.priority, ["primary", "secondary", "inactive"], "priority"),
-    status: enumValue(value.status, ["detected", "confirmed", "excluded"], "status"),
+    status: enumValue(
+      value.status,
+      [
+        "suggested",
+        "confirmed",
+        "inferred",
+        "proposed",
+        "rejected",
+        "detected",
+        "excluded",
+      ],
+      "status",
+    ),
     sourceReferences: array(value.sourceReferences, "sourceReferences").map(parseSource),
     ...optionalOfferingFields(value),
   };

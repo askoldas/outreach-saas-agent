@@ -81,8 +81,8 @@ export async function updateOfferingStatusAction(formData: FormData) {
   if (!offering) redirect("/company-profile?error=offering-not-found");
   const intent = text(formData, "intent");
   if (intent === "confirm") offering.status = "confirmed";
-  else if (intent === "exclude") offering.status = "excluded";
-  else if (intent === "restore") offering.status = "detected";
+  else if (intent === "exclude") offering.status = "rejected";
+  else if (intent === "restore") offering.status = "inferred";
   else if (intent === "capability") {
     draft.capabilities.push({
       id: `cap_${offering.id}`.slice(0, 64),
@@ -90,7 +90,7 @@ export async function updateOfferingStatusAction(formData: FormData) {
       description: offering.shortDescription,
       relatedOfferingIds: [],
     });
-    offering.status = "excluded";
+    offering.status = "rejected";
   } else redirect("/company-profile?error=invalid-offering-action");
   draft.readiness = calculateReadiness(draft);
   await saveCompanyProfileVersion(currentWorkspace.id, {
@@ -282,7 +282,8 @@ function applyQuestionAnswer(
   if (fieldPath === "offerings.structure") {
     if (values.join(" ").toLowerCase().includes("confirm"))
       for (const item of profile.offerings)
-        if (item.status === "detected") item.status = "confirmed";
+        if (item.status === "detected" || item.status === "inferred")
+          item.status = "confirmed";
   } else if (fieldPath === "offerings.active") {
     const selected = new Set(values);
     for (const item of profile.offerings)
@@ -312,7 +313,7 @@ function applyQuestionAnswer(
   } else if (category === "offering" && offering) {
     const answerText = values.join(" ").toLowerCase();
     if (answerText.includes("not") || answerText.includes("remove"))
-      offering.status = "excluded";
+      offering.status = "rejected";
     else offering.status = "confirmed";
   }
 }

@@ -81,7 +81,7 @@ test("current AI prompt versions match the approved structured contracts", async
     ["strategy-generation.ts", "campaign-strategy-v1"],
     ["lead-evaluation.ts", "lead-evaluator-v1"],
     ["draft-generation.ts", "grounded-outreach-draft-v1"],
-    ["guided-interpretation.ts", "guided-change-v1"],
+    ["guided-interpretation.ts", "guided-change-v2"],
   ]);
   for (const [file, promptVersion] of expectations) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");

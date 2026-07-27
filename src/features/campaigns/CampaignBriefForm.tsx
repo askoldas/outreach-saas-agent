@@ -217,7 +217,7 @@ export function CampaignBriefForm({
   function startWithProfileDefaults() {
     const offerings =
       profile.structuredProfile?.offerings.filter(
-        (offering) => offering.status !== "excluded",
+        (offering) => offering.status !== "excluded" && offering.status !== "rejected",
       ) ?? [];
     const preferred =
       offerings.find((offering) => offering.priority === "primary") ?? offerings[0];
@@ -400,7 +400,10 @@ export function CampaignBriefForm({
             />
             <div className={styles.options}>
               {profile.structuredProfile?.offerings
-                .filter((offering) => offering.status !== "excluded")
+                .filter(
+                  (offering) =>
+                    offering.status !== "excluded" && offering.status !== "rejected",
+                )
                 .map((offering) => (
                   <OfferingSuggestionCard
                     key={offering.id}

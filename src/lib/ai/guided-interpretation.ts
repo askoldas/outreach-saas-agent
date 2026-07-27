@@ -2,7 +2,7 @@ import { parseAiGuidedResponse, type GuidedScope } from "../guided/contracts.ts"
 import { generateTextResult } from "../providers/openrouter.ts";
 import { parseCompleteJsonObject } from "./company-profile-analysis.ts";
 
-export const guidedInterpretationPromptVersion = "guided-change-v1";
+export const guidedInterpretationPromptVersion = "guided-change-v2";
 
 const allowedFields: Partial<Record<GuidedScope, string[]>> = {
   company: [
@@ -42,7 +42,13 @@ export async function interpretGuidedChange(input: {
         content: [
           "Interpret one bounded commercial adjustment into a structured proposal.",
           "Never mutate data, invent company facts, or use fields and operations outside the supplied allowlist.",
+          "Preserve every existing confirmed item unless the user explicitly requests its removal or replacement.",
+          "Treat also, add, include, and we provide as additive. Treat change, rename, adjust, and update as modifications to referenced items.",
+          "Only treat instead, replace, or only as replacement intent, and make every removed or replaced value explicit in the proposal.",
+          "Treat remove, exclude, and we do not provide as removal of only the referenced values.",
+          "Include unchanged confirmed values in previousValue and proposedValue when updating a list so additions cannot silently erase them.",
           "Material settings require confirmation. If ambiguous, return one focused clarification question and no proposed changes.",
+          "Keep explanations concise. All mutations require confirmation; explanations alone do not.",
           "Return JSON only matching the required response contract.",
         ].join(" "),
       },
@@ -55,6 +61,12 @@ export async function interpretGuidedChange(input: {
           currentObject: input.context,
           allowedFields: allowedFields[input.scope],
           allowedOperations: ["set", "add", "remove", "replace", "merge", "classify"],
+          interpretationRules: {
+            additiveByDefault: true,
+            preserveConfirmedItems: true,
+            replacementRequiresExplicitLanguage: true,
+            mutationsRequireConfirmation: true,
+          },
           requiredContract: {
             message: "string",
             context: { scope: input.scope, [`${input.scope}Id`]: input.entityId },

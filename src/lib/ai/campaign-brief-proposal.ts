@@ -14,7 +14,7 @@ export async function generateCampaignBriefProposal(input: {
     throw new Error("Choose at least one country or region first.");
   }
   const offerings = input.profile.offerings.filter(
-    (offering) => offering.status !== "excluded",
+    (offering) => offering.status !== "excluded" && offering.status !== "rejected",
   );
   if (!offerings.length)
     throw new Error("The Company Profile has no campaign-ready offering.");

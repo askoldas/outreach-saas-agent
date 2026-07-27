@@ -17,7 +17,9 @@ export function CompanyGuidedSetup({ profile }: { profile: CompanyProfile }) {
   const data = profile.structuredProfile;
   if (!data) return null;
   const pending = profile.reviewQuestions.filter((item) => item.status === "unanswered");
-  const detected = data.offerings.filter((item) => item.status === "detected");
+  const detected = data.offerings.filter(
+    (item) => item.status === "detected" || item.status === "inferred",
+  );
   const activeQuestion = pending[0];
   const step = pending.length ? 5 : 9;
   const requiresItemClassification = false;

@@ -142,7 +142,7 @@ export function generateWebDiscoveryQueries(
 }
 
 export function normalizeWebQuery(query: string) {
-  return query.normalize("NFKC").trim().replace(/\s+/g, " ").toLocaleLowerCase();
+  return query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
 export function fingerprintWebQuery(normalizedQuery: string) {

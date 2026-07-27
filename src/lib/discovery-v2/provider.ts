@@ -10,5 +10,12 @@ export interface CompanyDiscoveryProvider {
   readonly version: string;
   getCapabilities(): Promise<DiscoveryProviderCapabilities>;
   estimate(request: ProviderDiscoveryRequest): Promise<ProviderDiscoveryEstimate>;
-  search(request: ProviderDiscoveryRequest): Promise<ProviderDiscoveryResponse>;
+  search(
+    request: ProviderDiscoveryRequest,
+    executionPlan?: ProviderDiscoveryExecutionPlan,
+  ): Promise<ProviderDiscoveryResponse>;
 }
+
+export type ProviderDiscoveryExecutionPlan = {
+  queries?: unknown;
+};

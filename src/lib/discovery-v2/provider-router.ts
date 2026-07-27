@@ -65,7 +65,7 @@ export async function routeDiscoverySegment(input: {
         (left.estimatedCostMinor ?? Number.POSITIVE_INFINITY) -
           (right.estimatedCostMinor ?? Number.POSITIVE_INFINITY) ||
         right.sourceDiversity - left.sourceDiversity ||
-        left.providerId.localeCompare(right.providerId),
+        compareText(left.providerId, right.providerId),
     );
   if (!routable.length) {
     throw new Error("No enabled discovery provider supports this segment.");
@@ -82,6 +82,10 @@ export async function routeDiscoverySegment(input: {
       unsupportedConstraints: provider.unsupportedConstraints,
     })),
   };
+}
+
+function compareText(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function unsupportedSemanticConstraints(

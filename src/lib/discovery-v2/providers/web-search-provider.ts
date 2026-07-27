@@ -6,8 +6,14 @@ import {
   type DiscoveryProviderCapabilities,
   type ProviderDiscoveryRequest,
 } from "../contracts.ts";
-import type { CompanyDiscoveryProvider } from "../provider.ts";
-import { generateWebDiscoveryQueries } from "./web-query-generator.ts";
+import type {
+  CompanyDiscoveryProvider,
+  ProviderDiscoveryExecutionPlan,
+} from "../provider.ts";
+import {
+  generateWebDiscoveryQueries,
+  webDiscoveryQuerySchema,
+} from "./web-query-generator.ts";
 import { normalizeWebSearchResult } from "./web-normalization.ts";
 
 type WebSearchTransport = (
@@ -61,13 +67,31 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
     };
   }
 
-  async search(request: ProviderDiscoveryRequest) {
+  async search(
+    request: ProviderDiscoveryRequest,
+    executionPlan?: ProviderDiscoveryExecutionPlan,
+  ) {
     const startedAt = Date.now();
     const parsed = providerDiscoveryRequestSchema.parse(request);
-    const queries = generateWebDiscoveryQueries(parsed);
+    const queries =
+      executionPlan?.queries === undefined
+        ? generateWebDiscoveryQueries(parsed)
+        : webDiscoveryQuerySchema.array().parse(executionPlan.queries);
+    if (
+      queries.some(
+        (query) =>
+          query.campaignId !== parsed.campaignId ||
+          query.discoverySegmentId !== parsed.segment.id,
+      )
+    ) {
+      throw new Error("Frozen web discovery queries do not match the request.");
+    }
     const retrievedAt = this.#now();
     const maxResults = parsed.budget.maxResults ?? 25;
-    const perQuery = Math.max(1, Math.min(8, Math.ceil(maxResults / queries.length)));
+    const perQuery = Math.max(
+      1,
+      Math.min(8, Math.ceil(maxResults / Math.max(1, queries.length))),
+    );
     const outcomes = await mapWithConcurrency(queries, 3, async (query) => {
       try {
         return {
@@ -82,6 +106,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
             code: classifyTransportError(error),
             message: boundedMessage(error),
             retryable: isRetryableTransportError(error),
+            recordReference: query.fingerprint,
           },
         };
       }
@@ -103,12 +128,14 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
         if (normalized.candidate) normalizedCandidates.push(normalized.candidate);
       }
     }
+    const errors = outcomes.flatMap((outcome) => (outcome.error ? [outcome.error] : []));
+    const retainedResultCapReached = records.length >= maxResults;
     return providerDiscoveryResponseSchema.parse({
       providerId: this.id,
       executionId: this.#executionId(),
       records,
       normalizedCandidates,
-      exhausted: true,
+      exhausted: errors.length === 0 && !retainedResultCapReached,
       usage: {
         calls: outcomes.length,
         recordsReturned: records.length,
@@ -116,7 +143,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
       },
       warnings:
         records.length === 0 ? ["Web search returned no retained source records."] : [],
-      errors: outcomes.flatMap((outcome) => (outcome.error ? [outcome.error] : [])),
+      errors,
     });
   }
 }

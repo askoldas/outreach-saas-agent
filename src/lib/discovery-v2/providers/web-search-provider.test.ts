@@ -23,6 +23,7 @@ test("V2 web queries are semantic, bounded, localized, and deterministic", () =>
   assert.ok(first.every((query) => query.query.includes("Lithuania")));
   assert.ok(first.every((query) => query.query.length <= 240));
   assert.equal(new Set(first.map(({ fingerprint }) => fingerprint)).size, first.length);
+  assert.equal(normalizeWebQuery("  INDUSTRY   I  "), "industry i");
 
   const localInput = request();
   localInput.segment.geography.localLanguages = ["Lithuanian"];
@@ -56,6 +57,18 @@ test("completed equivalent queries are skipped by fingerprint", () => {
   );
 });
 
+test("WebSearchProvider executes a frozen query plan without regenerating it", async () => {
+  const calls: string[] = [];
+  const provider = new WebSearchProvider(async (query) => {
+    calls.push(query);
+    return [];
+  });
+  const input = request();
+  const frozen = generateWebDiscoveryQueries(input).slice(1, 2);
+  await provider.search(input, { queries: frozen });
+  assert.deepEqual(calls, [frozen[0]!.query]);
+});
+
 test("WebSearchProvider bounds calls and records while preserving raw provenance", async () => {
   const calls: string[] = [];
   const provider = new WebSearchProvider(
@@ -86,6 +99,7 @@ test("WebSearchProvider bounds calls and records while preserving raw provenance
   assert.equal(calls.length, 2);
   assert.equal(response.records.length, 3);
   assert.equal(response.usage.recordsReturned, 3);
+  assert.equal(response.exhausted, false);
   assert.ok(response.records.every(({ rawPayloadHash }) => rawPayloadHash.length === 64));
   assert.ok(
     response.records.some(({ sourceType }) => sourceType === "industry_directory"),
@@ -114,6 +128,7 @@ test("directory pages are retained but not treated as company candidates", async
   const response = await provider.search(input);
   assert.equal(response.records.length, 1);
   assert.equal(response.normalizedCandidates.length, 0);
+  assert.equal(response.exhausted, true);
 });
 
 test("individual Tavily failures are bounded and classified", async () => {
@@ -129,7 +144,12 @@ test("individual Tavily failures are bounded and classified", async () => {
   const response = await provider.search(input);
   assert.equal(response.errors[0]?.code, "rate_limit");
   assert.equal(response.errors[0]?.retryable, true);
+  assert.equal(
+    response.errors[0]?.recordReference,
+    generateWebDiscoveryQueries(input)[0]?.fingerprint,
+  );
   assert.equal(response.records.length, 0);
+  assert.equal(response.exhausted, false);
 });
 
 function request(): ProviderDiscoveryRequest {

@@ -129,7 +129,7 @@ export function compileDiscoveryPlanV2(input: {
     versionNumber: input.versionNumber,
     status: "ready" as const,
     segments: [...strategy.discoverySegments].sort(
-      (left, right) => left.priority - right.priority || left.id.localeCompare(right.id),
+      (left, right) => left.priority - right.priority || compareText(left.id, right.id),
     ),
     routes: [...input.routes]
       .map((route) => ({
@@ -137,10 +137,10 @@ export function compileDiscoveryPlanV2(input: {
         providers: [...route.providers].sort(
           (left, right) =>
             left.priority - right.priority ||
-            left.providerId.localeCompare(right.providerId),
+            compareText(left.providerId, right.providerId),
         ),
       }))
-      .sort((left, right) => left.segmentId.localeCompare(right.segmentId)),
+      .sort((left, right) => compareText(left.segmentId, right.segmentId)),
     providerCapabilities: [...input.providerCapabilities]
       .map((capabilities) => ({
         providerId: capabilities.providerId,
@@ -148,7 +148,7 @@ export function compileDiscoveryPlanV2(input: {
         capabilities,
         contentHash: hashCanonical(capabilities),
       }))
-      .sort((left, right) => left.providerId.localeCompare(right.providerId)),
+      .sort((left, right) => compareText(left.providerId, right.providerId)),
     coveragePolicy: {
       minimumCoverageConfidence: 0.65,
       minimumSourceDiversity: 2,
@@ -168,4 +168,8 @@ export function compileDiscoveryPlanV2(input: {
     ...body,
     contentHash: hashCanonical(body),
   });
+}
+
+function compareText(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

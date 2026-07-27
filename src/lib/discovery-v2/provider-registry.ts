@@ -23,7 +23,7 @@ export class DiscoveryProviderRegistry {
 
   list() {
     return [...this.#providers.values()].sort((left, right) =>
-      left.id.localeCompare(right.id),
+      left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
     );
   }
 }

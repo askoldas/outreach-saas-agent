@@ -7,7 +7,7 @@ import {
   type DiscoveryGap,
 } from "@/lib/discovery-v2";
 import type { Json } from "@/types/database.types";
-import { persistDiscoveryCoverageDecision } from "./coverage-repository";
+import { persistDiscoverySegmentCoverageOnce } from "./coverage-repository";
 
 export async function calculateAndPersistCoverage(input: {
   workspaceId: string;
@@ -56,13 +56,12 @@ export async function calculateAndPersistCoverage(input: {
     maximumConsecutiveLowYieldPasses:
       input.campaignState.maximumConsecutiveLowYieldPasses,
   });
-  await persistDiscoveryCoverageDecision({
+  await persistDiscoverySegmentCoverageOnce({
     workspaceId: input.workspaceId,
     runId: input.runId,
     segmentRunId: input.segmentRunId,
     coverage: coverage as unknown as Json,
     gaps: gaps as unknown as Json,
-    decision: decision as unknown as Json,
   });
   return { coverage, gaps, decision };
 }

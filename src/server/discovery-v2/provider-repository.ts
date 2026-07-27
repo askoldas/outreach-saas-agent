@@ -5,6 +5,11 @@ import type {
 } from "@/lib/discovery-v2";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
+import {
+  summarizePersistedProviderCoverage,
+  type PersistedProviderCandidateFact,
+  type PersistedProviderCoverageSummary,
+} from "./provider-coverage";
 
 type RpcResult = {
   data: unknown;
@@ -13,6 +18,8 @@ type RpcResult = {
 
 export type PersistedProviderExecutionSummary = {
   cached: true;
+  completedAt: string;
+  coverage: PersistedProviderCoverageSummary;
   errors: Json;
   exhausted: boolean;
   executionId: string;
@@ -33,7 +40,9 @@ export async function findPersistedProviderExecution(input: {
   const supabase = createServiceRoleClient();
   const { data: execution, error } = await supabase
     .from("discovery_provider_executions")
-    .select("id,result_count,exhausted,errors_json,warnings_json,usage_json")
+    .select(
+      "id,result_count,exhausted,errors_json,warnings_json,usage_json,started_at,completed_at",
+    )
     .eq("workspace_id", input.workspaceId)
     .eq("campaign_id", input.campaignId)
     .eq("discovery_segment_key", input.segmentKey)
@@ -48,31 +57,38 @@ export async function findPersistedProviderExecution(input: {
 
   const { data: sources, error: sourceError } = await supabase
     .from("provider_source_records")
-    .select("id")
+    .select("id,ingestion_status,query_or_filter_fingerprint,source_type")
     .eq("workspace_id", input.workspaceId)
     .eq("provider_execution_id", execution.id);
   if (sourceError)
     throw new Error(`Could not inspect cached Discovery records: ${sourceError.message}`);
   const sourceIds = (sources ?? []).map(({ id }) => id);
-  let normalizedCandidateCount = 0;
+  const candidates: PersistedProviderCandidateFact[] = [];
   if (sourceIds.length) {
-    const { count, error: candidateError } = await supabase
-      .from("normalized_provider_candidates")
-      .select("id", { count: "exact", head: true })
-      .eq("workspace_id", input.workspaceId)
-      .in("provider_source_record_id", sourceIds);
-    if (candidateError)
-      throw new Error(
-        `Could not inspect cached normalized candidates: ${candidateError.message}`,
-      );
-    normalizedCandidateCount = count ?? 0;
+    for (const sourceIdBatch of batches(sourceIds, 200)) {
+      const { data, error: candidateError } = await supabase
+        .from("normalized_provider_candidates")
+        .select("provider_source_record_id,canonical_domain_hint,normalized_name,name")
+        .eq("workspace_id", input.workspaceId)
+        .in("provider_source_record_id", sourceIdBatch);
+      if (candidateError)
+        throw new Error(
+          `Could not inspect cached normalized candidates: ${candidateError.message}`,
+        );
+      candidates.push(...(data ?? []));
+    }
   }
   return {
     cached: true,
+    completedAt: new Date(execution.completed_at ?? execution.started_at).toISOString(),
+    coverage: summarizePersistedProviderCoverage({
+      sources: sources ?? [],
+      candidates,
+    }),
     errors: execution.errors_json,
     exhausted: execution.exhausted === true,
     executionId: execution.id,
-    normalizedCandidateCount,
+    normalizedCandidateCount: candidates.length,
     providerRecordCount: execution.result_count,
     usage: execution.usage_json,
     warnings: execution.warnings_json,
@@ -119,4 +135,12 @@ export async function persistProviderResponse(input: {
     throw new Error("Discovery provider persistence returned an invalid execution.");
   }
   return data as Record<string, unknown>;
+}
+
+function batches<T>(values: T[], size: number) {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }

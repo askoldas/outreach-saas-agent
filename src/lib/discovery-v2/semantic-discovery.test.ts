@@ -127,6 +127,13 @@ test("continuation stops on product goals and otherwise requires an actionable g
     maximumConsecutiveLowYieldPasses: 2,
   };
   assert.equal(decideDiscoveryContinuation(base).decision, "continue");
+  const bounded = decideDiscoveryContinuation({
+    ...base,
+    remainingCalls: 2,
+  });
+  assert.equal(bounded.decision, "continue");
+  assert.equal(bounded.selectedGapIds.length, 1);
+  assert.deepEqual(bounded.selectedActions, ["expand_directory"]);
   assert.equal(
     decideDiscoveryContinuation({
       ...base,

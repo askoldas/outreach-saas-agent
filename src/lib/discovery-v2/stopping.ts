@@ -105,13 +105,51 @@ export function decideDiscoveryContinuation(input: {
   }
   if (!actionable.length)
     return stop("no_actionable_gaps", "No material gap has a concrete next action.");
+  const selected = selectActionsWithinCallBudget(actionable, input.remainingCalls);
+  if (!selected.gapIds.length)
+    return stop(
+      "no_actionable_gaps",
+      "No material gap has an action within the remaining provider-call budget.",
+    );
   return discoveryContinuationDecisionSchema.parse({
     decision: "continue",
     reasonCode: "actionable_gap",
     rationale: "A material coverage gap has a bounded non-duplicate action.",
-    selectedGapIds: actionable.map(({ id }) => id),
-    selectedActions: actionable.flatMap(({ recommendedActions }) =>
-      recommendedActions.map(({ type }) => type),
-    ),
+    selectedGapIds: selected.gapIds,
+    selectedActions: selected.actionTypes,
   });
+}
+
+function selectActionsWithinCallBudget(gaps: DiscoveryGap[], remainingCalls: number) {
+  const severityOrder: Record<DiscoveryGap["severity"], number> = {
+    critical: 0,
+    high: 1,
+    normal: 2,
+    low: 3,
+  };
+  const ordered = [...gaps].sort(
+    (left, right) =>
+      severityOrder[left.severity] - severityOrder[right.severity] ||
+      compareText(left.id, right.id),
+  );
+  const gapIds: string[] = [];
+  const actionTypes: string[] = [];
+  let callsAvailable = Math.max(0, Math.floor(remainingCalls));
+  for (const gap of ordered) {
+    let selectedForGap = false;
+    for (const action of gap.recommendedActions) {
+      const calls = action.maxCalls ?? 1;
+      if (calls > callsAvailable) continue;
+      callsAvailable -= calls;
+      actionTypes.push(action.type);
+      selectedForGap = true;
+    }
+    if (selectedForGap) gapIds.push(gap.id);
+    if (callsAvailable === 0) break;
+  }
+  return { actionTypes, gapIds };
+}
+
+function compareText(left: string, right: string) {
+  return left < right ? -1 : left > right ? 1 : 0;
 }

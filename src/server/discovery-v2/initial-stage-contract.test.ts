@@ -15,35 +15,46 @@ test("initial V2 discovery is bounded globally and preserves priority breadth", 
   assert.match(stage, /maximumInitialSegments = 6/);
   assert.match(stage, /maximumResultsPerSegment = 25/);
   assert.match(stage, /\.slice\(0, maximumInitialSegments\)/);
-  assert.match(stage, /mapWithConcurrency\(requests, 2/);
-  assert.match(stage, /Math\.floor\(maximumInitialProviderCalls/);
+  assert.match(stage, /mapWithConcurrency\(\s*executionRequests,\s*2/);
+  assert.match(stage, /Math\.floor\(\s*input\.maximumCalls/);
 });
 
 test("worker context uses the run's exact confirmed strategy and internal Campaign ID", () => {
-  assert.match(context, /\.eq\("id", campaignRun\.strategy_version_id\)/);
-  assert.match(context, /strategyVersion\.campaign_id !== campaignRun\.campaign_id/);
+  assert.match(context, /\.eq\("id", parsedCampaignRun\.strategy_version_id\)/);
+  assert.match(
+    context,
+    /parsedStrategyVersion\.campaign_id !== parsedCampaignRun\.campaign_id/,
+  );
   assert.match(context, /confirmation_status !== "confirmed"/);
-  assert.match(context, /campaignInternalId: campaignRun\.campaign_id/);
+  assert.match(context, /campaignInternalId: parsedCampaignRun\.campaign_id/);
   assert.match(context, /if \(value === "web"\) return "web_search"/);
 });
 
 test("provider retries reuse completed request hashes before another paid search", () => {
   assert.match(providerService, /findPersistedProviderExecution/);
-  assert.match(providerService, /if \(cached\) return/);
+  assert.match(providerService, /if \(cached\) \{[\s\S]+return/);
   assert.match(providerRepository, /\.eq\("request_hash", input\.requestHash\)/);
   assert.match(providerRepository, /\.eq\("status", "completed"\)/);
 });
 
-test("discovery escalates total transient failure and checks worker configuration", () => {
+test("discovery settles provider failure evidence and checks worker configuration", () => {
   assert.match(stage, /TAVILY_API_KEY/);
-  assert.match(stage, /throwForTotalRetryableFailure/);
-  assert.match(stage, /code: "provider_unavailable", retryable: true/);
+  assert.match(stage, /fatalProviderFailure/);
+  assert.match(stage, /decideDiscoveryContinuation/);
+  assert.doesNotMatch(stage, /throwForTotalRetryableFailure/);
   assert.match(workflowStage, /input\.stage === "discover"/);
   assert.match(workflowStage, /executeInitialDiscoveryStage/);
 });
 
-test("initial breadth is explicitly partial until semantic coverage is attached", () => {
+test("initial breadth durably attaches semantic audit and remains partial", () => {
+  assert.match(stage, /prepareSemanticDiscoveryContext/);
+  assert.match(stage, /compileAndPersistDiscoveryPlan/);
+  assert.match(stage, /startCampaignDiscoveryRun/);
+  assert.match(stage, /startDiscoverySegmentPassOnce/);
+  assert.match(stage, /recordDiscoveryQueryAudit/);
+  assert.match(stage, /persistDiscoverySegmentCoverageOnce/);
+  assert.match(stage, /finalizeDiscoveryPass/);
   assert.match(stage, /status: "partial"/);
-  assert.match(stage, /stageScope: "initial_breadth"/);
+  assert.match(stage, /stageScope: "initial_semantic_breadth"/);
   assert.match(stage, /cachedExecutionCount/);
 });

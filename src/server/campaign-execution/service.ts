@@ -363,13 +363,12 @@ export async function linkDiscoveryTriggerRun(
 
 export async function createCampaignAgentIterationExecution(input: {
   context: CampaignExecutionContext;
+  planningInputHash?: string;
   iteration: number;
   plan: CampaignAgentPlan;
 }) {
   const idempotencyKey = `campaign-agent-discovery:${input.context.campaignRunId}:${input.iteration}`;
-  const requestHash = createHash("sha256")
-    .update(JSON.stringify(input.plan))
-    .digest("hex");
+  const planHash = createHash("sha256").update(JSON.stringify(input.plan)).digest("hex");
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
     .from("provider_executions")
@@ -382,13 +381,16 @@ export async function createCampaignAgentIterationExecution(input: {
         provider: "tavily_openrouter",
         operation: "campaign_discovery",
         idempotency_key: idempotencyKey,
-        request_hash: requestHash,
+        request_hash: planHash,
         status: "pending",
         metadata: {
           agentIteration: input.iteration,
           agentTool: "discover_companies",
           agentToolVersion: "v1",
           parentExecutionId: input.context.discoveryExecutionId,
+          plan: input.plan,
+          planHash,
+          planningInputHash: input.planningInputHash ?? null,
           planRationale: input.plan.rationale,
         },
       },
@@ -397,21 +399,55 @@ export async function createCampaignAgentIterationExecution(input: {
         ignoreDuplicates: true,
       },
     )
-    .select("id,status")
+    .select("id,status,metadata")
     .maybeSingle();
   if (error)
     throw new Error(`Could not create Campaign Agent iteration: ${error.message}`);
-  if (data) return data.id;
+  if (data) return { executionId: data.id, plan: input.plan };
 
   const { data: existing, error: existingError } = await supabase
     .from("provider_executions")
-    .select("id")
+    .select("id,metadata")
     .eq("parent_execution_id", input.context.discoveryExecutionId)
     .eq("agent_iteration", input.iteration)
     .single();
   if (existingError)
     throw new Error(`Could not load Campaign Agent iteration: ${existingError.message}`);
-  return existing.id;
+  const metadata = asRecord(existing.metadata);
+  const persistedPlan = campaignAgentPlan(metadata.plan);
+  if (persistedPlan) return { executionId: existing.id, plan: persistedPlan };
+  const { error: repairError } = await supabase
+    .from("provider_executions")
+    .update({
+      request_hash: planHash,
+      metadata: {
+        ...metadata,
+        plan: input.plan,
+        planHash,
+        planningInputHash: input.planningInputHash ?? null,
+      },
+    })
+    .eq("workspace_id", input.context.workspaceId)
+    .eq("id", existing.id);
+  if (repairError)
+    throw new Error(`Could not persist Campaign Agent plan: ${repairError.message}`);
+  return { executionId: existing.id, plan: input.plan };
+}
+
+export async function loadPersistedCampaignAgentPlan(input: {
+  context: CampaignExecutionContext;
+  iteration: number;
+}) {
+  const { data, error } = await createServiceRoleClient()
+    .from("provider_executions")
+    .select("metadata")
+    .eq("workspace_id", input.context.workspaceId)
+    .eq("parent_execution_id", input.context.discoveryExecutionId)
+    .eq("agent_iteration", input.iteration)
+    .maybeSingle();
+  if (error)
+    throw new Error(`Could not load persisted Campaign Agent plan: ${error.message}`);
+  return campaignAgentPlan(asRecord(data?.metadata).plan);
 }
 
 export async function completeCampaignAgentParentExecution(
@@ -441,14 +477,16 @@ export async function recordCampaignAgentPlannerRequest(input: {
   context: CampaignExecutionContext;
   result: CampaignAgentPlannerResult;
 }) {
-  const executionId = await createCampaignAgentIterationExecution({
-    context: input.context,
-    iteration: input.result.iteration,
-    plan: input.result.plan,
-  });
   const requestHash = createHash("sha256")
     .update(JSON.stringify(input.result.input))
     .digest("hex");
+  const execution = await createCampaignAgentIterationExecution({
+    context: input.context,
+    planningInputHash: requestHash,
+    iteration: input.result.iteration,
+    plan: input.result.plan,
+  });
+  const executionId = execution.executionId;
   const supabase = createServiceRoleClient();
   const { data: existing, error: lookupError } = await supabase
     .from("ai_requests")
@@ -622,6 +660,25 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function campaignAgentPlan(value: unknown): CampaignAgentPlan | null {
+  const row = asRecord(value);
+  const queries = Array.isArray(row.queries)
+    ? row.queries.filter(
+        (query): query is string => typeof query === "string" && Boolean(query.trim()),
+      )
+    : [];
+  const resultsPerQuery = Number(row.resultsPerQuery);
+  const rationale = stringValue(row.rationale);
+  if (
+    !queries.length ||
+    !Number.isInteger(resultsPerQuery) ||
+    resultsPerQuery < 1 ||
+    !rationale
+  )
+    return null;
+  return { queries, rationale, resultsPerQuery };
 }
 
 function positiveInteger(primary: unknown, fallback: unknown) {

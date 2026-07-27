@@ -25,11 +25,20 @@ export type CampaignAgentPlannerResult = {
 export function createCampaignAgentPlanner(
   context: CampaignAgentPlannerContext,
   options: {
+    loadPersistedPlan?: (input: {
+      iteration: number;
+      priorState: CampaignAgentState;
+    }) => Promise<CampaignAgentPlan | null>;
     onResult?: (result: CampaignAgentPlannerResult) => Promise<void>;
   } = {},
 ): CampaignAgentPlanner {
   return {
     async plan({ iteration, priorState }) {
+      const persistedPlan = await options.loadPersistedPlan?.({
+        iteration,
+        priorState,
+      });
+      if (persistedPlan) return persistedPlan;
       const input = {
         promptVersion: campaignAgentPlannerPromptVersion,
         iteration,

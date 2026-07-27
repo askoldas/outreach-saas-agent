@@ -25,6 +25,7 @@ import {
   loadCampaignAgentPlanningContext,
   loadCampaignExecutionContext,
   linkDiscoveryTriggerRun,
+  loadPersistedCampaignAgentPlan,
   markCampaignOrchestrationStarted,
   markCampaignAgentWaitingForInput,
   markOptionalEnrichmentGate,
@@ -134,11 +135,13 @@ async function executeDeterministicCampaign(
       iteration,
       previousQueries: discovery.output.queriesExecuted,
     });
-    executionId = await createCampaignAgentIterationExecution({
+    const iterationExecution = await createCampaignAgentIterationExecution({
       context,
       iteration,
       plan,
     });
+    executionId = iterationExecution.executionId;
+    plan = iterationExecution.plan;
   }
 
   await markOptionalEnrichmentGate(context);
@@ -157,6 +160,8 @@ async function executeAgentCampaign(
   const planner = createCampaignAgentPlanner(
     await loadCampaignAgentPlanningContext(context.campaignRunId),
     {
+      loadPersistedPlan: async ({ iteration }) =>
+        loadPersistedCampaignAgentPlan({ context, iteration }),
       onResult: async (result) => recordCampaignAgentPlannerRequest({ context, result }),
     },
   );
@@ -168,15 +173,18 @@ async function executeAgentCampaign(
   let previouslyQualified = initialState?.acceptedCompanies ?? 0;
   const toolRegistry = createCampaignAgentToolRegistry().register(
     createCampaignDiscoveryTool(async (plan, toolContext) => {
-      const iterationExecutionId = await createCampaignAgentIterationExecution({
+      const iterationExecution = await createCampaignAgentIterationExecution({
         context,
         iteration: toolContext.iteration,
         plan,
       });
       const discovery = await discoverCampaignCompaniesTask.triggerAndWait(
-        { plan, providerExecutionId: iterationExecutionId },
         {
-          idempotencyKey: `campaign-agent-discovery:${iterationExecutionId}:v1`,
+          plan: iterationExecution.plan,
+          providerExecutionId: iterationExecution.executionId,
+        },
+        {
+          idempotencyKey: `campaign-agent-discovery:${iterationExecution.executionId}:v1`,
           tags: [
             `workspace:${context.workspaceId}`,
             `campaign_run:${context.campaignRunId}`,
@@ -185,7 +193,11 @@ async function executeAgentCampaign(
           ],
         },
       );
-      await linkDiscoveryTriggerRun(context, discovery.id, iterationExecutionId);
+      await linkDiscoveryTriggerRun(
+        context,
+        discovery.id,
+        iterationExecution.executionId,
+      );
       if (!discovery.ok)
         throw new Error(
           `Campaign Agent discovery child failed: ${errorMessage(discovery.error)}`,

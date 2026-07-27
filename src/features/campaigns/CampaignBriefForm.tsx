@@ -419,26 +419,44 @@ export function CampaignBriefForm({
           />
           <Field label="Company types" value={companyTypes} onChange={setCompanyTypes} />
           <Field label="Industries" value={industries} onChange={setIndustries} />
-          <Field
-            label="Relevant business characteristics"
-            value={characteristics}
-            onChange={setCharacteristics}
-            multiline
-          />
-          <Field
-            label="Positive signals"
-            value={positiveSignals}
-            onChange={setPositiveSignals}
-            multiline
-          />
-          <Field
-            label="Required criteria"
-            value={requiredCriteria}
-            onChange={setRequiredCriteria}
-            multiline
-          />
-          <Field label="Exclude" value={exclusions} onChange={setExclusions} multiline />
-          <Field label="Likely decision-maker roles" value={roles} onChange={setRoles} />
+          <details className={styles.proposal}>
+            <summary>Advanced targeting</summary>
+            <div className={shared.stack}>
+              <p>
+                Refine discovery signals and exclusions only when the recommended target
+                needs additional constraints.
+              </p>
+              <Field
+                label="Relevant business characteristics"
+                value={characteristics}
+                onChange={setCharacteristics}
+                multiline
+              />
+              <Field
+                label="Positive signals"
+                value={positiveSignals}
+                onChange={setPositiveSignals}
+                multiline
+              />
+              <Field
+                label="Required criteria"
+                value={requiredCriteria}
+                onChange={setRequiredCriteria}
+                multiline
+              />
+              <Field
+                label="Exclude"
+                value={exclusions}
+                onChange={setExclusions}
+                multiline
+              />
+              <Field
+                label="Likely decision-maker roles"
+                value={roles}
+                onChange={setRoles}
+              />
+            </div>
+          </details>
           {proposal.ambiguity?.requiresClarification && proposal.ambiguity.question ? (
             <div className={shared.stack}>
               <strong>One clarification</strong>

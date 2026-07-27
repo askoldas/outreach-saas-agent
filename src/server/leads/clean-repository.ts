@@ -24,6 +24,7 @@ type CleanCampaignCompanyRow = {
   };
   status: string;
   source_summary: string;
+  user_notes: string;
   metadata: JsonObject;
   company: {
     id: string;
@@ -97,6 +98,7 @@ const cleanLeadSelect = `
   ),
   status,
   source_summary,
+  user_notes,
   metadata,
   company:companies!inner (
     id,
@@ -290,6 +292,7 @@ function mapCleanLead(row: CleanCampaignCompanyRow): Lead {
     qualificationStatus: mapQualificationStatus(qualification?.status),
     status: fromCleanStatus(row.status),
     summary: qualification?.summary || row.source_summary || row.company.description,
+    userNotes: row.user_notes,
     qualification: mapDimensions(qualification?.qualification_dimensions),
     evidence: mapEvidence(qualification?.qualification_evidence, sources),
     contacts,

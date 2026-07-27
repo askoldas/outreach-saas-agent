@@ -165,6 +165,7 @@ export type Lead = {
   qualificationStatus: LeadQualificationStatus;
   status: LeadStatus;
   summary: string;
+  userNotes: string;
   qualification: QualificationDimension[];
   evidence: EvidenceClaim[];
   contacts: ContactRoute[];

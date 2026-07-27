@@ -2,7 +2,7 @@
 import { Fragment, useMemo, useState, useTransition } from "react";
 import type { Lead, ReviewState } from "@/types/domain";
 import { fitLabel, confidenceLabel, leadReviewState } from "@/lib/opptium/domain";
-import { updateLeadReviewAction } from "@/server/leads/actions";
+import { updateLeadNotesAction, updateLeadReviewAction } from "@/server/leads/actions";
 import { Badge } from "@/components/ui/Badge";
 import { Button, ButtonLink } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
@@ -44,6 +44,23 @@ export function CampaignLeadReview({
         setMessage(result.message);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not update lead");
+      }
+    });
+  }
+  function saveNotes(id: string, userNotes: string) {
+    startTransition(async () => {
+      try {
+        const result = await updateLeadNotesAction({
+          campaignId,
+          leadId: id,
+          userNotes,
+        });
+        setLeads((items) =>
+          items.map((lead) => (lead.id === id ? { ...lead, userNotes } : lead)),
+        );
+        setMessage(result.message);
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not save lead notes");
       }
     });
   }
@@ -185,10 +202,22 @@ export function CampaignLeadReview({
                             ))}
                           </ul>
                           <h3>Notes and warnings</h3>
-                          <textarea
-                            aria-label="Lead notes"
-                            placeholder="Lead notes are not persisted yet."
-                          />
+                          <form
+                            action={(formData) =>
+                              saveNotes(lead.id, String(formData.get("userNotes") ?? ""))
+                            }
+                          >
+                            <textarea
+                              aria-label="Lead notes"
+                              name="userNotes"
+                              defaultValue={lead.userNotes}
+                              placeholder="Add campaign-specific review notes."
+                              maxLength={5000}
+                            />
+                            <Button type="submit" disabled={pending}>
+                              Save notes
+                            </Button>
+                          </form>
                         </section>
                       </div>
                     </td>

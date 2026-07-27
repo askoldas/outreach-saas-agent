@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import type { LeadStatus } from "@/types/domain";
-import { updateLeadStatus } from "./repository";
+import { updateLeadNotes, updateLeadStatus } from "./repository";
 import { createActivityEvent } from "@/server/activity/repository";
 import { enqueueLeadContactEnrichmentRun } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
@@ -70,4 +70,18 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
               ? "Lead archived"
               : "Lead sent back to review",
   };
+}
+
+export async function updateLeadNotesAction(input: {
+  campaignId: string;
+  leadId: string;
+  userNotes: string;
+}) {
+  const { currentWorkspace } = await getWorkspaceContext();
+  if (!currentWorkspace) throw new Error("Authentication required");
+  if (!input.leadId) throw new Error("Lead is required.");
+
+  await updateLeadNotes(currentWorkspace.id, input.leadId, input.userNotes);
+  revalidatePath(`/campaigns/${input.campaignId}/leads`);
+  return { message: "Lead notes saved" };
 }

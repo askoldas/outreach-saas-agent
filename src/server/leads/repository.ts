@@ -61,6 +61,20 @@ export async function updateLeadStatus(
   return updateCleanLeadStatus(workspaceId, leadId, status);
 }
 
+export async function updateLeadNotes(
+  workspaceId: string,
+  leadId: string,
+  userNotes: string,
+): Promise<void> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { error } = await supabase
+    .from("campaign_companies")
+    .update({ user_notes: userNotes.trim().slice(0, 5_000) })
+    .eq("workspace_id", workspaceId)
+    .eq("id", leadId);
+  if (error) throw new Error(`Could not save lead notes: ${error.message}`);
+}
+
 export async function getCampaignLeadCounts(
   workspaceId: string,
   campaignId: string,

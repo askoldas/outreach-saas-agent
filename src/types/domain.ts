@@ -80,7 +80,13 @@ export type ResearchProgress = {
   lastError: string;
   progress: number;
   runId: string;
-  status: "cancelled" | "completed" | "failed" | "pending" | "running";
+  status:
+    | "cancelled"
+    | "completed"
+    | "failed"
+    | "pending"
+    | "running"
+    | "waiting_for_input";
   totalTasks: number;
 };
 

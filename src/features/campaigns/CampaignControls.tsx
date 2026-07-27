@@ -30,6 +30,8 @@ export function CampaignControls({
   const [progress, setProgress] = useState<ResearchProgress | null>(null);
   const [progressError, setProgressError] = useState("");
   const isWorking = isPending || isDiscovering;
+  const displayStatus =
+    progress?.status === "waiting_for_input" ? "needs input" : currentStatus;
 
   async function refreshProgress() {
     const response = await fetch(
@@ -212,7 +214,7 @@ export function CampaignControls({
         </Button>
       </div>
       <Badge tone="accent">
-        {isWorking ? message || "Working..." : message || `Status: ${currentStatus}`}
+        {isWorking ? message || "Working..." : message || `Status: ${displayStatus}`}
       </Badge>
       {progressError ? (
         <Badge tone="warning">Progress polling: {progressError}</Badge>
@@ -278,6 +280,7 @@ function shouldStopPolling(progress: ResearchProgress) {
     progress.status === "completed" ||
     progress.status === "failed" ||
     progress.status === "cancelled" ||
+    progress.status === "waiting_for_input" ||
     progress.currentStep === "Campaign paused" ||
     progress.currentStep === "Waiting for your targeting clarification"
   );

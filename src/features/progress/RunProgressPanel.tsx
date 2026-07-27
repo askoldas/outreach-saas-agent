@@ -55,8 +55,14 @@ export function RunProgressPanel({
         title={title}
         eyebrow={progress.runId ? `Run ${progress.runId.slice(0, 8)}` : "Latest run"}
         action={
-          <Badge tone={progress.status === "failed" ? "warning" : "accent"}>
-            {progress.status}
+          <Badge
+            tone={
+              progress.status === "failed" || progress.status === "waiting_for_input"
+                ? "warning"
+                : "accent"
+            }
+          >
+            {progress.status === "waiting_for_input" ? "needs input" : progress.status}
           </Badge>
         }
       />

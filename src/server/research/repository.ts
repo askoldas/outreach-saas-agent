@@ -621,6 +621,7 @@ function toResearchProgressStatus(status: string): ResearchProgress["status"] {
   if (status === "completed" || status === "partially_completed") return "completed";
   if (status === "failed") return "failed";
   if (status === "cancelled") return "cancelled";
+  if (status === "waiting_for_input") return "waiting_for_input";
   return "running";
 }
 

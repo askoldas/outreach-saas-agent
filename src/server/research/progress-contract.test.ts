@@ -26,3 +26,14 @@ test("shared progress panel polls only active durable runs", async () => {
   assert.match(panel, /status === "running"/);
   assert.match(panel, /setInterval/);
 });
+
+test("a completed Trigger run waiting on clarification is not shown as running", async () => {
+  const repository = await readFile(new URL("./repository.ts", import.meta.url), "utf8");
+  const controls = await readFile(
+    new URL("../../features/campaigns/CampaignControls.tsx", import.meta.url),
+    "utf8",
+  );
+  assert.match(repository, /status === "waiting_for_input"\) return "waiting_for_input"/);
+  assert.match(controls, /progress\?\.status === "waiting_for_input"/);
+  assert.match(controls, /"needs input"/);
+});

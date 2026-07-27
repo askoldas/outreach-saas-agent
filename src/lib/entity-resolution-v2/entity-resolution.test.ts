@@ -51,6 +51,14 @@ test("does not auto-link a name-and-country-only match", () => {
   assert.equal(outcome.action, "needs_review");
 });
 
+test("does not create a duplicate when only the normalized name already exists", () => {
+  const outcome = resolveOrganization(
+    { ...baseCandidate, country: undefined, domain: undefined },
+    [{ ...baseOrganization, domains: [], canonicalUrls: [] }],
+  );
+  assert.equal(outcome.action, "needs_review");
+});
+
 test("does not auto-link candidates found on shared directory domains", () => {
   const outcome = resolveOrganization({ ...baseCandidate, sharedDirectoryDomain: true }, [
     baseOrganization,

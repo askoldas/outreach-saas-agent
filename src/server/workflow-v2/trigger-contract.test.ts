@@ -26,9 +26,11 @@ test("V2 stage execution claims and settles one logical task", () => {
   assert.match(service, /saveWorkflowCheckpoint/);
 });
 
-test("V2 downstream stages fail closed until their real persistence adapters exist", () => {
+test("V2 stages fail closed after the connected entity-resolution boundary", () => {
   assert.match(service, /input\.stage === "initialize"/);
   assert.match(service, /input\.stage === "discover"/);
+  assert.match(service, /input\.stage === "resolve_entities"/);
+  assert.match(service, /executeEntityResolutionStage/);
   assert.match(service, /stage adapter.*is not implemented/s);
   assert.match(routing, /not enabled yet/);
   assert.doesNotMatch(routing, /return "execute-campaign-v2"/);

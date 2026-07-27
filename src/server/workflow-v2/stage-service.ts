@@ -2,6 +2,7 @@ import type { CampaignV2Stage, StageResult } from "@/lib/workflow-v2/contracts";
 import { stageCheckpointKey } from "@/lib/workflow-v2/controller";
 import { classifyWorkflowError, errorForTrigger } from "@/server/execution/errors";
 import { executeSemanticDiscoveryStage } from "@/server/discovery-v2/targeted-discovery-stage";
+import { executeEntityResolutionStage } from "@/server/entity-resolution-v2/stage-service";
 import type { Json } from "@/types/database.types";
 import {
   claimWorkflowTask,
@@ -105,6 +106,7 @@ async function runStageAdapter(input: ExecuteCampaignV2StageInput): Promise<Stag
     };
   }
   if (input.stage === "discover") return executeSemanticDiscoveryStage(input);
+  if (input.stage === "resolve_entities") return executeEntityResolutionStage(input);
   throw new Error(
     `V2 stage adapter "${input.stage}" is not implemented and cannot execute.`,
   );

@@ -102,10 +102,10 @@ export function assessOrganizationMatch(
     });
   }
 
-  const nameAndCountryMatch =
+  const nameMatch =
     candidateName.length > 0 &&
-    candidateName === normalizeOrganizationName(organization.normalizedName) &&
-    countryMatches;
+    candidateName === normalizeOrganizationName(organization.normalizedName);
+  const nameAndCountryMatch = nameMatch && countryMatches;
   if (nameAndCountryMatch) {
     signals.push({
       key: "normalized_name_country",
@@ -116,6 +116,16 @@ export function assessOrganizationMatch(
       evidenceIds: [],
       explanation:
         "Normalized name and country match; this is not sufficient to auto-link.",
+    });
+  } else if (nameMatch) {
+    signals.push({
+      key: "normalized_name",
+      category: "name",
+      state: "partial_match",
+      weight: 0.35,
+      confidence: 0.65,
+      evidenceIds: [],
+      explanation: "A normalized-name match without country evidence requires review.",
     });
   }
   if (typeConflict) {
@@ -136,7 +146,7 @@ export function assessOrganizationMatch(
     ? "link_as_related_entity"
     : deterministicMatch
       ? "auto_link"
-      : nameAndCountryMatch
+      : nameMatch
         ? "needs_review"
         : "create_new";
 
@@ -150,7 +160,7 @@ export function assessOrganizationMatch(
         ? 1
         : domainMatch || urlMatch
           ? 0.98
-          : nameAndCountryMatch
+          : nameMatch
             ? 0.8
             : 0,
     contradictionSeverity: typeConflict ? "high" : "none",
@@ -159,8 +169,8 @@ export function assessOrganizationMatch(
       ? "A related graph node may be appropriate, but these entity types must not be merged."
       : deterministicMatch
         ? "A deterministic exact identity signal supports linking."
-        : nameAndCountryMatch
-          ? "Name and country require review or additional evidence."
+        : nameMatch
+          ? "A name match requires country or stronger identity evidence."
           : "No reliable identity match was found.",
     rulesVersion: ENTITY_RESOLUTION_RULES_VERSION,
   };

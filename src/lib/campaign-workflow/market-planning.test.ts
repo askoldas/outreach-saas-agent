@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { parseDiscoveryPlan, parseMarketAnalysis } from "./market-planning.ts";
+import {
+  parseDiscoveryPlan,
+  parseMarketAnalysis,
+  scheduleDiscoveryPathQueries,
+} from "./market-planning.ts";
 
 test("market planning reserves its completion budget for compact JSON", async () => {
   const source = await readFile(new URL("./market-planning.ts", import.meta.url), "utf8");
@@ -53,6 +57,15 @@ test("discovery plan requires several auditable paths and clamps approved limits
           queries: ["German software agency directory"],
           maxResults: 25,
         },
+        {
+          id: "adjacent",
+          type: "adjacent_category",
+          rationale: "Expand into adjacent buyer categories.",
+          expectedCompanyCategory: "Consultancy",
+          priority: 3,
+          queries: ["German digital consultancy outbound sales"],
+          maxResults: 25,
+        },
       ],
       stopConditions: {
         maxIterations: 5,
@@ -64,7 +77,7 @@ test("discovery plan requires several auditable paths and clamps approved limits
     100,
   );
   assert.equal(plan.stopConditions.targetQualifiedCompanies, 100);
-  assert.equal(plan.paths.length, 2);
+  assert.equal(plan.paths.length, 3);
 });
 
 test("discovery plan canonicalizes reasonable model-generated path labels", () => {
@@ -90,6 +103,15 @@ test("discovery plan canonicalizes reasonable model-generated path labels", () =
           queries: ["agency registry"],
           maxResults: 25,
         },
+        {
+          id: "association",
+          type: "trade body",
+          rationale: "Inspect industry members.",
+          expectedCompanyCategory: "Agency",
+          priority: 3,
+          queries: ["agency association members"],
+          maxResults: 25,
+        },
       ],
       stopConditions: {
         maxIterations: 5,
@@ -103,6 +125,7 @@ test("discovery plan canonicalizes reasonable model-generated path labels", () =
 
   assert.equal(plan.paths[0]?.type, "local_language_search");
   assert.equal(plan.paths[1]?.type, "directory");
+  assert.equal(plan.paths[2]?.type, "association");
 });
 
 test("discovery plan rejects one flat search path", () => {
@@ -112,6 +135,20 @@ test("discovery plan rejects one flat search path", () => {
         { strategySummary: "Flat search", paths: [], stopConditions: {} },
         25,
       ),
-    /at least two/,
+    /3-6/,
+  );
+});
+
+test("query scheduling covers distinct paths before taking second queries", () => {
+  assert.deepEqual(
+    scheduleDiscoveryPathQueries(
+      [
+        { id: "direct", priority: 1, queries: ["direct one", "direct two"] },
+        { id: "local", priority: 2, queries: ["local one", "local two"] },
+        { id: "directory", priority: 3, queries: ["directory one", "directory two"] },
+      ],
+      4,
+    ),
+    ["direct one", "local one", "directory one", "direct two"],
   );
 });

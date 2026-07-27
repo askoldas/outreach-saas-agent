@@ -24,6 +24,7 @@ import {
   discoveryPlanPromptVersion,
   generateMarketAnalysisAndPlan,
   marketAnalysisPromptVersion,
+  scheduleDiscoveryPathQueries,
 } from "@/lib/campaign-workflow/market-planning";
 import { extractWebPages, searchWeb, type SearchResult } from "@/lib/providers/tavily";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -559,7 +560,7 @@ async function ensurePlanningArtifacts(
   const supabase = createServiceRoleClient();
   const { data: existing } = await supabase
     .from("discovery_plans")
-    .select("id,discovery_paths(id,external_id,queries,max_results)")
+    .select("id,discovery_paths(id,external_id,priority,queries,max_results)")
     .eq("workspace_id", context.workspaceId)
     .eq("campaign_run_id", context.runId)
     .order("version", { ascending: false })
@@ -569,12 +570,20 @@ async function ensurePlanningArtifacts(
     const paths = (existing.discovery_paths ?? []) as Array<{
       id: string;
       external_id: string;
+      priority: number;
       queries: string[];
       max_results: number;
     }>;
     return {
       planId: existing.id,
-      queries: paths.flatMap((path) => path.queries),
+      queries: scheduleDiscoveryPathQueries(
+        paths.map((path) => ({
+          id: path.external_id,
+          priority: path.priority,
+          queries: path.queries,
+        })),
+        10,
+      ),
       paths,
       iterationId: await ensureIteration(
         context,
@@ -660,7 +669,7 @@ async function ensurePlanningArtifacts(
   const { data: paths, error: pathsError } = await supabase
     .from("discovery_paths")
     .insert(pathRows)
-    .select("id,external_id,queries,max_results");
+    .select("id,external_id,priority,queries,max_results");
   if (pathsError)
     throw new Error(`Could not save discovery paths: ${pathsError.message}`);
   const requestHash = hash({
@@ -701,7 +710,7 @@ async function ensurePlanningArtifacts(
   );
   return {
     planId: plan.id,
-    queries: generated.discoveryPlan.paths.flatMap((path) => path.queries),
+    queries: scheduleDiscoveryPathQueries(generated.discoveryPlan.paths, 10),
     paths: paths ?? [],
     iterationId: await ensureIteration(
       context,
@@ -764,7 +773,7 @@ async function ensureRefinementPath(
       },
       { onConflict: "discovery_plan_id,external_id" },
     )
-    .select("id,external_id,queries,max_results")
+    .select("id,external_id,priority,queries,max_results")
     .single();
   if (error) throw new Error(`Could not save refinement path: ${error.message}`);
   return {

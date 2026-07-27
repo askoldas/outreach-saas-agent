@@ -63,7 +63,7 @@ export async function generateMarketAnalysisAndPlan(input: {
       {
         role: "system",
         content:
-          "Produce a compact operational market analysis and an auditable bounded B2B company discovery plan. Use local terminology and multiple distinct paths. Queries must find target companies, never the seller. Return one JSON object only, with no markdown or commentary. Keep every string concise. Use at most 8 items in each market-analysis list, 3-6 discovery paths, 2-5 queries per path, and at most 5 source hints per path. Every discovery path type must be exactly one of: direct_search, local_language_search, industry_terminology, directory, association, event_exhibitors, partner_directory, adjacent_category. Maximum 5 iterations, 10 queries per iteration, 50 results per query. Do not provide hidden reasoning.",
+          "Produce a compact operational market analysis and an auditable bounded B2B company discovery plan. Use local terminology and 3-6 materially distinct paths. Queries must find target companies, never the seller. Return one JSON object only, with no markdown or commentary. Keep every string concise. Use at most 8 items in each market-analysis list, 3-6 discovery paths, 2-5 queries per path, and at most 5 source hints per path. For pharmaceutical retail or distribution, deliberately separate pharmacy chains, drugstore or health-and-beauty chains, pharmaceutical wholesalers or distributors, online pharmacies or health shops, marketplaces, and relevant local or industry directories. Every discovery path type must be exactly one of: direct_search, local_language_search, industry_terminology, directory, association, event_exhibitors, partner_directory, adjacent_category. Include local-language and English discovery where the frozen strategy supplies both. Maximum 5 iterations, 10 queries per iteration, 50 results per query. Do not provide hidden reasoning.",
       },
       {
         role: "user",
@@ -185,13 +185,17 @@ export function parseDiscoveryPlan(
   targetQualifiedCompanies: number,
 ): DiscoveryPlan {
   const row = record(value, "discoveryPlan");
-  if (!Array.isArray(row.paths) || row.paths.length < 2) {
-    throw new Error("Discovery plan must contain at least two auditable paths.");
+  if (!Array.isArray(row.paths) || row.paths.length < 3 || row.paths.length > 6) {
+    throw new Error("Discovery plan must contain 3-6 auditable paths.");
   }
-  const paths = row.paths.slice(0, 12).map((value, index): DiscoveryPath => {
+  const paths = row.paths.map((value, index): DiscoveryPath => {
     const path = record(value, `paths.${index}`);
     const type = normalizePathType(text(path.type, "path.type"));
     const expectedYield = path.expectedYield;
+    const queries = list(path.queries, "path.queries").slice(0, 5);
+    if (!queries.length) {
+      throw new Error("Every discovery path must contain at least one query.");
+    }
     return {
       id: text(path.id, "path.id").replace(/[^a-zA-Z0-9_-]/g, "-"),
       type,
@@ -201,7 +205,7 @@ export function parseDiscoveryPlan(
         "path.expectedCompanyCategory",
       ),
       priority: Math.max(1, Math.floor(bounded(path.priority, 1, 100))),
-      queries: list(path.queries, "path.queries").slice(0, 10),
+      queries,
       ...(path.sourceHints === undefined
         ? {}
         : { sourceHints: list(path.sourceHints, "path.sourceHints") }),
@@ -225,6 +229,29 @@ export function parseDiscoveryPlan(
       minimumMarginalQualifiedYield: bounded(stop.minimumMarginalQualifiedYield, 0, 1),
     },
   };
+}
+
+export function scheduleDiscoveryPathQueries(
+  paths: Array<Pick<DiscoveryPath, "id" | "priority" | "queries">>,
+  limit: number,
+) {
+  const ordered = [...paths].sort(
+    (left, right) => left.priority - right.priority || left.id.localeCompare(right.id),
+  );
+  const scheduled: string[] = [];
+  const seen = new Set<string>();
+  const maxDepth = Math.max(0, ...ordered.map((path) => path.queries.length));
+  for (let depth = 0; depth < maxDepth && scheduled.length < limit; depth += 1) {
+    for (const path of ordered) {
+      const query = path.queries[depth]?.trim();
+      const key = query?.toLowerCase();
+      if (!query || !key || seen.has(key)) continue;
+      seen.add(key);
+      scheduled.push(query);
+      if (scheduled.length >= limit) break;
+    }
+  }
+  return scheduled;
 }
 
 function normalizePathType(value: string): DiscoveryPath["type"] {

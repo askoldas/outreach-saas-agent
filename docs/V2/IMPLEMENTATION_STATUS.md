@@ -32,7 +32,7 @@ behavior and deterministic tests are implemented.
 | WP-13 — Semantic discovery plan and coverage             | complete    | Confirmed-strategy planning, frozen provider routes/capabilities, durable runs/query audit, explicit progress counters, metric coverage, gap actions, and stopping decisions added.           |
 | WP-14 — Organization graph and entity resolution         | complete    | Canonical graph persistence, deterministic exact matching, explicit ambiguity, buying-authority hypotheses, reversible merge/split RPCs, tenant guards, and regression fixtures added.        |
 | WP-15 — Candidate research and reusable intelligence     | complete    | Question-driven research plans, bounded first-party fetch contracts, evidence reuse/freshness, claim projections, immutable snapshots, campaign scoping, and tests added.                     |
-| WP-16 — Qualification V2 factor engine                   | not_started | Relationship-first evaluation, exclusions, deterministic scoring, confidence, traces, and lanes remain.                                                                                       |
+| WP-16 — Qualification V2 factor engine                   | complete    | Relationship-first evaluation, evidence-gated exclusions, ordered eligibility, versioned factor library, deterministic fit/potential, confidence caps, traces, lanes, and tests added.        |
 | WP-17 — Comparative ranking and consistency checks       | not_started | Ranking persistence, inversion checks, and failure isolation remain.                                                                                                                          |
 | WP-18 — V2 Campaign Trigger workflow                     | not_started | Versioned V2 parent/children and workflow tests remain.                                                                                                                                       |
 | WP-19 — V2 campaign results UI                           | not_started | Coverage, lanes, factors, corrections, entity review, and accessibility remain.                                                                                                               |
@@ -338,7 +338,23 @@ behavior and deterministic tests are implemented.
 - WP-15 does not activate fetching or V2 orchestration; those durable tasks are wired
   into the versioned Trigger workflow in WP-18.
 
+## WP-16 delivery record
+
+- Qualification classifies the objective-relative commercial relationship before any
+  scoring and sends missing or weak relationship evidence to research.
+- Eligibility follows the required deterministic order: invalid/merged identity,
+  evidenced hard exclusions, incompatible relationship, unresolved critical states,
+  evidence sufficiency, rejection threshold, conditions, then eligibility.
+- Fit and potential remain separate weighted calculations. Unknown and conflicting
+  factors are excluded from score denominators; an empty denominator produces `null`.
+- Confidence combines coverage, evidence quality and consistency, identity, and
+  relationship certainty, then applies explicit caps for unresolved identity,
+  exclusions, procurement, relationship, and required factors.
+- Migration 14 persists immutable rubric/evaluation versions and separate relationship,
+  exclusion, factor, score, confidence, eligibility, and lane audit records.
+- WP-16 does not perform comparative ranking or activate V2 orchestration.
+
 ## Next package entry point
 
-Begin WP-16 with the Candidate Qualification V2 factor engine. V1 remains the default
+Begin WP-17 with comparative ranking and consistency checks. V1 remains the default
 path until its successor packages are complete and the V2 rollout is explicitly enabled.

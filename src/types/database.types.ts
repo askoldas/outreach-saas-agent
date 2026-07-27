@@ -802,6 +802,225 @@ export type Database = {
           },
         ];
       };
+      campaign_candidate_claims: {
+        Row: {
+          campaign_candidate_id: string;
+          campaign_strategy_version_id: string;
+          claim_scope: string;
+          created_at: string;
+          id: string;
+          intelligence_claim_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_candidate_id: string;
+          campaign_strategy_version_id: string;
+          claim_scope: string;
+          created_at?: string;
+          id?: string;
+          intelligence_claim_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_candidate_id?: string;
+          campaign_strategy_version_id?: string;
+          claim_scope?: string;
+          created_at?: string;
+          id?: string;
+          intelligence_claim_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_candidate_claims_campaign_candidate_id_fkey";
+            columns: ["campaign_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidate_claims_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidate_claims_intelligence_claim_id_fkey";
+            columns: ["intelligence_claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidate_claims_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_candidate_discovery_links: {
+        Row: {
+          campaign_candidate_id: string;
+          created_at: string;
+          discovery_segment_key: string | null;
+          id: string;
+          normalized_candidate_id: string | null;
+          provider_source_record_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_candidate_id: string;
+          created_at?: string;
+          discovery_segment_key?: string | null;
+          id?: string;
+          normalized_candidate_id?: string | null;
+          provider_source_record_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_candidate_id?: string;
+          created_at?: string;
+          discovery_segment_key?: string | null;
+          id?: string;
+          normalized_candidate_id?: string | null;
+          provider_source_record_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_candidate_discovery_lin_provider_source_record_id_fkey";
+            columns: ["provider_source_record_id"];
+            isOneToOne: false;
+            referencedRelation: "provider_source_records";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidate_discovery_links_campaign_candidate_id_fkey";
+            columns: ["campaign_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidate_discovery_links_normalized_candidate_id_fkey";
+            columns: ["normalized_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "normalized_provider_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidate_discovery_links_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_candidates: {
+        Row: {
+          buying_organization_id: string | null;
+          campaign_id: string;
+          campaign_strategy_version_id: string;
+          created_at: string;
+          current_intelligence_version_id: string | null;
+          discovered_country: string | null;
+          display_organization_id: string;
+          id: string;
+          matched_archetype_ids_json: Json;
+          organization_id: string;
+          state: string;
+          updated_at: string;
+          user_review_status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          buying_organization_id?: string | null;
+          campaign_id: string;
+          campaign_strategy_version_id: string;
+          created_at?: string;
+          current_intelligence_version_id?: string | null;
+          discovered_country?: string | null;
+          display_organization_id: string;
+          id?: string;
+          matched_archetype_ids_json?: Json;
+          organization_id: string;
+          state?: string;
+          updated_at?: string;
+          user_review_status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          buying_organization_id?: string | null;
+          campaign_id?: string;
+          campaign_strategy_version_id?: string;
+          created_at?: string;
+          current_intelligence_version_id?: string | null;
+          discovered_country?: string | null;
+          display_organization_id?: string;
+          id?: string;
+          matched_archetype_ids_json?: Json;
+          organization_id?: string;
+          state?: string;
+          updated_at?: string;
+          user_review_status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_candidates_buying_organization_id_fkey";
+            columns: ["buying_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidates_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidates_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidates_current_intelligence_version_fk";
+            columns: ["current_intelligence_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_intelligence_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidates_display_organization_id_fkey";
+            columns: ["display_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidates_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_candidates_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_companies: {
         Row: {
           campaign_id: string;
@@ -2220,6 +2439,58 @@ export type Database = {
           },
         ];
       };
+      candidate_claims: {
+        Row: {
+          created_at: string;
+          freshness_state: string;
+          id: string;
+          intelligence_claim_id: string;
+          organization_id: string;
+          reusable_status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          freshness_state: string;
+          id?: string;
+          intelligence_claim_id: string;
+          organization_id: string;
+          reusable_status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          freshness_state?: string;
+          id?: string;
+          intelligence_claim_id?: string;
+          organization_id?: string;
+          reusable_status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_claims_intelligence_claim_id_fkey";
+            columns: ["intelligence_claim_id"];
+            isOneToOne: true;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_claims_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_claims_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       candidate_classifications: {
         Row: {
           actual_model: string | null;
@@ -2295,6 +2566,288 @@ export type Database = {
           },
           {
             foreignKeyName: "candidate_classifications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_intelligence_versions: {
+        Row: {
+          claim_ids_json: Json;
+          compiled_snapshot_json: Json;
+          conflict_keys_json: Json;
+          content_hash: string;
+          created_at: string;
+          evidence_ids_json: Json;
+          id: string;
+          organization_id: string;
+          source_cutoff_at: string;
+          unresolved_question_keys_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        Insert: {
+          claim_ids_json: Json;
+          compiled_snapshot_json: Json;
+          conflict_keys_json?: Json;
+          content_hash: string;
+          created_at?: string;
+          evidence_ids_json: Json;
+          id?: string;
+          organization_id: string;
+          source_cutoff_at: string;
+          unresolved_question_keys_json?: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        Update: {
+          claim_ids_json?: Json;
+          compiled_snapshot_json?: Json;
+          conflict_keys_json?: Json;
+          content_hash?: string;
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          organization_id?: string;
+          source_cutoff_at?: string;
+          unresolved_question_keys_json?: Json;
+          version_number?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_intelligence_versions_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_intelligence_versions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_page_fetches: {
+        Row: {
+          access_status: string;
+          canonical_url: string;
+          content_hash: string | null;
+          created_at: string;
+          expires_at: string;
+          freshness_window_started_at: string;
+          http_status: number | null;
+          id: string;
+          organization_id: string;
+          page_kind: string;
+          raw_artifact_reference: string | null;
+          retrieved_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          access_status: string;
+          canonical_url: string;
+          content_hash?: string | null;
+          created_at?: string;
+          expires_at: string;
+          freshness_window_started_at: string;
+          http_status?: number | null;
+          id?: string;
+          organization_id: string;
+          page_kind: string;
+          raw_artifact_reference?: string | null;
+          retrieved_at: string;
+          workspace_id: string;
+        };
+        Update: {
+          access_status?: string;
+          canonical_url?: string;
+          content_hash?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          freshness_window_started_at?: string;
+          http_status?: number | null;
+          id?: string;
+          organization_id?: string;
+          page_kind?: string;
+          raw_artifact_reference?: string | null;
+          retrieved_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_page_fetches_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_page_fetches_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_research_plans: {
+        Row: {
+          campaign_candidate_id: string | null;
+          campaign_strategy_version_id: string | null;
+          content_hash: string;
+          created_at: string;
+          id: string;
+          organization_id: string;
+          page_budget: number;
+          priority: number;
+          questions_json: Json;
+          research_type: string;
+          source_plan_json: Json;
+          status: string;
+          stop_policy_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_candidate_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          content_hash: string;
+          created_at?: string;
+          id?: string;
+          organization_id: string;
+          page_budget: number;
+          priority: number;
+          questions_json: Json;
+          research_type: string;
+          source_plan_json: Json;
+          status?: string;
+          stop_policy_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_candidate_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          content_hash?: string;
+          created_at?: string;
+          id?: string;
+          organization_id?: string;
+          page_budget?: number;
+          priority?: number;
+          questions_json?: Json;
+          research_type?: string;
+          source_plan_json?: Json;
+          status?: string;
+          stop_policy_json?: Json;
+          version_number?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_research_plans_campaign_candidate_id_fkey";
+            columns: ["campaign_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_research_plans_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_research_plans_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_research_plans_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_research_tasks: {
+        Row: {
+          completed_at: string | null;
+          created_at: string;
+          error_code: string | null;
+          evidence_id: string | null;
+          id: string;
+          idempotency_key: string;
+          priority: number;
+          question_key: string;
+          research_plan_id: string;
+          result_reference_json: Json | null;
+          source_url: string | null;
+          started_at: string | null;
+          status: string;
+          task_type: string;
+          workspace_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          created_at?: string;
+          error_code?: string | null;
+          evidence_id?: string | null;
+          id?: string;
+          idempotency_key: string;
+          priority: number;
+          question_key: string;
+          research_plan_id: string;
+          result_reference_json?: Json | null;
+          source_url?: string | null;
+          started_at?: string | null;
+          status?: string;
+          task_type: string;
+          workspace_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          created_at?: string;
+          error_code?: string | null;
+          evidence_id?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          priority?: number;
+          question_key?: string;
+          research_plan_id?: string;
+          result_reference_json?: Json | null;
+          source_url?: string | null;
+          started_at?: string | null;
+          status?: string;
+          task_type?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_research_tasks_evidence_id_fkey";
+            columns: ["evidence_id"];
+            isOneToOne: false;
+            referencedRelation: "evidence_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_research_tasks_research_plan_id_fkey";
+            columns: ["research_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_research_plans";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_research_tasks_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -4602,10 +5155,13 @@ export type Database = {
           created_at: string;
           epistemic_status: string;
           field_path: string;
+          freshness_class: string | null;
           id: string;
           lifecycle_status: string;
+          observed_at: string | null;
           origin_id: string | null;
           origin_type: string;
+          source_scope: string;
           statement: string;
           subject_id: string;
           subject_type: string;
@@ -4622,10 +5178,13 @@ export type Database = {
           created_at?: string;
           epistemic_status: string;
           field_path: string;
+          freshness_class?: string | null;
           id?: string;
           lifecycle_status?: string;
+          observed_at?: string | null;
           origin_id?: string | null;
           origin_type: string;
+          source_scope?: string;
           statement: string;
           subject_id: string;
           subject_type: string;
@@ -4642,10 +5201,13 @@ export type Database = {
           created_at?: string;
           epistemic_status?: string;
           field_path?: string;
+          freshness_class?: string | null;
           id?: string;
           lifecycle_status?: string;
+          observed_at?: string | null;
           origin_id?: string | null;
           origin_type?: string;
+          source_scope?: string;
           statement?: string;
           subject_id?: string;
           subject_type?: string;
@@ -7612,6 +8174,39 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "discovery_provider_executions";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      publish_candidate_intelligence_v2: {
+        Args: {
+          target_claim_ids: Json;
+          target_conflict_keys: Json;
+          target_content_hash: string;
+          target_evidence_ids: Json;
+          target_organization_id: string;
+          target_snapshot: Json;
+          target_source_cutoff_at: string;
+          target_unresolved_keys: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          claim_ids_json: Json;
+          compiled_snapshot_json: Json;
+          conflict_keys_json: Json;
+          content_hash: string;
+          created_at: string;
+          evidence_ids_json: Json;
+          id: string;
+          organization_id: string;
+          source_cutoff_at: string;
+          unresolved_question_keys_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "candidate_intelligence_versions";
           isOneToOne: true;
           isSetofReturn: false;
         };

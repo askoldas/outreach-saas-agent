@@ -1,8 +1,10 @@
 import { task } from "@trigger.dev/sdk";
 import {
+  failProfileV3Draft,
   finalizeProfileV3Draft,
   profileV3StageIds,
 } from "@/server/company-profile-v3/stage-service";
+import { runProfileV3Workflow } from "@/lib/intelligence/company-profile-v3/workflow";
 import { runCompanyProfileV3StageTask } from "./run-company-profile-v3-stage";
 
 export type CreateCompanyIntelligenceV3Payload = {
@@ -15,28 +17,39 @@ export const createCompanyIntelligenceV3Task = task({
   retry: {
     maxAttempts: 1,
   },
+  onFailure: async ({ payload, error }) =>
+    failProfileV3Draft({
+      workspaceId: payload.workspaceId,
+      profileDraftId: payload.profileDraftId,
+      error,
+    }),
   run: async (payload: CreateCompanyIntelligenceV3Payload) => {
-    const taskRunIds: string[] = [];
-    for (const taskId of profileV3StageIds) {
-      const child = await runCompanyProfileV3StageTask.triggerAndWait(
-        { ...payload, taskId },
-        {
-          idempotencyKey: `profile-v3:${payload.profileDraftId}:${taskId}:v2`,
-          tags: [
-            `workspace:${payload.workspaceId}`,
-            `profile_draft:${payload.profileDraftId}`,
-            `profile_stage:${taskId}`,
-          ],
-        },
-      );
-      if (!child.ok)
-        throw new Error(
-          `Company Intelligence child ${taskId} failed: ${errorMessage(child.error)}`,
+    const workflow = await runProfileV3Workflow({
+      stageIds: profileV3StageIds,
+      runStage: async (taskId) => {
+        const child = await runCompanyProfileV3StageTask.triggerAndWait(
+          { ...payload, taskId },
+          {
+            idempotencyKey: `profile-v3:${payload.profileDraftId}:${taskId}:v2`,
+            tags: [
+              `workspace:${payload.workspaceId}`,
+              `profile_draft:${payload.profileDraftId}`,
+              `profile_stage:${taskId}`,
+            ],
+          },
         );
-      taskRunIds.push(child.output.taskRunId);
-    }
-    const final = await finalizeProfileV3Draft(payload);
-    return { ...payload, ...final, taskRunIds };
+        if (!child.ok)
+          throw new Error(
+            `Company Intelligence child ${taskId} failed: ${errorMessage(child.error)}`,
+          );
+        return {
+          taskRunId: child.output.taskRunId,
+          cached: child.output.cached,
+        };
+      },
+      finalize: () => finalizeProfileV3Draft(payload),
+    });
+    return { ...payload, ...workflow };
   },
 });
 

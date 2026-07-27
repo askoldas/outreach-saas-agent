@@ -12,6 +12,8 @@ test("V3 profile orchestration uses durable sequential child stages", () => {
   assert.match(parent, /profileV3StageIds/);
   assert.match(parent, /runCompanyProfileV3StageTask\.triggerAndWait/);
   assert.match(parent, /if \(!child\.ok\)/);
+  assert.match(parent, /onFailure/);
+  assert.match(parent, /failProfileV3Draft/);
   assert.match(child, /id: "run-company-profile-v3-stage"/);
 });
 

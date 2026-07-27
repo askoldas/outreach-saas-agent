@@ -9,6 +9,7 @@ import {
   profileOfferingDecompositionOutputSchema,
   profileV3TaskDefinitions,
 } from "@/lib/intelligence/company-profile-v3/task-contracts";
+import { resolveProfileV3DraftState } from "@/lib/intelligence/company-profile-v3/workflow";
 import { resolveWorkspaceIntelligenceSettings } from "@/lib/intelligence/rollout";
 import { generateTextResult } from "@/lib/providers/openrouter";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -267,14 +268,10 @@ export async function finalizeProfileV3Draft(input: {
     clarification,
     consistency,
   });
-  const compileRpc = supabase.rpc as unknown as (
-    name: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ error: { message: string } | null }>;
-  const { error: compileError } = await compileRpc("compile_company_profile_v3_draft", {
+  const { error: compileError } = await supabase.rpc("compile_company_profile_v3_draft", {
     target_workspace_id: input.workspaceId,
     target_profile_draft_id: input.profileDraftId,
-    target_compilation: compilation,
+    target_compilation: compilation as Json,
   });
   if (compileError)
     throw new Error(
@@ -294,10 +291,10 @@ export async function finalizeProfileV3Draft(input: {
   if (auditError)
     throw new Error(`Could not load profile consistency audit: ${auditError.message}`);
   const recommendation = stringField(audit?.output_json, "publishRecommendation");
-  const state =
-    recommendation === "ready" || recommendation === "ready_with_warnings"
-      ? "ready_for_review"
-      : "needs_input";
+  const state = resolveProfileV3DraftState({
+    publishRecommendation: recommendation,
+    clarificationQuestions: clarification.questions,
+  });
   const { error } = await supabase
     .from("company_profile_drafts")
     .update({ state, updated_at: new Date().toISOString() })
@@ -305,6 +302,34 @@ export async function finalizeProfileV3Draft(input: {
     .eq("id", input.profileDraftId);
   if (error) throw new Error(`Could not finalize profile draft: ${error.message}`);
   return { state };
+}
+
+export async function failProfileV3Draft(input: {
+  workspaceId: string;
+  profileDraftId: string;
+  error: unknown;
+}) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("company_profile_drafts")
+    .update({ state: "failed", updated_at: new Date().toISOString() })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.profileDraftId)
+    .eq("state", "building");
+  if (error) throw new Error(`Could not fail profile draft: ${error.message}`);
+  const { error: eventError } = await supabase.from("profile_change_events").insert({
+    workspace_id: input.workspaceId,
+    profile_draft_id: input.profileDraftId,
+    event_type: "workflow_failed",
+    actor_type: "system",
+    affected_paths: [],
+    details_json: {
+      errorCode: errorCode(input.error),
+      errorMessage: errorMessage(input.error).slice(0, 2_000),
+    },
+  });
+  if (eventError)
+    throw new Error(`Could not record profile workflow failure: ${eventError.message}`);
 }
 
 async function assertProfileV3Enabled(workspaceId: string) {

@@ -4858,6 +4858,14 @@ export type Database = {
         Args: { target_workspace_id: string };
         Returns: undefined;
       };
+      compile_company_profile_v3_draft: {
+        Args: {
+          target_compilation: Json;
+          target_profile_draft_id: string;
+          target_workspace_id: string;
+        };
+        Returns: undefined;
+      };
       create_clean_campaign: {
         Args: {
           campaign_data: Json;

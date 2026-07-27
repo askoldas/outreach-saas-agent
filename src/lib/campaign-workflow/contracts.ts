@@ -1,3 +1,5 @@
+import { parseTargetSegments, type TargetSegment } from "./target-segments.ts";
+
 export type CampaignGeography = {
   countryCodes: string[];
   regionLabel?: string;
@@ -28,6 +30,7 @@ export type CampaignBriefProposal = {
   geography: CampaignGeography;
   offering: CampaignOfferingProposal;
   targetClient: CampaignTargetClient;
+  targetSegments: TargetSegment[];
   ambiguity?: {
     requiresClarification: boolean;
     question?: string;
@@ -40,10 +43,11 @@ export type ConfirmedCampaignBrief = {
   geography: CampaignGeography;
   offering: CampaignOfferingProposal;
   targetClient: CampaignTargetClient;
+  targetSegments: TargetSegment[];
   desiredQualifiedCompanies: number;
 };
 
-export const campaignBriefPromptVersion = "campaign-brief-proposal-v1";
+export const campaignBriefPromptVersion = "campaign-brief-proposal-v2-b2b-segments";
 
 export function parseCampaignBriefProposal(
   value: unknown,
@@ -140,6 +144,57 @@ function parseBrief(
   if (min !== undefined && max !== undefined && min > max) {
     throw new Error("Campaign proposal returned an invalid employee range.");
   }
+  const targetClient = {
+    companyTypes: strings(targetRow.companyTypes, "targetClient.companyTypes"),
+    industries: strings(targetRow.industries, "targetClient.industries"),
+    ...(employeeRow
+      ? { employeeRange: { ...(min ? { min } : {}), ...(max ? { max } : {}) } }
+      : {}),
+    characteristics: strings(targetRow.characteristics, "targetClient.characteristics"),
+    positiveSignals: strings(targetRow.positiveSignals, "targetClient.positiveSignals"),
+    requiredCriteria: strings(
+      targetRow.requiredCriteria,
+      "targetClient.requiredCriteria",
+    ),
+    exclusions: strings(targetRow.exclusions, "targetClient.exclusions"),
+    recommendedDecisionMakerRoles: strings(
+      targetRow.recommendedDecisionMakerRoles,
+      "targetClient.recommendedDecisionMakerRoles",
+    ),
+    summary: requiredString(targetRow.summary, "targetClient.summary"),
+  };
+  const targetSegments =
+    row.targetSegments === undefined
+      ? parseTargetSegments([
+          {
+            id: "primary_organization_segment",
+            name: targetClient.companyTypes[0] ?? "Target organizations",
+            summary: targetClient.summary,
+            relationshipType: "customer",
+            organizationTypes: targetClient.companyTypes,
+            industries: targetClient.industries,
+            ...(employeeRow
+              ? {
+                  companySize: {
+                    ...(min ? { minimumEmployees: min } : {}),
+                    ...(max ? { maximumEmployees: max } : {}),
+                  },
+                }
+              : {}),
+            geographies: countryCodes,
+            characteristics: targetClient.characteristics,
+            buyingSignals: targetClient.positiveSignals,
+            likelyBuyerRoles: targetClient.recommendedDecisionMakerRoles,
+            exclusions: targetClient.exclusions,
+            rationale: "Derived from the confirmed campaign target.",
+            supportingEvidence: [],
+            discoverability: "medium",
+            source: "ai_suggested",
+            confidence: "medium",
+            status: "confirmed",
+          },
+        ])
+      : parseTargetSegments(row.targetSegments);
   return {
     geography: {
       countryCodes,
@@ -160,25 +215,8 @@ function parseBrief(
       ),
       rationale: requiredString(offeringRow.rationale, "offering.rationale"),
     },
-    targetClient: {
-      companyTypes: strings(targetRow.companyTypes, "targetClient.companyTypes"),
-      industries: strings(targetRow.industries, "targetClient.industries"),
-      ...(employeeRow
-        ? { employeeRange: { ...(min ? { min } : {}), ...(max ? { max } : {}) } }
-        : {}),
-      characteristics: strings(targetRow.characteristics, "targetClient.characteristics"),
-      positiveSignals: strings(targetRow.positiveSignals, "targetClient.positiveSignals"),
-      requiredCriteria: strings(
-        targetRow.requiredCriteria,
-        "targetClient.requiredCriteria",
-      ),
-      exclusions: strings(targetRow.exclusions, "targetClient.exclusions"),
-      recommendedDecisionMakerRoles: strings(
-        targetRow.recommendedDecisionMakerRoles,
-        "targetClient.recommendedDecisionMakerRoles",
-      ),
-      summary: requiredString(targetRow.summary, "targetClient.summary"),
-    },
+    targetClient,
+    targetSegments,
   };
 }
 

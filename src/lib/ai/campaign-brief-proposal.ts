@@ -24,7 +24,7 @@ export async function generateCampaignBriefProposal(input: {
       {
         role: "system",
         content:
-          "Propose one concise B2B campaign brief for the selected geography. Select exactly one primary offering from the supplied offering IDs. Supporting capabilities may inform the value proposition but must not be returned as additional offering IDs. Return JSON matching the requested shape. Ground the proposal in the frozen Company Profile. Do not modify it. Ask at most one focused clarification and only for a material ambiguity.",
+          "Propose one concise B2B campaign brief for the selected geography. Select exactly one primary offering from the supplied offering IDs. Propose three to five coherent and distinct organization target segments. Every target must be a searchable company, institution, or partner with a valid B2B relationship type. Consumers, families, private customers, end users, and Consumer as a standalone industry are invalid targets. Current customer groups are profile facts and must not be copied into Campaign targeting automatically. Supporting capabilities may inform the value proposition but must not be returned as additional offering IDs. Distinguish buyer organizations from decision makers and beneficiaries. Return JSON matching the requested shape. Ground the proposal in the frozen Company Profile. Do not modify it. Ask at most one focused clarification and only for a material ambiguity.",
       },
       {
         role: "user",
@@ -60,6 +60,29 @@ export async function generateCampaignBriefProposal(input: {
               recommendedDecisionMakerRoles: [],
               summary: "",
             },
+            targetSegments: [
+              {
+                id: "stable-segment-id",
+                name: "searchable organization segment",
+                summary: "",
+                relationshipType:
+                  "customer|partner|distributor|reseller|supplier|contractor|public_institution",
+                organizationTypes: [],
+                industries: [],
+                companySize: { minimumEmployees: 1, maximumEmployees: 100 },
+                geographies: input.geography.countryCodes,
+                characteristics: [],
+                buyingSignals: [],
+                likelyBuyerRoles: [],
+                exclusions: [],
+                rationale: "",
+                supportingEvidence: [],
+                discoverability: "high|medium",
+                source: "ai_suggested",
+                confidence: "high|medium|low",
+                status: "suggested",
+              },
+            ],
             ambiguity: { requiresClarification: false },
             confidence: 0.8,
           },

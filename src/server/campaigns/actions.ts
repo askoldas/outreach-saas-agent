@@ -196,9 +196,19 @@ export async function createCampaignAction(formData: FormData) {
     confirmedBrief.geography.regionLabel ||
     confirmedBrief.geography.countryCodes.join(", ");
   const selectedOfferingId = confirmedBrief.offering.profileOfferingIds[0]!;
-  const targetSegments = confirmedBrief.targetClient.companyTypes;
+  const confirmedTargetSegments = confirmedBrief.targetSegments.filter(
+    (segment) => segment.status === "confirmed",
+  );
+  const targetSegments = Array.from(
+    new Set(confirmedTargetSegments.flatMap((segment) => segment.organizationTypes)),
+  );
 
-  if (name.length < 2 || geography.length < 2 || !targetSegments.length) {
+  if (
+    name.length < 2 ||
+    geography.length < 2 ||
+    !targetSegments.length ||
+    confirmedBrief.offering.valueProposition.trim().length < 2
+  ) {
     redirect(
       `/campaigns/new?error=${encodeURIComponent(
         "Select an offering and confirm the campaign name, market, and target segment.",
@@ -208,17 +218,28 @@ export async function createCampaignAction(formData: FormData) {
 
   const campaign = await createCampaign(currentWorkspace.id, {
     desiredLeadCount: confirmedBrief.desiredQualifiedCompanies,
-    exclusions: confirmedBrief.targetClient.exclusions,
+    exclusions: Array.from(
+      new Set(confirmedTargetSegments.flatMap((segment) => segment.exclusions)),
+    ),
     geography,
-    industryTerms: confirmedBrief.targetClient.industries,
+    industryTerms: Array.from(
+      new Set(confirmedTargetSegments.flatMap((segment) => segment.industries)),
+    ),
     preferredOutreachLanguage: confirmedBrief.geography.primaryLanguage || "English",
     discoveryLanguages: deriveDiscoveryLanguages({
       countryCodes: confirmedBrief.geography.countryCodes,
     }),
     localizedTerms: [],
     name,
-    objective: confirmedBrief.targetClient.summary,
-    qualificationCriteria: confirmedBrief.targetClient.requiredCriteria,
+    objective: confirmedTargetSegments.map((segment) => segment.summary).join(" "),
+    qualificationCriteria: Array.from(
+      new Set(
+        confirmedTargetSegments.flatMap((segment) => [
+          ...segment.characteristics,
+          ...segment.buyingSignals,
+        ]),
+      ),
+    ),
     sourceCategories: [
       "Company websites",
       "Public business directories",
@@ -230,14 +251,15 @@ export async function createCampaignAction(formData: FormData) {
     terms: Array.from(
       new Set([
         confirmedBrief.offering.title,
-        ...confirmedBrief.targetClient.industries,
-        ...confirmedBrief.targetClient.companyTypes,
+        ...confirmedTargetSegments.flatMap((segment) => segment.industries),
+        ...confirmedTargetSegments.flatMap((segment) => segment.organizationTypes),
       ]),
     ),
     selectedOfferingId,
     offeringOverrides: {
       offering: confirmedBrief.offering,
       targetClient: confirmedBrief.targetClient,
+      targetSegments: confirmedTargetSegments,
     },
   });
   await saveCampaignBrief(currentWorkspace.id, campaign.id, {

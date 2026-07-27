@@ -22,7 +22,7 @@ behavior and deterministic tests are implemented.
 | WP-03 — Evidence and claim persistence                   | complete    | Append-only evidence/claim persistence, atomic links, conflicts, source guards, tenant repositories, RLS, and tests added.                                                        |
 | WP-04 — Company Intelligence V3 contracts and V1 adapter | complete    | V3 identity, business model, offerings, mechanics, buyer logic, rules, readiness, and reviewed V2 draft adapter added.                                                            |
 | WP-05 — Company Intelligence V3 workflow                 | complete    | V3 persistence, six narrow task contracts, guarded sequential Trigger orchestration, audited/resumable stages, atomic normalized draft compilation, and lifecycle fixtures added. |
-| WP-06 — Company Profile V3 UI                            | not_started | V3 review and publish UI remain.                                                                                                                                                  |
+| WP-06 — Company Profile V3 UI                            | in_progress | Rollout-routed V3 review read model, commercial review surface, V1 fallback, and workspace-scoped clarification actions added; editing and immutable publish remain.              |
 | WP-07 — Campaign Strategy V2 contracts                   | not_started | Objective, archetype, rubric, source-plan, and segment contracts remain.                                                                                                          |
 | WP-08 — Campaign Strategy V2 persistence and compiler    | not_started | Compiler, persistence, confirmation, and audit remain.                                                                                                                            |
 | WP-09 — Campaign creation and Strategy V2 UI             | not_started | V2 routing, wizard, review, and E2E coverage remain.                                                                                                                              |
@@ -132,6 +132,19 @@ behavior and deterministic tests are implemented.
 - Deterministic workflow fixtures cover ordered success, cached-stage resume, blocking
   clarification, and terminal child failure. Terminal parent failure marks a building
   draft failed and records a bounded change event instead of leaving it stuck.
+
+## WP-06 delivery record
+
+- The Company Profile route selects V3 only through resolved environment and workspace
+  rollout settings; V1 retains its existing editor and guided-AI fallback.
+- The first V3 review slice reads normalized business models, roles, offerings, buyer
+  archetypes, commercial rules, and clarification questions with explicit workspace and
+  current-draft scoping.
+- V3 clarification answers and skips are workspace scoped; non-skippable questions
+  cannot be skipped. Legacy guided mutations are hidden while reviewing a V3 draft.
+- Remaining before WP-06 completion: editable V3 identity/commercial fields, explicit
+  offering/archetype/rule review decisions, atomic immutable publishing, published V1
+  viewer compatibility, and an E2E UI test.
 
 ## Next package entry point
 

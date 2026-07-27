@@ -6,6 +6,10 @@ import shared from "@/features/shared/Feature.module.css";
 import type { CompanyProfileV3Review } from "@/server/company-profile-v3/repository";
 import {
   answerCompanyProfileV3QuestionAction,
+  publishCompanyProfileV3Action,
+  reviewCompanyProfileV3ArchetypeAction,
+  reviewCompanyProfileV3OfferingAction,
+  reviewCompanyProfileV3RuleAction,
   skipCompanyProfileV3QuestionAction,
 } from "@/server/company-profile-v3/actions";
 import styles from "./CompanyProfileWorkspace.module.css";
@@ -17,6 +21,11 @@ export function CompanyProfileV3Workspace({
   const blocking = pending.filter(
     (question) => question.impact === "blocking" && !question.skip_allowed,
   );
+  const reviewable = ["needs_input", "ready_for_review"].includes(review.state);
+  const publishable =
+    review.state === "ready_for_review" &&
+    blocking.length === 0 &&
+    review.offerings.some((offering) => offering.status === "active");
   return (
     <>
       <section
@@ -49,6 +58,29 @@ export function CompanyProfileV3Workspace({
           ) : null}
         </div>
       </Card>
+
+      {reviewable ? (
+        <Card>
+          <CardHeader
+            title="Publish reviewed profile"
+            eyebrow="Create an immutable Company Intelligence version"
+            action={
+              <form action={publishCompanyProfileV3Action}>
+                <input type="hidden" name="draftId" value={review.id} />
+                <Button type="submit" variant="primary" disabled={!publishable}>
+                  Publish V3 profile
+                </Button>
+              </form>
+            }
+          />
+          <div className={shared.cardBody}>
+            <p>
+              Publishing freezes the reviewed business model, offerings, buyer archetypes,
+              and accepted rules for future campaign strategies.
+            </p>
+          </div>
+        </Card>
+      ) : null}
 
       <Card>
         <CardHeader title="Business model" eyebrow="How the company creates value" />
@@ -122,13 +154,44 @@ export function CompanyProfileV3Workspace({
                     {offering.archetypes.map((archetype) => (
                       <li key={archetype.id}>
                         {archetype.name} · {label(archetype.relationship_type)} ·{" "}
-                        {label(archetype.priority)} · {percent(archetype.confidence)}
+                        {label(archetype.priority)} · {percent(archetype.confidence)} ·{" "}
+                        {label(archetype.status)}
+                        {reviewable ? (
+                          <form
+                            action={reviewCompanyProfileV3ArchetypeAction}
+                            className={styles.actions}
+                          >
+                            <input type="hidden" name="draftId" value={review.id} />
+                            <input type="hidden" name="entityId" value={archetype.id} />
+                            <Button type="submit" name="intent" value="confirm">
+                              Confirm
+                            </Button>
+                            <Button type="submit" name="intent" value="reject">
+                              Reject
+                            </Button>
+                          </form>
+                        ) : null}
                       </li>
                     ))}
                   </ul>
                 ) : (
                   <p className={styles.meta}>No buyer archetype was linked.</p>
                 )}
+                {reviewable ? (
+                  <form
+                    action={reviewCompanyProfileV3OfferingAction}
+                    className={styles.actions}
+                  >
+                    <input type="hidden" name="draftId" value={review.id} />
+                    <input type="hidden" name="entityId" value={offering.id} />
+                    <Button type="submit" name="intent" value="activate">
+                      Keep active
+                    </Button>
+                    <Button type="submit" name="intent" value="deactivate">
+                      Mark inactive
+                    </Button>
+                  </form>
+                ) : null}
               </div>
             </details>
           ))}
@@ -143,8 +206,25 @@ export function CompanyProfileV3Workspace({
               {review.rules.map((rule) => (
                 <li key={rule.id}>
                   <strong>{label(rule.rule_key)}</strong> · {rule.scope} · {rule.strength}
+                  {" · "}
+                  {rule.status}
                   <br />
                   {rule.description}
+                  {reviewable ? (
+                    <form
+                      action={reviewCompanyProfileV3RuleAction}
+                      className={styles.actions}
+                    >
+                      <input type="hidden" name="draftId" value={review.id} />
+                      <input type="hidden" name="entityId" value={rule.id} />
+                      <Button type="submit" name="intent" value="confirm">
+                        Confirm
+                      </Button>
+                      <Button type="submit" name="intent" value="reject">
+                        Reject
+                      </Button>
+                    </form>
+                  ) : null}
                 </li>
               ))}
             </ul>

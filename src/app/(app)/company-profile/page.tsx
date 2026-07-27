@@ -57,13 +57,15 @@ export default async function CompanyProfilePage({
                 Create campaign
               </ButtonLink>
             ) : null}
-            <form action={analyzeCompanyProfileAction}>
-              <Button type="submit" disabled={!profile.website}>
-                {profile.structuredProfile
-                  ? "Improve profile structure"
-                  : "Analyse website"}
-              </Button>
-            </form>
+            {!useProfileV3 ? (
+              <form action={analyzeCompanyProfileAction}>
+                <Button type="submit" disabled={!profile.website}>
+                  {profile.structuredProfile
+                    ? "Improve profile structure"
+                    : "Analyse website"}
+                </Button>
+              </form>
+            ) : null}
             {pendingQuestions ? (
               <ButtonLink
                 variant="primary"
@@ -79,6 +81,11 @@ export default async function CompanyProfilePage({
       {query.message === "company-website-updated" ? (
         <Badge tone="success">
           Company website updated. Future analysis runs will use the new URL.
+        </Badge>
+      ) : null}
+      {query.message === "v3-profile-published" ? (
+        <Badge tone="success">
+          Company Intelligence V3 was published as an immutable profile version.
         </Badge>
       ) : null}
       {query.error ? <Badge tone="danger">{errorMessage(query.error)}</Badge> : null}
@@ -146,6 +153,11 @@ function errorMessage(error: string) {
       "Analyse the website to create a structured profile first.",
     "v3-draft-create-failed":
       "The Company Intelligence review could not be started. Try again.",
+    "v3-blocking-questions":
+      "Answer all blocking clarification questions before publishing.",
+    "v3-publish-failed":
+      "The reviewed Company Intelligence profile could not be published.",
+    "v3-draft-not-reviewable": "This Company Intelligence draft is no longer editable.",
   };
   return messages[error] ?? "The profile could not be updated.";
 }

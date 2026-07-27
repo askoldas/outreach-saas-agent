@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { createAndDispatchCompanyIntelligenceV3Draft } from "./repository";
+import type { Json } from "@/types/database.types";
 
 export async function createCompanyProfileV3DraftAction() {
   const { currentWorkspace } = await getWorkspaceContext();
@@ -60,6 +61,120 @@ export async function skipCompanyProfileV3QuestionAction(formData: FormData) {
   if (error) throw new Error(`Could not skip profile clarification: ${error.message}`);
   revalidatePath("/company-profile");
   redirect("/company-profile?message=v3-question-skipped");
+}
+
+export async function reviewCompanyProfileV3OfferingAction(formData: FormData) {
+  const context = await reviewContext(formData);
+  const intent = text(formData, "intent");
+  const status = intent === "activate" ? "active" : "inactive";
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { error } = await supabase
+    .from("company_offering_versions")
+    .update({ status })
+    .eq("workspace_id", context.workspaceId)
+    .eq("profile_draft_id", context.draftId)
+    .eq("id", text(formData, "entityId"));
+  if (error) throw new Error(`Could not review V3 offering: ${error.message}`);
+  await recordDecision(context, "offering_reviewed", {
+    entityId: text(formData, "entityId"),
+    status,
+  });
+  revalidatePath("/company-profile");
+}
+
+export async function reviewCompanyProfileV3ArchetypeAction(formData: FormData) {
+  const context = await reviewContext(formData);
+  const intent = text(formData, "intent");
+  const status = intent === "confirm" ? "user_confirmed" : "user_rejected";
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { error } = await supabase
+    .from("buyer_archetype_hypotheses")
+    .update({ status })
+    .eq("workspace_id", context.workspaceId)
+    .eq("profile_draft_id", context.draftId)
+    .eq("id", text(formData, "entityId"));
+  if (error) throw new Error(`Could not review buyer archetype: ${error.message}`);
+  await recordDecision(context, "archetype_reviewed", {
+    entityId: text(formData, "entityId"),
+    status,
+  });
+  revalidatePath("/company-profile");
+}
+
+export async function reviewCompanyProfileV3RuleAction(formData: FormData) {
+  const context = await reviewContext(formData);
+  const intent = text(formData, "intent");
+  const status = intent === "confirm" ? "confirmed" : "rejected";
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { error } = await supabase
+    .from("commercial_rules")
+    .update({ status })
+    .eq("workspace_id", context.workspaceId)
+    .eq("profile_draft_id", context.draftId)
+    .eq("id", text(formData, "entityId"));
+  if (error) throw new Error(`Could not review commercial rule: ${error.message}`);
+  await recordDecision(context, "rule_reviewed", {
+    entityId: text(formData, "entityId"),
+    status,
+  });
+  revalidatePath("/company-profile");
+}
+
+export async function publishCompanyProfileV3Action(formData: FormData) {
+  const context = await reviewContext(formData);
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const publishRpc = supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>;
+  const { error } = await publishRpc("publish_company_profile_v3_draft", {
+    target_workspace_id: context.workspaceId,
+    target_profile_draft_id: context.draftId,
+  });
+  if (error) {
+    const code = error.message.includes("Blocking clarification")
+      ? "v3-blocking-questions"
+      : "v3-publish-failed";
+    redirect(`/company-profile?error=${code}`);
+  }
+  revalidatePath("/company-profile");
+  revalidatePath("/campaigns/new");
+  redirect("/company-profile?message=v3-profile-published");
+}
+
+async function reviewContext(formData: FormData) {
+  const { currentWorkspace } = await getWorkspaceContext();
+  if (!currentWorkspace) redirect("/onboarding/workspace");
+  const draftId = text(formData, "draftId");
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("company_profile_drafts")
+    .select("state")
+    .eq("workspace_id", currentWorkspace.id)
+    .eq("id", draftId)
+    .single();
+  if (error || !["needs_input", "ready_for_review"].includes(data.state)) {
+    redirect("/company-profile?error=v3-draft-not-reviewable");
+  }
+  return { workspaceId: currentWorkspace.id, draftId };
+}
+
+async function recordDecision(
+  context: { workspaceId: string; draftId: string },
+  eventType: string,
+  details: Json,
+) {
+  const { supabase, user } = await createAuthenticatedDatabaseClient();
+  const { error } = await supabase.from("profile_change_events").insert({
+    workspace_id: context.workspaceId,
+    profile_draft_id: context.draftId,
+    event_type: eventType,
+    actor_type: "user",
+    actor_user_id: user.id,
+    affected_paths: [],
+    details_json: details,
+  });
+  if (error) throw new Error(`Could not record profile review: ${error.message}`);
 }
 
 function text(formData: FormData, key: string) {

@@ -15,9 +15,10 @@ type VersionRow = {
   readiness_score: number;
   provenance: CompanyProfile["provenance"];
   created_at: string;
+  intelligence_version: string;
 };
 
-const select = `id,version,company_name,website_url,summary,structured_profile,extracted_facts,review_questions,profile_status,readiness_score,provenance,created_at`;
+const select = `id,version,company_name,website_url,summary,structured_profile,extracted_facts,review_questions,profile_status,readiness_score,provenance,created_at,intelligence_version`;
 
 export async function getCurrentCompanyProfile(
   workspaceId: string,
@@ -78,6 +79,7 @@ export async function saveCompanyProfileVersion(
 }
 
 function mapVersion(row: VersionRow): CompanyProfile {
+  if (row.intelligence_version === "v2") return mapV3CompatibilityVersion(row);
   const structured = parseStructuredCompanyProfile(row.structured_profile);
   return {
     id: row.id,
@@ -111,6 +113,52 @@ function mapVersion(row: VersionRow): CompanyProfile {
     profileStatus: row.profile_status,
     readinessScore: row.readiness_score,
   };
+}
+
+function mapV3CompatibilityVersion(row: VersionRow): CompanyProfile {
+  const snapshot = objectValue(row.structured_profile);
+  const offerings = arrayObjects(objectValue(snapshot.offerings).offerings);
+  const commercial = objectValue(snapshot.commercialSynthesis);
+  return {
+    id: row.id,
+    version: row.version,
+    companyName: row.company_name,
+    website: row.website_url,
+    summary: row.summary,
+    productsAndServices: offerings
+      .map((offering) => String(offering.name ?? ""))
+      .filter(Boolean),
+    capabilities: [],
+    customerTypes: [],
+    differentiators: [],
+    proofPoints: [],
+    marketsAndLanguages: [],
+    claims: [],
+    limitations: stringArray(commercial.unresolvedCommercialQuestions),
+    sources: [],
+    warnings: [],
+    lastAnalyzed: row.created_at,
+    provenance: row.provenance,
+    structuredProfile: null,
+    extractedFacts: row.extracted_facts ?? [],
+    reviewQuestions: row.review_questions ?? [],
+    profileStatus: row.profile_status,
+    readinessScore: row.readiness_score,
+  };
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function arrayObjects(value: unknown) {
+  return Array.isArray(value) ? value.map(objectValue) : [];
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.map(String) : [];
 }
 
 function emptyProfile(name: string, website: string | null): CompanyProfile {

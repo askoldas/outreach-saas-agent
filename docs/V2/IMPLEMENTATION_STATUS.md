@@ -30,7 +30,7 @@ behavior and deterministic tests are implemented.
 | WP-11 — Discovery provider contracts                     | complete    | Strict provider interface and capabilities, central registry, deterministic capability router, immutable raw ingestion, normalized candidates, deduplication, and tests added.                |
 | WP-12 — WebSearchProvider                                | complete    | Registered WebSearchProvider, deterministic semantic/localized query generation, Tavily transport use, bounded parallel execution, raw normalization, source classification, and tests added. |
 | WP-13 — Semantic discovery plan and coverage             | complete    | Confirmed-strategy planning, frozen provider routes/capabilities, durable runs/query audit, explicit progress counters, metric coverage, gap actions, and stopping decisions added.           |
-| WP-14 — Organization graph and entity resolution         | not_started | Graph, conservative matching, reversible merge/split, and fixtures remain.                                                                                                                    |
+| WP-14 — Organization graph and entity resolution         | complete    | Canonical graph persistence, deterministic exact matching, explicit ambiguity, buying-authority hypotheses, reversible merge/split RPCs, tenant guards, and regression fixtures added.        |
 | WP-15 — Candidate research and reusable intelligence     | not_started | Research plan, claims, freshness, and reusable versions remain.                                                                                                                               |
 | WP-16 — Qualification V2 factor engine                   | not_started | Relationship-first evaluation, exclusions, deterministic scoring, confidence, traces, and lanes remain.                                                                                       |
 | WP-17 — Comparative ranking and consistency checks       | not_started | Ranking persistence, inversion checks, and failure isolation remain.                                                                                                                          |
@@ -297,7 +297,27 @@ behavior and deterministic tests are implemented.
 - WP-13 persists coverage, gaps, actions, and the continuation decision atomically but
   does not activate the V2 Trigger workflow; orchestration remains WP-18.
 
+## WP-14 delivery record
+
+- Existing `companies` remain canonical organization roots. Provider records and
+  normalized candidates remain immutable source inputs linked through explicit
+  resolution decisions.
+- Migration 12 adds aliases, identifiers, locations, graph relationships, buying
+  hypotheses, resolution cases, pairwise assessments, decisions, source links, and
+  reversible merge/split events with workspace guards and RLS.
+- Deterministic matching considers verified legal identifiers, safe canonical domains
+  and URLs before normalized name and country. Name-only matches, multiple exact
+  matches, shared-directory domains, brands versus franchisees, and marketplace
+  versus seller identities remain explicit review cases.
+- Buying-organization selection preserves `unknown` procurement autonomy when no
+  evidence exists; unknown is not converted into an exclusion.
+- Merge operations use a graph lock, preserve the source organization and pre-merge
+  snapshot, and create a canonical redirect. Split operations reverse the active
+  redirect while preserving both audit events.
+- WP-14 does not activate V2 campaign execution. Its graph will be consumed by the
+  candidate research and qualification packages.
+
 ## Next package entry point
 
-Begin WP-14 with organization graph and entity resolution. V1 remains the default path until its successor
-packages are complete and the V2 rollout is explicitly enabled.
+Begin WP-15 with candidate research and reusable intelligence. V1 remains the default
+path until its successor packages are complete and the V2 rollout is explicitly enabled.

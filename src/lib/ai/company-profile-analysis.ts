@@ -6,13 +6,17 @@ import {
   type ReviewQuestion,
   type StructuredCompanyProfile,
 } from "../company-profile/structured-profile.ts";
-import { generateTextResult } from "../providers/openrouter.ts";
+import {
+  generateTextResult,
+  OpenRouterRequestError,
+  type OpenRouterMessage,
+} from "../providers/openrouter.ts";
 import { parseCompleteJsonObject } from "./structured-json.ts";
 
 export { parseCompleteJsonObject } from "./structured-json.ts";
 
 export const companyProfileAnalysisPromptVersion =
-  "company-profile-website-v4-b2b-context";
+  "company-profile-website-v5-bounded-recovery";
 
 export type CompanyProfileAnalysis = {
   facts: ExtractedProfileFact[];
@@ -24,48 +28,30 @@ export async function analyzeCompanyProfile(input: {
   currentProfile: Record<string, unknown>;
   sources: Array<{ title: string; url: string; content: string }>;
 }) {
-  const modelCall = await generateTextResult(
-    [
-      {
-        role: "system",
-        content: [
-          "Extract atomic commercial facts from supplied public website evidence, then build a grouped structured company draft.",
-          "First classify every commercial item as offering, product_category, capability, supporting_service, business_model, relationship_model, feature, or irrelevant. Then group related items into a small set of campaign-worthy offerings.",
-          "An offering must be a meaningful proposition with its own customers, value proposition, and potential campaign. Product ranges, dosage forms, skills, methods, features, and delivery steps are not automatically offerings.",
-          "Attach product categories and supporting capabilities to offerings. For a complex manufacturer, prefer roughly 3-5 coherent offerings over 12-15 fragments.",
-          "Keep customer types, buyer industries, customer needs, relationship types, existing markets, and potential markets separate.",
-          "Record current consumer audiences as factual customer groups, but never turn consumers, families, private customers, end users, or demographic groups into company-discovery targets.",
-          "Separate what the company currently sells, what it can deliver, who currently buys, and which organization-based B2B applications are plausible but unconfirmed.",
-          "A B2B application must identify a searchable organization, partner, distributor, reseller, supplier, contractor, or public institution. Distinguish that buyer organization from decision makers and end users.",
-          "Proposed B2B packaging must be marked as requiring confirmation and must not invent unsupported capabilities, commercial terms, or delivery commitments.",
-          "Keep company and offering differentiators separate from categorized credibility proof. Company metrics are never case studies.",
-          "Separate verified claims, strategic direction, commercial constraints, regulatory limitations, and unverified or conflicting information.",
-          "Separate headquarters, operating markets, export markets, prospecting markets, supported company languages, and outreach languages. Never infer user strategy fields such as prospecting markets or outreach languages from website presence.",
-          "Do not invent customers, metrics, certifications, buyer roles, prospecting preferences, claims, or commercial constraints.",
-          "Ask zero to three high-impact clarification questions only when an answer materially changes the offering, business model, organization target, delivery constraint, or discovery feasibility. Sort highest impact first.",
-          "Prefer selectable answers. Questions must be skippable and cannot block provisional offering suggestions. Do not ask for target markets, messaging, or facts that later research can establish.",
-          "Safe explicit proof may be approved for outreach; inferred or conflicting proof must not be approved.",
-          "Produce a concise commercially useful overview covering company kind, propositions, business models, general customers, markets, and commercial significance.",
-          "Return JSON only and use stable lowercase slug IDs unique within each collection.",
-        ].join(" "),
-      },
-      {
-        role: "user",
-        content: JSON.stringify({
-          currentStructuredProfile: input.currentProfile.structured_profile ?? null,
-          sources: input.sources,
-          requiredShape: groupedCompactAnalysisShape,
-        }),
-      },
-    ],
-    {
+  const messages = profileAnalysisMessages(input);
+  let modelCall;
+  try {
+    modelCall = await generateTextResult(messages, {
       role: "profile_analysis",
       jsonMode: true,
       maxCompletionTokens: 6_000,
       reasoningEffort: "none",
       taskName: "structured company profile website analysis",
-    },
-  );
+    });
+  } catch (error) {
+    if (
+      !(error instanceof OpenRouterRequestError) ||
+      error.code !== "completion_truncated"
+    )
+      throw error;
+    modelCall = await generateTextResult(profileAnalysisMessages(input, true), {
+      role: "profile_analysis",
+      jsonMode: true,
+      maxCompletionTokens: 8_000,
+      reasoningEffort: "none",
+      taskName: "compact structured company profile website analysis recovery",
+    });
+  }
   const rawOutput = modelCall.data;
   const parsed = parseCompanyProfileAnalysis(rawOutput);
   const current = input.currentProfile.structured_profile
@@ -80,6 +66,57 @@ export async function analyzeCompanyProfile(input: {
     rawOutput,
     modelCall,
   };
+}
+
+function profileAnalysisMessages(
+  input: {
+    currentProfile: Record<string, unknown>;
+    sources: Array<{ title: string; url: string; content: string }>;
+  },
+  recovery = false,
+): OpenRouterMessage[] {
+  return [
+    {
+      role: "system",
+      content: [
+        "Extract atomic commercial facts from supplied public website evidence, then build a grouped structured company draft.",
+        "First classify every commercial item as offering, product_category, capability, supporting_service, business_model, relationship_model, feature, or irrelevant. Then group related items into a small set of campaign-worthy offerings.",
+        "An offering must be a meaningful proposition with its own customers, value proposition, and potential campaign. Product ranges, dosage forms, skills, methods, features, and delivery steps are not automatically offerings.",
+        "Attach product categories and supporting capabilities to offerings. For a complex manufacturer, prefer roughly 3-5 coherent offerings over 12-15 fragments.",
+        "Keep customer types, buyer industries, customer needs, relationship types, existing markets, and potential markets separate.",
+        "Record current consumer audiences as factual customer groups, but never turn consumers, families, private customers, end users, or demographic groups into company-discovery targets.",
+        "Separate what the company currently sells, what it can deliver, who currently buys, and which organization-based B2B applications are plausible but unconfirmed.",
+        "A B2B application must identify a searchable organization, partner, distributor, reseller, supplier, contractor, or public institution. Distinguish that buyer organization from decision makers and end users.",
+        "Proposed B2B packaging must be marked as requiring confirmation and must not invent unsupported capabilities, commercial terms, or delivery commitments.",
+        "Keep company and offering differentiators separate from categorized credibility proof. Company metrics are never case studies.",
+        "Separate verified claims, strategic direction, commercial constraints, regulatory limitations, and unverified or conflicting information.",
+        "Separate headquarters, operating markets, export markets, prospecting markets, supported company languages, and outreach languages. Never infer user strategy fields such as prospecting markets or outreach languages from website presence.",
+        "Do not invent customers, metrics, certifications, buyer roles, prospecting preferences, claims, or commercial constraints.",
+        "Ask zero to three high-impact clarification questions only when an answer materially changes the offering, business model, organization target, delivery constraint, or discovery feasibility. Sort highest impact first.",
+        "Prefer selectable answers. Questions must be skippable and cannot block provisional offering suggestions. Do not ask for target markets, messaging, or facts that later research can establish.",
+        "Safe explicit proof may be approved for outreach; inferred or conflicting proof must not be approved.",
+        "Produce a concise commercially useful overview covering company kind, propositions, business models, general customers, markets, and commercial significance.",
+        "Keep the response compact: return 3-5 offerings, at most 12 capabilities, 8 customer groups, 5 B2B applications, 10 proof items, 12 sources, and 3 questions. Limit descriptions to two sentences, evidence snippets to 160 characters, and other arrays to the strongest 8 items.",
+        recovery
+          ? "This is a truncation recovery attempt. Omit low-value detail, empty optional collections, repeated evidence, and duplicate source passages. Completing one valid JSON object is the highest priority."
+          : "Prefer omission of low-value detail over an oversized response. Complete the JSON object within the output budget.",
+        "Return JSON only and use stable lowercase slug IDs unique within each collection.",
+      ].join(" "),
+    },
+    {
+      role: "user",
+      content: JSON.stringify({
+        currentStructuredProfile: input.currentProfile.structured_profile ?? null,
+        sources: recovery
+          ? input.sources.slice(0, 4).map((source) => ({
+              ...source,
+              content: source.content.slice(0, 6_000),
+            }))
+          : input.sources,
+        requiredShape: groupedCompactAnalysisShape,
+      }),
+    },
+  ];
 }
 
 export function parseCompanyProfileAnalysis(rawOutput: string): CompanyProfileAnalysis {

@@ -3,7 +3,11 @@ import { generateTextResult } from "../providers/openrouter.ts";
 export const draftPromptVersion = "grounded-outreach-draft-v1";
 
 export type DraftGenerationInput = {
-  campaign: { name: string; objective: string; language: string };
+  campaign: {
+    name: string;
+    objective: string;
+    preferredOutreachLanguage: string;
+  };
   companyProfile: Record<string, unknown>;
   strategy: Record<string, unknown>;
   lead: {

@@ -21,6 +21,9 @@ Campaign creation is geography-first. A bounded `campaign_planning` call propose
 Offering and structured target client from the frozen Company Profile; user edits remain
 campaign-local. One Start action persists the proposal and confirmed brief, freezes
 profile/strategy context, creates a Campaign Run, and dispatches Trigger.dev.
+The campaign's preferred outreach language is a communication-generation setting.
+Discovery languages are a separate Strategy concern derived from target country codes,
+local official languages, and an English international-source fallback.
 Market adjustments create a new immutable Campaign Strategy only while no run is
 active. The strategy-save transaction synchronizes the Campaign read model and
 user-confirmed Campaign Brief so the next run receives one consistent target.

@@ -128,3 +128,9 @@ rules remove obvious non-company results and duplicates. Remaining plausible can
 are classified in one economical `search_result_classification` batch per iteration.
 Only `promising` and policy-approved `possible` candidates enter
 `company_qualification`.
+
+Preferred outreach language is supplied only to draft and sequence generation.
+Discovery and qualification receive the Strategy's discovery-language list, derived
+from target countries plus English for international sources. Selecting English for
+outreach therefore does not suppress Lithuanian, Latvian, Estonian, or other relevant
+local-language discovery.

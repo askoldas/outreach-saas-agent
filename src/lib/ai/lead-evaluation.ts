@@ -6,7 +6,7 @@ export const LEAD_EVALUATOR_PROMPT_VERSION = "lead-evaluator-v1";
 export type LeadEvaluationInput = {
   campaign: Pick<
     Campaign,
-    "geography" | "industryTerms" | "language" | "objective" | "targetSegments"
+    "discoveryLanguages" | "geography" | "industryTerms" | "objective" | "targetSegments"
   > & {
     strategy: Pick<Campaign["strategy"], "criteria" | "exclusions" | "terms">;
   };

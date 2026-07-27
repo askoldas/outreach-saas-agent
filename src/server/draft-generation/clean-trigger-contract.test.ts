@@ -40,6 +40,9 @@ test("draft execution writes clean drafts, AI audit, state, and usage", () => {
   assert.match(service, /campaign_contact_id: campaignContactId/);
   assert.match(service, /profile_snapshot_id: profileSnapshotId/);
   assert.match(service, /input_hash: requestHash/);
+  assert.match(service, /\.select\("name,objective,preferred_outreach_language"\)/);
+  assert.match(service, /campaign\.preferred_outreach_language/);
+  assert.doesNotMatch(service, /\.select\("name,objective,language"\)/);
   assert.doesNotMatch(
     service,
     /ai_generations|usage_events|lead_contact_routes|\.from\("leads"\)/,

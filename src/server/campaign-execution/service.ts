@@ -622,7 +622,7 @@ function normalizeCampaignAgentPlanningContext(input: {
       relevantUseCase: stringValue(input.campaign.relevant_use_case),
       exclusions: stringArray(input.campaign.exclusions),
       targetVolume: input.campaign.target_volume,
-      language: stringValue(input.campaign.preferred_outreach_language),
+      discoveryLanguages: stringArray(input.strategy.searchLanguages),
       selectedOfferingId,
     },
     clarifications: input.clarifications.filter((item) => item.answer),

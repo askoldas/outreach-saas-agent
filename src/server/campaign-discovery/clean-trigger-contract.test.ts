@@ -53,6 +53,11 @@ test("discovery and qualification persist only clean durable entities", () => {
   assert.match(service, /snapshot_data/);
   assert.match(service, /strategyDocument = asRecord\(strategy\.strategy\)/);
   assert.match(service, /strategyDocument\.searchLanguages/);
+  assert.match(service, /discoveryLanguages: stringArray/);
+  assert.doesNotMatch(
+    service,
+    /discoveryLanguages:\s*\[?campaignRow\.preferred_outreach_language/,
+  );
   assert.doesNotMatch(service, /\.select\("snapshot"\)/);
   assert.doesNotMatch(service, /strategy\.search_languages/);
   assert.doesNotMatch(service, /objective,language\)/);

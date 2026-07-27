@@ -97,7 +97,7 @@ export function CampaignsReportTable({ rows }: Readonly<{ rows: CampaignReportRo
                           <h3>Campaign</h3>
                           <p>{campaign.objective}</p>
                           <p>
-                            {campaign.geography} · {campaign.language}
+                            {campaign.geography} · {campaign.preferredOutreachLanguage}
                           </p>
                         </section>
                         <section>

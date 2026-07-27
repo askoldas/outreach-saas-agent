@@ -23,6 +23,7 @@ import {
   parseConfirmedCampaignBrief,
   parseCampaignBriefProposal,
 } from "@/lib/campaign-workflow/contracts";
+import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
 
 type UpdateCampaignStatusInput = {
   campaignId: string;
@@ -200,7 +201,10 @@ export async function createCampaignAction(formData: FormData) {
     exclusions: confirmedBrief.targetClient.exclusions,
     geography,
     industryTerms: confirmedBrief.targetClient.industries,
-    language: confirmedBrief.geography.primaryLanguage || "English",
+    preferredOutreachLanguage: confirmedBrief.geography.primaryLanguage || "English",
+    discoveryLanguages: deriveDiscoveryLanguages({
+      countryCodes: confirmedBrief.geography.countryCodes,
+    }),
     localizedTerms: [],
     name,
     objective: confirmedBrief.targetClient.summary,

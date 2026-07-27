@@ -205,7 +205,7 @@ export function CampaignBriefForm({
     ]);
     setResult(null);
     applyProposal(next);
-    setName(`${next.offering.title} â€” ${geographyLabel}`);
+    setName(`${next.offering.title} — ${geographyLabel}`);
     setStep(2);
   }
 

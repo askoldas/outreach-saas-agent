@@ -1,7 +1,24 @@
-import type { Campaign, CompanyProfile } from "@/types/domain";
-import { CAMPAIGN_EXECUTION_LIMITS } from "@/lib/campaign-agent/execution-policy";
+import type { Campaign, CompanyProfile } from "../../types/domain.ts";
+import { CAMPAIGN_EXECUTION_LIMITS } from "../campaign-agent/execution-policy.ts";
 
 const maxTermsPerFamily = 4;
+
+const languageBusinessTerms: Readonly<Record<string, readonly string[]>> = {
+  Danish: ["virksomhed", "leverandør", "kontakt"],
+  Dutch: ["bedrijf", "leverancier", "contact"],
+  English: ["company", "provider", "supplier", "contact"],
+  Estonian: ["ettevõte", "tarnija", "kontakt"],
+  Finnish: ["yritys", "toimittaja", "yhteystiedot"],
+  French: ["entreprise", "fournisseur", "contact"],
+  German: ["Unternehmen", "Anbieter", "Kontakt"],
+  Italian: ["azienda", "fornitore", "contatti"],
+  Latvian: ["uzņēmums", "piegādātājs", "kontakti"],
+  Lithuanian: ["įmonė", "tiekėjas", "kontaktai"],
+  Norwegian: ["bedrift", "leverandør", "kontakt"],
+  Polish: ["firma", "dostawca", "kontakt"],
+  Spanish: ["empresa", "proveedor", "contacto"],
+  Swedish: ["företag", "leverantör", "kontakt"],
+};
 
 type CampaignSearchContext = Campaign & {
   sellerProfile?: Pick<
@@ -57,9 +74,13 @@ export function buildCampaignSearchQueries(campaign: CampaignSearchContext): str
   const geographyTerms = locale.countryAliases.length
     ? locale.countryAliases
     : [campaign.geography];
-  const businessTerms = locale.businessTerms.length
-    ? locale.businessTerms
-    : ["company", "provider", "supplier", "contact"];
+  const businessTerms = unique([
+    ...campaign.discoveryLanguages.flatMap(
+      (language) => languageBusinessTerms[language] ?? [],
+    ),
+    ...locale.businessTerms,
+    ...(languageBusinessTerms.English ?? []),
+  ]);
   const siteFilter = locale.siteFilter;
   const sellerProfile = campaign.sellerProfile ?? null;
   const buyerTerms = unique([

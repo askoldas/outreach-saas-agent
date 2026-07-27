@@ -29,7 +29,8 @@ export type CreateCampaignInput = {
   exclusions: string[];
   geography: string;
   industryTerms: string[];
-  language: string;
+  preferredOutreachLanguage: string;
+  discoveryLanguages: string[];
   localizedTerms: string[];
   name: string;
   objective: string;
@@ -114,7 +115,7 @@ export async function createCampaign(workspaceId: string, input: CreateCampaignI
       characteristics: input.targetSegments,
       exclusions: input.exclusions,
       targetVolume: input.desiredLeadCount,
-      language: input.language,
+      language: input.preferredOutreachLanguage,
       selectedOfferingId: input.selectedOfferingId,
       targetDescription: JSON.stringify(input.offeringOverrides),
     },
@@ -199,7 +200,8 @@ function mapCampaign(row: CampaignRow, strategyRow: StrategyRow): Campaign {
     awaitingReview: 0,
     status: row.status === "active" ? "running" : (row.status as CampaignStatus),
     lastActivity: row.updated_at,
-    language: row.preferred_outreach_language,
+    preferredOutreachLanguage: row.preferred_outreach_language,
+    discoveryLanguages: strategy.searchLanguages,
     warnings: [],
     latestDiscoveryReport: null,
     strategyVersion: strategyRow.version,
@@ -234,7 +236,7 @@ function initialStrategy(input: CreateCampaignInput): CampaignStrategyVersion {
       "Department email",
       "General business route",
     ],
-    searchLanguages: [input.language],
+    searchLanguages: input.discoveryLanguages,
     sourceCategories: input.sourceCategories,
     searchTerms: input.terms,
     localizedTerms: input.localizedTerms,

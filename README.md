@@ -4,7 +4,10 @@ Opptium is an AI-assisted B2B prospecting and outbound-preparation platform. A c
 
 ## Current implementation
 
-This repository contains one Next.js 16 App Router application with strict TypeScript, CSS Modules, Supabase Auth/Postgres/RLS, workspace-scoped repositories, ordered migrations, provider-neutral Tavily/OpenRouter adapters, and a retry-safe research worker.
+This repository contains one Next.js 16 App Router application with strict TypeScript,
+CSS Modules, Supabase Auth/Postgres/RLS, workspace-scoped repositories, ordered
+migrations, provider-neutral Tavily/OpenRouter adapters, and Trigger.dev Cloud for
+durable execution. The retired polling worker is not part of the current runtime.
 
 Persisted today: authentication, workspaces, manually edited and website-analyzed Company Profile versions, immutable campaign profile snapshots, immutable Campaign Strategy versions tied to research runs, campaigns, leads, evidence/qualification/contact routes, drafts, activity, research runs, and tasks.
 
@@ -14,7 +17,14 @@ application, live summaries, persistent guided drafts, scoped assistant history,
 applied-change audit records. Direct editing remains available and conversations never
 replace the canonical Company Profile, Campaign, or Strategy objects.
 
-Company Profile analysis, Campaign Strategy refinement, lead qualification, and draft generation use schema-validated provider output with persisted provenance. Draft generation is a durable worker task grounded in frozen Company Profile and Campaign Strategy versions, saved lead evidence, and an accepted public recipient route. Tavily-backed contact enrichment retains route-level verification provenance. Enrichment state, accepted recipient selections, immutable export history, and operation-level usage events are persisted; CSV files are generated locally from frozen authorized records.
+Company Profile analysis, Campaign Strategy refinement, lead qualification, and draft
+generation use schema-validated provider output with persisted provenance. Draft
+generation is a durable Trigger.dev task grounded in frozen Company Profile and
+Campaign Strategy versions, saved lead evidence, and an accepted public recipient
+route. The preferred outreach language controls generated communication only.
+Discovery languages are independently derived from the selected market and retain
+English as an international-source fallback. Tavily-backed contact enrichment retains
+route-level verification provenance.
 
 The application uses Company Profiles and immutable Campaign Strategy versions exclusively. Discovery and qualification consume immutable campaign profile snapshots and frozen strategy versions. Migration `20260719000600` completed the audited retirement of the former Offer schema and duplicated campaign strategy columns.
 

@@ -64,7 +64,7 @@ export async function executeDraftGeneration(providerExecutionId: string) {
           subject: generated.draft.subject,
           body: generated.draft.body,
           variant: "primary",
-          language: input.context.campaign.language,
+          language: input.context.campaign.preferredOutreachLanguage,
           status: "needs_review",
           seller_claims: generated.draft.sellerClaims,
           evidence_used: input.evidenceIds,
@@ -228,7 +228,7 @@ async function loadDraftInput(input: {
   ] = await Promise.all([
     supabase
       .from("campaigns")
-      .select("name,objective,language")
+      .select("name,objective,preferred_outreach_language")
       .eq("workspace_id", input.workspaceId)
       .eq("id", input.campaignId)
       .single(),
@@ -304,7 +304,7 @@ async function loadDraftInput(input: {
       campaign: {
         name: campaign.name,
         objective: campaign.objective,
-        language: campaign.language,
+        preferredOutreachLanguage: campaign.preferred_outreach_language,
       },
       companyProfile: asRecord(snapshot.snapshot_data),
       strategy: strategy as Record<string, unknown>,

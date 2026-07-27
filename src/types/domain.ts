@@ -97,7 +97,8 @@ export type Campaign = {
   awaitingReview: number;
   status: CampaignStatus;
   lastActivity: string;
-  language: string;
+  preferredOutreachLanguage: string;
+  discoveryLanguages: string[];
   warnings: string[];
   latestDiscoveryReport: DiscoveryReport | null;
   strategyVersion?: number;

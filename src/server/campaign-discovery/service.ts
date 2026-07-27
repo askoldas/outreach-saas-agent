@@ -461,10 +461,8 @@ async function loadContext(workspaceId: string, runId: string) {
     awaitingReview: 0,
     status: "running",
     lastActivity: "",
-    language:
-      stringArray(strategyDocument.searchLanguages)[0] ??
-      campaignRow.preferred_outreach_language ??
-      "English",
+    preferredOutreachLanguage: campaignRow.preferred_outreach_language ?? "English",
+    discoveryLanguages: stringArray(strategyDocument.searchLanguages),
     warnings: [],
     latestDiscoveryReport: null,
     strategy: {
@@ -1152,7 +1150,7 @@ async function qualifyCandidate(
     campaign: {
       geography: context.campaign.geography,
       industryTerms: context.campaign.industryTerms,
-      language: context.campaign.language,
+      discoveryLanguages: context.campaign.discoveryLanguages,
       objective: context.campaign.objective,
       targetSegments: context.campaign.targetSegments,
       strategy: {

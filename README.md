@@ -9,7 +9,11 @@ CSS Modules, Supabase Auth/Postgres/RLS, workspace-scoped repositories, ordered
 migrations, provider-neutral Tavily/OpenRouter adapters, and Trigger.dev Cloud for
 durable execution. The retired polling worker is not part of the current runtime.
 
-Persisted today: authentication, workspaces, manually edited and website-analyzed Company Profile versions, immutable campaign profile snapshots, immutable Campaign Strategy versions tied to research runs, campaigns, leads, evidence/qualification/contact routes, drafts, activity, research runs, and tasks.
+Persisted today: authentication, workspaces, versioned Company Profiles, immutable
+campaign profile snapshots and Campaign Strategy versions, campaign runs, staged
+discovery plans/queries/candidates, canonical companies and contacts,
+campaign-company/contact associations, qualification evidence, provider executions,
+drafts, exports, and internal usage telemetry.
 
 Company setup and Campaign creation use compact AI-guided workspaces with recommended
 structured selections, optional natural-language interpretation, explicit proposal
@@ -17,11 +21,13 @@ application, live summaries, persistent guided drafts, scoped assistant history,
 applied-change audit records. Direct editing remains available and conversations never
 replace the canonical Company Profile, Campaign, or Strategy objects.
 
-Company Profile analysis, Campaign Strategy refinement, lead qualification, and draft
-generation use schema-validated provider output with persisted provenance. Draft
-generation is a durable Trigger.dev task grounded in frozen Company Profile and
-Campaign Strategy versions, saved lead evidence, and an accepted public recipient
-route. The preferred outreach language controls generated communication only.
+Company Profile analysis, Campaign Strategy refinement, company qualification, and
+draft generation use schema-validated provider output with persisted provenance.
+Trigger.dev orchestrates durable logical provider executions with retry-safe results,
+stable idempotency keys, explicit dispatch recovery, and terminal failure handling.
+Draft generation is grounded in frozen Company Profile and Campaign Strategy versions,
+saved company evidence, and an accepted public recipient route. The preferred outreach
+language controls generated communication only.
 Discovery languages are independently derived from the selected market and retain
 English as an international-source fallback. Tavily-backed contact enrichment retains
 route-level verification provenance.

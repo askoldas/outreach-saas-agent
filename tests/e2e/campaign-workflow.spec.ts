@@ -53,13 +53,15 @@ test("creates a workspace, profile version, and campaign strategy", async ({ pag
   ).toBeVisible();
 
   await page.goto("/campaigns/new");
-  await page.getByLabel("Campaign name").fill(campaign);
+  await page.getByRole("button", { name: "Nordics" }).click();
   await page
-    .getByLabel("Campaign brief")
-    .fill("Manufacturers needing preventive maintenance.");
-  await page.getByLabel("Country or region").fill("Northern Europe");
-  await page.getByLabel("Desired companies").fill("5");
-  await page.getByRole("button", { name: "Create campaign strategy" }).click();
+    .getByRole("button", { name: "Continue with Company Profile defaults" })
+    .click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByRole("button", { name: "Continue" }).click();
+  await page.getByLabel("Campaign name").fill(campaign);
+  await page.getByLabel("Qualified companies wanted").fill("5");
+  await page.getByRole("button", { name: "Start campaign" }).click();
   await expect(page).toHaveURL(/\/campaigns\/[^/]+$/);
   const campaignId = new URL(page.url()).pathname.split("/").at(-1);
   expect(campaignId).toBeTruthy();
@@ -68,7 +70,7 @@ test("creates a workspace, profile version, and campaign strategy", async ({ pag
   await expect(page.getByText(/Strategy version 1/)).toBeVisible();
   await expect(page.getByLabel("Target geography")).toHaveValue("Northern Europe");
 
-  await seedCompletedOutreachState({
+  await seedCleanWorkflowState({
     campaignId: campaignId!,
     suffix,
     workspaceName: workspace,
@@ -100,7 +102,7 @@ test("creates a workspace, profile version, and campaign strategy", async ({ pag
   expect(frozenFile.suggestedFilename()).toBe("opptium-outreach.csv");
 });
 
-async function seedCompletedOutreachState(input: {
+async function seedCleanWorkflowState(input: {
   campaignId: string;
   suffix: string;
   workspaceName: string;
@@ -118,84 +120,295 @@ async function seedCompletedOutreachState(input: {
     .eq("name", input.workspaceName)
     .single();
   if (workspaceError) throw workspaceError;
-  const leadExternalId = `e2e-lead-${input.suffix}`;
-  const { data: lead, error: leadError } = await supabase
-    .from("leads")
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id,profile_snapshot_id,current_strategy_version_id")
+    .eq("workspace_id", workspace.id)
+    .eq("external_id", input.campaignId)
+    .single();
+  if (campaignError) throw campaignError;
+  if (!campaign.profile_snapshot_id || !campaign.current_strategy_version_id)
+    throw new Error("Campaign did not freeze its profile and strategy.");
+
+  const { data: run, error: runError } = await supabase
+    .from("campaign_runs")
     .insert({
       workspace_id: workspace.id,
-      external_id: leadExternalId,
-      company: "Synthetic Components",
-      website: "https://synthetic.example.com",
+      campaign_id: campaign.id,
+      profile_snapshot_id: campaign.profile_snapshot_id,
+      strategy_version_id: campaign.current_strategy_version_id,
+      status: "completed",
+      current_phase: "ready_for_review",
+      progress_percentage: 100,
+      companies_discovered: 1,
+      companies_qualified: 1,
+      contacts_found: 1,
+      candidates_discovered: 1,
+      candidates_unique: 1,
+      candidates_classified: 1,
+      companies_evaluated: 1,
+      completed_at: new Date().toISOString(),
+      dispatch_state: "completed",
+      dispatch_key: `e2e:${input.suffix}`,
+    })
+    .select("id")
+    .single();
+  if (runError) throw runError;
+
+  const { data: market, error: marketError } = await supabase
+    .from("market_analyses")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_id: campaign.id,
+      campaign_run_id: run.id,
+      version: 1,
+      analysis: { market: "Nordics", source: "deterministic_e2e" },
+      prompt_version: "deterministic-e2e-v1",
+      requested_model: "fixture",
+      actual_model: "fixture",
+      confidence: 1,
+    })
+    .select("id")
+    .single();
+  if (marketError) throw marketError;
+  const { data: plan, error: planError } = await supabase
+    .from("discovery_plans")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_id: campaign.id,
+      campaign_run_id: run.id,
+      market_analysis_id: market.id,
+      version: 1,
+      strategy_summary: "Synthetic deterministic discovery plan.",
+      stop_conditions: { target: 1 },
+      prompt_version: "deterministic-e2e-v1",
+      requested_model: "fixture",
+      actual_model: "fixture",
+    })
+    .select("id")
+    .single();
+  if (planError) throw planError;
+  const { data: path, error: pathError } = await supabase
+    .from("discovery_paths")
+    .insert({
+      workspace_id: workspace.id,
+      discovery_plan_id: plan.id,
+      external_id: "synthetic-direct-search",
+      path_type: "direct_search",
+      rationale: "Exercise clean staged persistence without an external provider.",
+      expected_company_category: "Manufacturer",
+      priority: 1,
+      queries: ["Nordic industrial component manufacturer"],
+      source_hints: ["company website"],
+      expected_yield: "low",
+      max_results: 5,
+    })
+    .select("id")
+    .single();
+  if (pathError) throw pathError;
+  const { data: iteration, error: iterationError } = await supabase
+    .from("discovery_iterations")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_id: campaign.id,
+      campaign_run_id: run.id,
+      discovery_plan_id: plan.id,
+      iteration_number: 1,
+      objective: "Find one deterministic fixture company.",
+      decision: "target_reached",
+      decision_reason: "The fixture target was reached.",
+      completed_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (iterationError) throw iterationError;
+  const { data: query, error: queryError } = await supabase
+    .from("discovery_queries")
+    .insert({
+      workspace_id: workspace.id,
+      discovery_iteration_id: iteration.id,
+      discovery_path_id: path.id,
+      query: "Nordic industrial component manufacturer",
+      source_type: "company_website",
+      result_limit: 5,
+      provider: "deterministic_fixture",
+      provider_request_id: `fixture-${input.suffix}`,
+      retrieved_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (queryError) throw queryError;
+  const { data: candidate, error: candidateError } = await supabase
+    .from("discovery_candidates")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_id: campaign.id,
+      campaign_run_id: run.id,
+      discovery_iteration_id: iteration.id,
+      discovery_query_id: query.id,
+      candidate_key: "domain:synthetic.example.com",
+      company_name: "Synthetic Components",
+      normalized_domain: "synthetic.example.com",
+      source_url: "https://synthetic.example.com/about",
+      source_type: "company_website",
+      source_query: "Nordic industrial component manufacturer",
+      source_path: "synthetic-direct-search",
+      snippet: "Synthetic industrial component manufacturer.",
+      country_region: "Finland",
+      probable_category: "Manufacturer",
+      discovery_confidence: 1,
+      retrieved_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+  if (candidateError) throw candidateError;
+  const { error: classificationError } = await supabase
+    .from("candidate_classifications")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_run_id: run.id,
+      candidate_id: candidate.id,
+      status: "promising",
+      confidence: 1,
+      probable_category: "Manufacturer",
+      geography_match: true,
+      reasons: ["Deterministic fixture matches the campaign."],
+      should_evaluate: true,
+      model_role: "search_result_classification",
+      prompt_version: "deterministic-e2e-v1",
+      requested_model: "fixture",
+      actual_model: "fixture",
+      input_hash: `classification-${input.suffix}`,
+    });
+  if (classificationError) throw classificationError;
+
+  const { data: company, error: companyError } = await supabase
+    .from("companies")
+    .insert({
+      workspace_id: workspace.id,
+      name: "Synthetic Components",
+      normalized_name: "synthetic components",
+      website_url: "https://synthetic.example.com",
       country: "Finland",
       city: "Helsinki",
-      campaign_id: input.campaignId,
       company_type: "Manufacturer",
       industry: "Industrial components",
       estimated_size: "50-200 employees",
       description: "Synthetic browser-test company",
-      fit_score: 88,
-      confidence: "high",
-      contactability: "high",
-      status: "approved",
-      summary: "Public evidence indicates a maintenance-relevant manufacturer.",
     })
     .select("id")
     .single();
-  if (leadError) throw leadError;
-  const { data: contact, error: contactError } = await supabase
-    .from("lead_contact_routes")
+  if (companyError) throw companyError;
+  const { data: source, error: sourceError } = await supabase
+    .from("company_sources")
     .insert({
-      lead_id: lead.id,
-      type: "Email",
-      value: "sales@synthetic.example.com",
-      suggested_role: "Sales department",
-      verification: "source_confirmed",
-      source: "https://synthetic.example.com/contact",
-      sort_order: 0,
-      verification_provider: "synthetic_e2e",
-      verification_source_url: "https://synthetic.example.com/contact",
-      verified_at: new Date().toISOString(),
+      workspace_id: workspace.id,
+      company_id: company.id,
+      campaign_run_id: run.id,
+      provider: "deterministic_fixture",
+      source_type: "company_website",
+      title: "Synthetic company page",
+      source_url: "https://synthetic.example.com/about",
+      original_url: "https://synthetic.example.com/about",
+      excerpt: "The company publicly describes industrial component manufacturing.",
     })
     .select("id")
     .single();
-  if (contactError) throw contactError;
-  const { error: evidenceError } = await supabase.from("lead_evidence_claims").insert({
-    lead_id: lead.id,
-    external_id: "e2e-public-evidence",
-    kind: "fact",
-    text: "The company publicly describes industrial component manufacturing.",
-    source_type: "synthetic_e2e",
-    source_label: "Synthetic company page",
+  if (sourceError) throw sourceError;
+  const { data: association, error: associationError } = await supabase
+    .from("campaign_companies")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_id: campaign.id,
+      campaign_run_id: run.id,
+      company_id: company.id,
+      status: "approved",
+      source_summary: "Deterministic public company evidence.",
+    })
+    .select("id")
+    .single();
+  if (associationError) throw associationError;
+  const { data: qualification, error: qualificationError } = await supabase
+    .from("qualification_results")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_company_id: association.id,
+      campaign_run_id: run.id,
+      status: "qualified",
+      score: 88,
+      confidence: "high",
+      summary: "The fixture company matches the campaign.",
+      schema_version: "qualification-v1",
+      prompt_version: "deterministic-e2e-v1",
+      input_hash: `qualification-${input.suffix}`,
+    })
+    .select("id")
+    .single();
+  if (qualificationError) throw qualificationError;
+  const { error: evidenceError } = await supabase.from("qualification_evidence").insert({
+    workspace_id: workspace.id,
+    qualification_result_id: qualification.id,
+    criterion: "industry fit",
+    evidence_kind: "fact",
+    statement: "The company manufactures industrial components.",
     source_url: "https://synthetic.example.com/about",
-    retrieved_at: "2026-07-19",
+    source_id: source.id,
     confidence: "high",
-    sort_order: 0,
   });
   if (evidenceError) throw evidenceError;
-  const { error: stateError } = await supabase.from("lead_outreach_states").upsert({
+  const { data: method, error: methodError } = await supabase
+    .from("contact_methods")
+    .insert({
+      workspace_id: workspace.id,
+      company_id: company.id,
+      method_type: "general_company_email",
+      value: "sales@synthetic.example.com",
+      normalized_value: "sales@synthetic.example.com",
+      verification_status: "source_confirmed",
+      is_primary: true,
+    })
+    .select("id")
+    .single();
+  if (methodError) throw methodError;
+  const { error: contactSourceError } = await supabase.from("contact_sources").insert({
     workspace_id: workspace.id,
-    lead_id: lead.id,
-    enrichment_status: "contacts_ready",
-    selected_contact_route_id: contact.id,
-    selection_status: "accepted",
-    recommendation_reason: "Synthetic accepted recipient",
+    contact_method_id: method.id,
+    provider: "deterministic_fixture",
+    source_url: "https://synthetic.example.com/contact",
+    source_title: "Synthetic contact page",
   });
-  if (stateError) throw stateError;
+  if (contactSourceError) throw contactSourceError;
+  const { data: campaignContact, error: campaignContactError } = await supabase
+    .from("campaign_contacts")
+    .insert({
+      workspace_id: workspace.id,
+      campaign_company_id: association.id,
+      contact_method_id: method.id,
+      role_relevance: "Sales department",
+      selection_status: "recommended",
+      recommendation_reason: "Synthetic accepted recipient",
+    })
+    .select("id")
+    .single();
+  if (campaignContactError) throw campaignContactError;
   const { error: draftError } = await supabase.from("outreach_drafts").insert({
     workspace_id: workspace.id,
-    external_id: `e2e-draft-${input.suffix}`,
-    lead_external_id: leadExternalId,
-    campaign_external_id: input.campaignId,
-    recipient_route: "sales@synthetic.example.com",
+    campaign_id: campaign.id,
+    campaign_run_id: run.id,
+    campaign_company_id: association.id,
+    campaign_contact_id: campaignContact.id,
+    profile_snapshot_id: campaign.profile_snapshot_id,
+    strategy_version_id: campaign.current_strategy_version_id,
     subject: "Maintenance planning",
     body: "Hello, this is a grounded synthetic browser-test draft.",
     variant: "primary",
     language: "English",
     status: "needs_review",
     seller_claims: ["Preventive maintenance"],
-    evidence_used: ["e2e-public-evidence"],
+    evidence_used: [source.id],
     warnings: [],
-    prompt_version: "synthetic-e2e-v1",
+    prompt_version: "deterministic-e2e-v1",
+    input_hash: `draft-${input.suffix}`,
     generated_at: new Date().toISOString(),
   });
   if (draftError) throw draftError;

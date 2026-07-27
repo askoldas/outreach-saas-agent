@@ -35,6 +35,8 @@ jobs:
         with:
           version: latest
       - run: supabase start
+      - name: Rebuild database from zero
+        run: supabase db reset
       - run: supabase test db
       - if: always()
         run: supabase stop --no-backup
@@ -56,6 +58,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
       - run: supabase start
+      - name: Rebuild browser database from zero
+        run: supabase db reset
       - name: Export local Supabase configuration
         run: |
           echo "NEXT_PUBLIC_SUPABASE_URL=$(supabase status -o json | jq -r .API_URL)" >> "$GITHUB_ENV"

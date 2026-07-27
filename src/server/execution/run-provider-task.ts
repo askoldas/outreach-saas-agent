@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import { classifyWorkflowError, errorForTrigger } from "./errors";
+import { classifyWorkflowError } from "./errors";
+import { executeProviderAttempt } from "./provider-attempt";
 
 type ProviderTaskContext = {
   attempt: { number: number };
@@ -12,23 +13,22 @@ export async function runProviderTask<T>(
   context: ProviderTaskContext,
   execute: () => Promise<T>,
 ): Promise<T> {
-  await updateProviderDispatch(providerExecutionId, {
-    dispatch_state: "running",
-    dispatch_updated_at: new Date().toISOString(),
-    trigger_run_id: context.run.id,
+  return executeProviderAttempt(execute, {
+    onAttemptFailure: (error) =>
+      recordAttemptFailure(providerExecutionId, operation, context, error),
+    onCompleted: () =>
+      updateProviderDispatch(providerExecutionId, {
+        dispatch_state: "completed",
+        dispatch_updated_at: new Date().toISOString(),
+        last_dispatch_error: null,
+      }),
+    onStarted: () =>
+      updateProviderDispatch(providerExecutionId, {
+        dispatch_state: "running",
+        dispatch_updated_at: new Date().toISOString(),
+        trigger_run_id: context.run.id,
+      }),
   });
-  try {
-    const result = await execute();
-    await updateProviderDispatch(providerExecutionId, {
-      dispatch_state: "completed",
-      dispatch_updated_at: new Date().toISOString(),
-      last_dispatch_error: null,
-    });
-    return result;
-  } catch (error) {
-    await recordAttemptFailure(providerExecutionId, operation, context, error);
-    throw errorForTrigger(error);
-  }
 }
 
 export async function finalizeProviderTaskFailure(

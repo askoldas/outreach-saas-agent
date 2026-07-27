@@ -23,7 +23,7 @@ behavior and deterministic tests are implemented.
 | WP-04 — Company Intelligence V3 contracts and V1 adapter | complete    | V3 identity, business model, offerings, mechanics, buyer logic, rules, readiness, and reviewed V2 draft adapter added.                                                                |
 | WP-05 — Company Intelligence V3 workflow                 | complete    | V3 persistence, six narrow task contracts, guarded sequential Trigger orchestration, audited/resumable stages, atomic normalized draft compilation, and lifecycle fixtures added.     |
 | WP-06 — Company Profile V3 UI                            | complete    | Rollout-routed V3 review, V1 compatibility fallback, clarification and explicit review decisions, atomic core editing, immutable publishing, and an authenticated browser flow added. |
-| WP-07 — Campaign Strategy V2 contracts                   | not_started | Objective, archetype, rubric, source-plan, and segment contracts remain.                                                                                                              |
+| WP-07 — Campaign Strategy V2 contracts                   | complete    | Strict objective, geography, frozen offering, variant, archetype, signal, rubric, rule, source-plan, coverage, stopping, semantic-segment, strategy, and V1 adapter contracts added.  |
 | WP-08 — Campaign Strategy V2 persistence and compiler    | not_started | Compiler, persistence, confirmation, and audit remain.                                                                                                                                |
 | WP-09 — Campaign creation and Strategy V2 UI             | not_started | V2 routing, wizard, review, and E2E coverage remain.                                                                                                                                  |
 | WP-10 — Scoped memory V2                                 | not_started | Scope precedence, promotion, conflicts, and application events remain.                                                                                                                |
@@ -163,7 +163,26 @@ behavior and deterministic tests are implemented.
   and verifies both the approved draft and immutable V2 profile version. It self-skips
   when deployment-level V2 profile flags are intentionally disabled.
 
+## WP-07 delivery record
+
+- Campaign Strategy V2 now requires an explicit commercial objective and relationship
+  taxonomy, confirmed structured geography, and offering versions belonging to one
+  frozen Company Intelligence version.
+- Archetypes combine organization roles, relationship, use mode, commercial rationale,
+  conditions, signals, and evidence questions. Conditional archetypes require explicit
+  conditions, and every strategy requires at least one priority archetype.
+- Qualification policy stores factor definitions rather than holistic model scores.
+  Factor weights must total 100, hard gates must be actual hard-exclusion rules, and
+  unknown evidence has an explicit handling policy.
+- Discovery segments are provider-neutral semantic requests. Strict schemas reject raw
+  query fields, unknown archetype links, incompatible-archetype discovery, inverted size
+  ranges, and cross-profile offering references.
+- The V1 adapter produces only a low-confidence, review-required V2 draft. It does not
+  copy legacy raw search terms, keeps inferred exclusions soft and campaign scoped, and
+  cannot be confirmed until the user explicitly reviews the objective and geography.
+
 ## Next package entry point
 
-Begin WP-07 with Campaign Strategy V2 contracts. V1 remains the default path until its
-successor packages are complete and the V2 rollout is explicitly enabled.
+Begin WP-08 with Campaign Strategy V2 persistence and the deterministic context/compiler
+boundary. V1 remains the default path until its successor packages are complete and the
+V2 rollout is explicitly enabled.

@@ -5058,6 +5058,191 @@ export type Database = {
           },
         ];
       };
+      discovery_coverage_snapshots_v2: {
+        Row: {
+          archetype_key: string;
+          confidence: number;
+          created_at: string;
+          discovery_run_id: string;
+          discovery_segment_run_id: string;
+          geography_key: string;
+          id: string;
+          metrics_json: Json;
+          reasons_json: Json;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          archetype_key: string;
+          confidence: number;
+          created_at?: string;
+          discovery_run_id: string;
+          discovery_segment_run_id: string;
+          geography_key: string;
+          id?: string;
+          metrics_json: Json;
+          reasons_json?: Json;
+          status: string;
+          workspace_id: string;
+        };
+        Update: {
+          archetype_key?: string;
+          confidence?: number;
+          created_at?: string;
+          discovery_run_id?: string;
+          discovery_segment_run_id?: string;
+          geography_key?: string;
+          id?: string;
+          metrics_json?: Json;
+          reasons_json?: Json;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_coverage_snapshots_v2_discovery_run_id_fkey";
+            columns: ["discovery_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_coverage_snapshots_v2_discovery_segment_run_id_fkey";
+            columns: ["discovery_segment_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segment_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_coverage_snapshots_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_gap_actions_v2: {
+        Row: {
+          action_type: string;
+          created_at: string;
+          discovery_gap_id: string;
+          expected_improvement: string;
+          id: string;
+          max_calls: number | null;
+          max_estimated_cost_minor: number | null;
+          reason: string;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          action_type: string;
+          created_at?: string;
+          discovery_gap_id: string;
+          expected_improvement: string;
+          id?: string;
+          max_calls?: number | null;
+          max_estimated_cost_minor?: number | null;
+          reason: string;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          action_type?: string;
+          created_at?: string;
+          discovery_gap_id?: string;
+          expected_improvement?: string;
+          id?: string;
+          max_calls?: number | null;
+          max_estimated_cost_minor?: number | null;
+          reason?: string;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_gap_actions_v2_discovery_gap_id_fkey";
+            columns: ["discovery_gap_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_gaps_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_gap_actions_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_gaps_v2: {
+        Row: {
+          created_at: string;
+          description: string;
+          discovery_run_id: string;
+          discovery_segment_id: string | null;
+          gap_key: string;
+          gap_type: string;
+          id: string;
+          resolved_at: string | null;
+          severity: string;
+          status: string;
+          supporting_metrics_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          description: string;
+          discovery_run_id: string;
+          discovery_segment_id?: string | null;
+          gap_key: string;
+          gap_type: string;
+          id?: string;
+          resolved_at?: string | null;
+          severity: string;
+          status: string;
+          supporting_metrics_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          description?: string;
+          discovery_run_id?: string;
+          discovery_segment_id?: string | null;
+          gap_key?: string;
+          gap_type?: string;
+          id?: string;
+          resolved_at?: string | null;
+          severity?: string;
+          status?: string;
+          supporting_metrics_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_gaps_v2_discovery_run_id_fkey";
+            columns: ["discovery_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_gaps_v2_discovery_segment_id_fkey";
+            columns: ["discovery_segment_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segments_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_gaps_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       discovery_iterations: {
         Row: {
           campaign_id: string;
@@ -5269,6 +5454,83 @@ export type Database = {
           },
         ];
       };
+      discovery_plans_v2: {
+        Row: {
+          budget_policy_json: Json;
+          campaign_id: string;
+          campaign_strategy_version_id: string;
+          compiled_snapshot_json: Json;
+          content_hash: string;
+          coverage_policy_json: Json;
+          created_at: string;
+          id: string;
+          memory_snapshot_id: string;
+          status: string;
+          stopping_policy_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        Insert: {
+          budget_policy_json: Json;
+          campaign_id: string;
+          campaign_strategy_version_id: string;
+          compiled_snapshot_json: Json;
+          content_hash: string;
+          coverage_policy_json: Json;
+          created_at?: string;
+          id?: string;
+          memory_snapshot_id: string;
+          status: string;
+          stopping_policy_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        Update: {
+          budget_policy_json?: Json;
+          campaign_id?: string;
+          campaign_strategy_version_id?: string;
+          compiled_snapshot_json?: Json;
+          content_hash?: string;
+          coverage_policy_json?: Json;
+          created_at?: string;
+          id?: string;
+          memory_snapshot_id?: string;
+          status?: string;
+          stopping_policy_json?: Json;
+          version_number?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_plans_v2_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_plans_v2_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_plans_v2_memory_snapshot_id_fkey";
+            columns: ["memory_snapshot_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_memory_snapshots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_plans_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       discovery_provider_capability_snapshots: {
         Row: {
           adapter_version: string;
@@ -5315,6 +5577,7 @@ export type Database = {
           completed_at: string | null;
           discovery_plan_key: string;
           discovery_segment_key: string;
+          discovery_segment_run_id: string | null;
           errors_json: Json;
           exhausted: boolean | null;
           external_execution_key: string;
@@ -5337,6 +5600,7 @@ export type Database = {
           completed_at?: string | null;
           discovery_plan_key: string;
           discovery_segment_key: string;
+          discovery_segment_run_id?: string | null;
           errors_json?: Json;
           exhausted?: boolean | null;
           external_execution_key: string;
@@ -5359,6 +5623,7 @@ export type Database = {
           completed_at?: string | null;
           discovery_plan_key?: string;
           discovery_segment_key?: string;
+          discovery_segment_run_id?: string | null;
           errors_json?: Json;
           exhausted?: boolean | null;
           external_execution_key?: string;
@@ -5387,6 +5652,13 @@ export type Database = {
             columns: ["capability_snapshot_id"];
             isOneToOne: false;
             referencedRelation: "discovery_provider_capability_snapshots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_provider_executions_discovery_segment_run_id_fkey";
+            columns: ["discovery_segment_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segment_runs_v2";
             referencedColumns: ["id"];
           },
           {
@@ -5455,6 +5727,422 @@ export type Database = {
           },
           {
             foreignKeyName: "discovery_queries_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_queries_v2: {
+        Row: {
+          country: string | null;
+          created_at: string;
+          fingerprint: string;
+          id: string;
+          language: string;
+          normalized_query: string;
+          provider_execution_id: string;
+          purpose: string;
+          query_key: string;
+          query_text: string;
+          query_type: string;
+          result_count: number;
+          sequence_number: number;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          country?: string | null;
+          created_at?: string;
+          fingerprint: string;
+          id?: string;
+          language: string;
+          normalized_query: string;
+          provider_execution_id: string;
+          purpose: string;
+          query_key: string;
+          query_text: string;
+          query_type: string;
+          result_count?: number;
+          sequence_number: number;
+          status: string;
+          workspace_id: string;
+        };
+        Update: {
+          country?: string | null;
+          created_at?: string;
+          fingerprint?: string;
+          id?: string;
+          language?: string;
+          normalized_query?: string;
+          provider_execution_id?: string;
+          purpose?: string;
+          query_key?: string;
+          query_text?: string;
+          query_type?: string;
+          result_count?: number;
+          sequence_number?: number;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_queries_v2_provider_execution_id_fkey";
+            columns: ["provider_execution_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_provider_executions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_queries_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_runs_v2: {
+        Row: {
+          budget_limit_json: Json;
+          campaign_id: string;
+          completed_at: string | null;
+          continuation_decision_json: Json | null;
+          coverage_summary_json: Json;
+          created_at: string;
+          discovery_plan_id: string;
+          id: string;
+          paused_at: string | null;
+          started_at: string;
+          status: string;
+          stopping_reason: string | null;
+          usage_summary_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          budget_limit_json: Json;
+          campaign_id: string;
+          completed_at?: string | null;
+          continuation_decision_json?: Json | null;
+          coverage_summary_json?: Json;
+          created_at?: string;
+          discovery_plan_id: string;
+          id?: string;
+          paused_at?: string | null;
+          started_at?: string;
+          status?: string;
+          stopping_reason?: string | null;
+          usage_summary_json?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          budget_limit_json?: Json;
+          campaign_id?: string;
+          completed_at?: string | null;
+          continuation_decision_json?: Json | null;
+          coverage_summary_json?: Json;
+          created_at?: string;
+          discovery_plan_id?: string;
+          id?: string;
+          paused_at?: string | null;
+          started_at?: string;
+          status?: string;
+          stopping_reason?: string | null;
+          usage_summary_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_runs_v2_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_runs_v2_discovery_plan_id_fkey";
+            columns: ["discovery_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_plans_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_runs_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_segment_runs_v2: {
+        Row: {
+          completed_at: string | null;
+          discovery_run_id: string;
+          discovery_segment_id: string;
+          gap_ids: string[];
+          id: string;
+          metrics_json: Json;
+          normalized_candidate_count: number;
+          pass_number: number;
+          plausible_candidate_count: number | null;
+          provider_record_count: number;
+          qualified_yield_count: number | null;
+          started_at: string;
+          status: string;
+          unique_candidate_count: number;
+          workspace_id: string;
+        };
+        Insert: {
+          completed_at?: string | null;
+          discovery_run_id: string;
+          discovery_segment_id: string;
+          gap_ids?: string[];
+          id?: string;
+          metrics_json?: Json;
+          normalized_candidate_count?: number;
+          pass_number: number;
+          plausible_candidate_count?: number | null;
+          provider_record_count?: number;
+          qualified_yield_count?: number | null;
+          started_at?: string;
+          status?: string;
+          unique_candidate_count?: number;
+          workspace_id: string;
+        };
+        Update: {
+          completed_at?: string | null;
+          discovery_run_id?: string;
+          discovery_segment_id?: string;
+          gap_ids?: string[];
+          id?: string;
+          metrics_json?: Json;
+          normalized_candidate_count?: number;
+          pass_number?: number;
+          plausible_candidate_count?: number | null;
+          provider_record_count?: number;
+          qualified_yield_count?: number | null;
+          started_at?: string;
+          status?: string;
+          unique_candidate_count?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_segment_runs_v2_discovery_run_id_fkey";
+            columns: ["discovery_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_segment_runs_v2_discovery_segment_id_fkey";
+            columns: ["discovery_segment_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segments_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_segment_runs_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_segments_v2: {
+        Row: {
+          business_characteristics_json: Json;
+          campaign_archetype_key: string;
+          created_at: string;
+          discovery_plan_id: string;
+          exclusion_rules_json: Json;
+          exploration_budget_class: string;
+          geography_json: Json;
+          id: string;
+          negative_signals_json: Json;
+          positive_signals_json: Json;
+          priority: number;
+          segment_key: string;
+          status: string;
+          target_candidate_count: number | null;
+          workspace_id: string;
+        };
+        Insert: {
+          business_characteristics_json: Json;
+          campaign_archetype_key: string;
+          created_at?: string;
+          discovery_plan_id: string;
+          exclusion_rules_json?: Json;
+          exploration_budget_class: string;
+          geography_json: Json;
+          id?: string;
+          negative_signals_json?: Json;
+          positive_signals_json?: Json;
+          priority: number;
+          segment_key: string;
+          status?: string;
+          target_candidate_count?: number | null;
+          workspace_id: string;
+        };
+        Update: {
+          business_characteristics_json?: Json;
+          campaign_archetype_key?: string;
+          created_at?: string;
+          discovery_plan_id?: string;
+          exclusion_rules_json?: Json;
+          exploration_budget_class?: string;
+          geography_json?: Json;
+          id?: string;
+          negative_signals_json?: Json;
+          positive_signals_json?: Json;
+          priority?: number;
+          segment_key?: string;
+          status?: string;
+          target_candidate_count?: number | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_segments_v2_discovery_plan_id_fkey";
+            columns: ["discovery_plan_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_plans_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_segments_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_source_plans_v2: {
+        Row: {
+          activation_condition_json: Json;
+          capability_snapshot_id: string;
+          created_at: string;
+          discovery_segment_id: string;
+          id: string;
+          priority: number;
+          provider_key: string;
+          provider_request_policy_json: Json;
+          reasons_json: Json;
+          source_role: string;
+          unsupported_constraints_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          activation_condition_json?: Json;
+          capability_snapshot_id: string;
+          created_at?: string;
+          discovery_segment_id: string;
+          id?: string;
+          priority: number;
+          provider_key: string;
+          provider_request_policy_json?: Json;
+          reasons_json?: Json;
+          source_role: string;
+          unsupported_constraints_json?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          activation_condition_json?: Json;
+          capability_snapshot_id?: string;
+          created_at?: string;
+          discovery_segment_id?: string;
+          id?: string;
+          priority?: number;
+          provider_key?: string;
+          provider_request_policy_json?: Json;
+          reasons_json?: Json;
+          source_role?: string;
+          unsupported_constraints_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_source_plans_v2_capability_snapshot_id_fkey";
+            columns: ["capability_snapshot_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_provider_capability_snapshots";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_source_plans_v2_discovery_segment_id_fkey";
+            columns: ["discovery_segment_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segments_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_source_plans_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_usage_events_v2: {
+        Row: {
+          created_at: string;
+          discovery_run_id: string;
+          discovery_segment_run_id: string | null;
+          event_type: string;
+          id: string;
+          metrics_json: Json;
+          provider_execution_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          discovery_run_id: string;
+          discovery_segment_run_id?: string | null;
+          event_type: string;
+          id?: string;
+          metrics_json: Json;
+          provider_execution_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          discovery_run_id?: string;
+          discovery_segment_run_id?: string | null;
+          event_type?: string;
+          id?: string;
+          metrics_json?: Json;
+          provider_execution_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_usage_events_v2_discovery_run_id_fkey";
+            columns: ["discovery_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_usage_events_v2_discovery_segment_run_id_fkey";
+            columns: ["discovery_segment_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segment_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_usage_events_v2_provider_execution_id_fkey";
+            columns: ["provider_execution_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_provider_executions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_usage_events_v2_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -9413,6 +10101,37 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_discovery_plan_v2: {
+        Args: {
+          target_campaign_id: string;
+          target_content_hash: string;
+          target_memory_snapshot_id: string;
+          target_plan: Json;
+          target_strategy_version_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          budget_policy_json: Json;
+          campaign_id: string;
+          campaign_strategy_version_id: string;
+          compiled_snapshot_json: Json;
+          content_hash: string;
+          coverage_policy_json: Json;
+          created_at: string;
+          id: string;
+          memory_snapshot_id: string;
+          status: string;
+          stopping_policy_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_plans_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_intelligence_claim_with_evidence: {
         Args: {
           evidence_links: Json;
@@ -9457,6 +10176,7 @@ export type Database = {
         Args: { target_workspace_id: string };
         Returns: string;
       };
+      empty_discovery_progress_counters_v2: { Args: never; Returns: Json };
       is_workspace_admin: {
         Args: { target_workspace_id: string };
         Returns: boolean;
@@ -9500,6 +10220,35 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      persist_discovery_coverage_decision_v2: {
+        Args: {
+          target_coverage: Json;
+          target_decision: Json;
+          target_gaps: Json;
+          target_run_id: string;
+          target_segment_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          archetype_key: string;
+          confidence: number;
+          created_at: string;
+          discovery_run_id: string;
+          discovery_segment_run_id: string;
+          geography_key: string;
+          id: string;
+          metrics_json: Json;
+          reasons_json: Json;
+          status: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_coverage_snapshots_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       persist_discovery_provider_response: {
         Args: {
           target_adapter_version: string;
@@ -9523,6 +10272,7 @@ export type Database = {
           completed_at: string | null;
           discovery_plan_key: string;
           discovery_segment_key: string;
+          discovery_segment_run_id: string | null;
           errors_json: Json;
           exhausted: boolean | null;
           external_execution_key: string;
@@ -9653,6 +10403,15 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      record_discovery_query_audit_v2: {
+        Args: {
+          target_provider_execution_id: string;
+          target_queries: Json;
+          target_segment_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: number;
       };
       resolve_discovered_company: {
         Args: {
@@ -9828,6 +10587,63 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "organization_split_events";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      start_discovery_run_v2: {
+        Args: { target_plan_id: string; target_workspace_id: string };
+        Returns: {
+          budget_limit_json: Json;
+          campaign_id: string;
+          completed_at: string | null;
+          continuation_decision_json: Json | null;
+          coverage_summary_json: Json;
+          created_at: string;
+          discovery_plan_id: string;
+          id: string;
+          paused_at: string | null;
+          started_at: string;
+          status: string;
+          stopping_reason: string | null;
+          usage_summary_json: Json;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_runs_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      start_discovery_segment_pass_v2: {
+        Args: {
+          target_gap_ids?: string[];
+          target_pass_number: number;
+          target_run_id: string;
+          target_segment_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          completed_at: string | null;
+          discovery_run_id: string;
+          discovery_segment_id: string;
+          gap_ids: string[];
+          id: string;
+          metrics_json: Json;
+          normalized_candidate_count: number;
+          pass_number: number;
+          plausible_candidate_count: number | null;
+          provider_record_count: number;
+          qualified_yield_count: number | null;
+          started_at: string;
+          status: string;
+          unique_candidate_count: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_segment_runs_v2";
           isOneToOne: true;
           isSetofReturn: false;
         };

@@ -34,7 +34,7 @@ behavior and deterministic tests are implemented.
 | WP-15 — Candidate research and reusable intelligence     | complete    | Question-driven research plans, bounded first-party fetch contracts, evidence reuse/freshness, claim projections, immutable snapshots, campaign scoping, and tests added.                     |
 | WP-16 — Qualification V2 factor engine                   | complete    | Relationship-first evaluation, evidence-gated exclusions, ordered eligibility, versioned factor library, deterministic fit/potential, confidence caps, traces, lanes, and tests added.        |
 | WP-17 — Comparative ranking and consistency checks       | complete    | Lane-first stable ranking, deterministic anomaly checks, constrained comparative assessments, failure isolation, immutable snapshots, audit persistence, and tests added.                     |
-| WP-18 — V2 Campaign Trigger workflow                     | in_progress | Durable workflow/task/attempt persistence, checkpoints, controls, outbox, usage ledger, and controller tests added; Trigger parent/children and stage adapters remain.                        |
+| WP-18 — V2 Campaign Trigger workflow                     | in_progress | Durable persistence plus atomic, service-role-only workflow initialization, task claim/attempt settlement, checkpoint transitions, stable fingerprints, and tests added; Trigger parent/children and stage adapters remain. |
 | WP-19 — V2 campaign results UI                           | not_started | Coverage, lanes, factors, corrections, entity review, and accessibility remain.                                                                                                               |
 | WP-20 — Shadow mode and benchmark runner                 | not_started | Synthetic portfolio, comparison runner, report, and no-write shadow mode remain.                                                                                                              |
 | WP-21 — Controlled beta                                  | not_started | Selected-workspace rollout, telemetry, and rollback drill remain.                                                                                                                             |
@@ -380,4 +380,6 @@ path until its successor packages are complete and the V2 rollout is explicitly 
 WP-18 runtime integration discovered that the live schema retained the legacy
 `discovery_plans` relation and did not contain WP-13 semantic discovery children.
 Migration 17 repairs that drift using collision-safe `discovery_plans_v2` persistence.
-The V2 Trigger parent remains deliberately undispatchable until the repair is applied.
+Migration 18 adds the atomic runtime transition API used by Trigger retries and
+idempotent stage execution. The V2 Trigger parent remains deliberately undispatchable
+until that migration is applied and the parent/child adapters are implemented.

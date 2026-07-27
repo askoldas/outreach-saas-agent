@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { ResearchProgress } from "@/types/domain";
 import {
+  cancelTriggerRuns,
   dispatchCampaignRun,
   dispatchProviderExecution,
 } from "@/server/trigger/dispatch";
@@ -100,6 +101,96 @@ export async function resumePausedCampaignRun(input: {
     workspaceId: input.workspaceId,
   });
   return { runId: run.id };
+}
+
+export async function stopActiveCampaignRun(input: {
+  campaignId: string;
+  workspaceId: string;
+}) {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("external_id", input.campaignId)
+    .single();
+  if (campaignError)
+    throw new Error(`Could not resolve Campaign to stop: ${campaignError.message}`);
+  const { data: run, error: runError } = await supabase
+    .from("campaign_runs")
+    .select("id,trigger_run_id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_id", campaign.id)
+    .not("status", "in", '("completed","partially_completed","failed","cancelled")')
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (runError)
+    throw new Error(`Could not load active Campaign Run: ${runError.message}`);
+  if (!run) return { cancelledTriggerRuns: 0, runId: null };
+
+  const stoppedAt = new Date().toISOString();
+  const { data: executions, error: executionLoadError } = await supabase
+    .from("provider_executions")
+    .select("id,trigger_run_id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", run.id)
+    .in("status", ["pending", "running"]);
+  if (executionLoadError)
+    throw new Error(
+      `Could not load active provider executions: ${executionLoadError.message}`,
+    );
+  const [{ error: runUpdateError }, { error: executionUpdateError }] = await Promise.all([
+    supabase
+      .from("campaign_runs")
+      .update({
+        status: "cancelled",
+        current_phase: "cancelled",
+        cancelled_at: stoppedAt,
+        error_code: "campaign_cancelled",
+        error_message: "Campaign stopped by the user.",
+      })
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", run.id),
+    supabase
+      .from("provider_executions")
+      .update({
+        status: "cancelled",
+        completed_at: stoppedAt,
+        error_code: "campaign_cancelled",
+        error_message: "Campaign stopped by the user.",
+      })
+      .eq("workspace_id", input.workspaceId)
+      .eq("campaign_run_id", run.id)
+      .in("status", ["pending", "running"]),
+  ]);
+  if (runUpdateError || executionUpdateError) {
+    throw new Error(
+      `Could not persist Campaign cancellation: ${
+        runUpdateError?.message ?? executionUpdateError?.message
+      }`,
+    );
+  }
+
+  const cancellation = await cancelTriggerRuns([
+    run.trigger_run_id ?? "",
+    ...(executions ?? []).map((item) => item.trigger_run_id ?? ""),
+  ]);
+  if (cancellation.failures.length) {
+    const { error } = await supabase
+      .from("campaign_runs")
+      .update({
+        last_dispatch_error: cancellation.failures
+          .map((item) => `${item.runId}: ${item.message}`)
+          .join("; ")
+          .slice(0, 2_000),
+      })
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", run.id);
+    if (error)
+      throw new Error(`Could not record Trigger cancellation result: ${error.message}`);
+  }
+  return { cancelledTriggerRuns: cancellation.cancelled, runId: run.id };
 }
 
 export async function enqueueLeadContactEnrichmentRun(input: {

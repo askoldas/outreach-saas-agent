@@ -90,6 +90,7 @@ export async function executeCampaignDiscovery(
   );
 
   try {
+    await assertCampaignRunCanContinue(context);
     const bounds = createDiscoveryBounds(context.desiredCompanyCount);
     let stagedPlan = await ensurePlanningArtifacts(
       context,
@@ -127,6 +128,7 @@ export async function executeCampaignDiscovery(
       rawResults: Array<SearchResult & { query: string }>;
     }>(providerExecutionId, searchInputHash, "search");
     if (!searchBatch) {
+      await assertCampaignRunCanContinue(context);
       const resultGroups = await Promise.all(
         queries.map(async (query) =>
           (await searchWeb(query, resultsPerQuery)).map((result) => ({
@@ -178,6 +180,7 @@ export async function executeCampaignDiscovery(
       "first_party_inspection",
     );
     if (!accepted) {
+      await assertCampaignRunCanContinue(context);
       accepted = await inspectFirstPartyCandidates(inspectable);
       await storeProviderResult(
         providerExecutionId,
@@ -232,6 +235,7 @@ export async function executeCampaignDiscovery(
     let failedCount = 0;
     let evaluatedCount = 0;
     for (const [index, source] of accepted.entries()) {
+      await assertCampaignRunCanContinue(context);
       const association = await persistCandidate(context, source, index + 1);
       try {
         const qualificationStatus = await qualifyCandidate(
@@ -430,6 +434,21 @@ export async function executeCampaignDiscovery(
     return result;
   } catch (error) {
     throw error;
+  }
+}
+
+async function assertCampaignRunCanContinue(
+  context: Awaited<ReturnType<typeof loadContext>>,
+) {
+  const { data, error } = await createServiceRoleClient()
+    .from("campaign_runs")
+    .select("status")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", context.runId)
+    .single();
+  if (error) throw new Error(`Could not verify Campaign cancellation: ${error.message}`);
+  if (data.status === "cancelled") {
+    throw new Error("[cancellation] Campaign stopped by the user.");
   }
 }
 

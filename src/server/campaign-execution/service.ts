@@ -508,6 +508,17 @@ export async function failCampaignOrchestration(
   context: CampaignExecutionContext,
   failure: unknown,
 ) {
+  const { data: currentRun, error: currentRunError } = await createServiceRoleClient()
+    .from("campaign_runs")
+    .select("status")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", context.campaignRunId)
+    .single();
+  if (currentRunError)
+    throw new Error(
+      `Could not inspect Campaign failure state: ${currentRunError.message}`,
+    );
+  if (currentRun.status === "cancelled") return;
   const message =
     failure instanceof Error
       ? failure.message.slice(0, 2_000)
@@ -577,12 +588,13 @@ export async function markOptionalEnrichmentGate(context: CampaignExecutionConte
   const supabase = createServiceRoleClient();
   const { data: run, error: loadError } = await supabase
     .from("campaign_runs")
-    .select("companies_qualified")
+    .select("companies_qualified,status")
     .eq("workspace_id", context.workspaceId)
     .eq("id", context.campaignRunId)
     .single();
   if (loadError)
     throw new Error(`Could not load Campaign Run completion state: ${loadError.message}`);
+  if (run.status === "cancelled") return;
   const targetReached = run.companies_qualified >= context.desiredCompanyCount;
   const { error: runError } = await supabase
     .from("campaign_runs")

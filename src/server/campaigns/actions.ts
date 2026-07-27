@@ -14,6 +14,7 @@ import { completeGuidedDraft } from "@/server/guided/repository";
 import {
   enqueueCampaignDiscoveryRun,
   resumePausedCampaignRun,
+  stopActiveCampaignRun,
 } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { getCurrentCompanyProfile } from "@/server/company-profile/repository";
@@ -120,6 +121,13 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
     throw new Error("Unsupported campaign status.");
   }
 
+  const stopped =
+    input.status === "completed"
+      ? await stopActiveCampaignRun({
+          campaignId: input.campaignId,
+          workspaceId: currentWorkspace.id,
+        })
+      : null;
   await updateCampaignStatus(currentWorkspace.id, input.campaignId, input.status);
   const resumed =
     input.status === "running"
@@ -147,7 +155,9 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
           : "Campaign running"
         : input.status === "paused"
           ? "Campaign paused"
-          : "Campaign completed",
+          : stopped?.runId
+            ? `Campaign stopped${stopped.cancelledTriggerRuns ? `; ${stopped.cancelledTriggerRuns} Trigger run${stopped.cancelledTriggerRuns === 1 ? "" : "s"} cancelled` : ""}`
+            : "Campaign stopped",
   };
 }
 

@@ -1,4 +1,4 @@
-import { tasks } from "@trigger.dev/sdk";
+import { runs, tasks } from "@trigger.dev/sdk";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { analyzeCompanyProfileTask } from "@/trigger/analyze-company-profile";
 import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
@@ -6,6 +6,19 @@ import type { executeCampaignTask } from "@/trigger/execute-campaign";
 import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
 
 const staleDispatchMs = 2 * 60 * 1_000;
+
+export async function cancelTriggerRuns(triggerRunIds: string[]) {
+  const uniqueRunIds = [...new Set(triggerRunIds.filter(Boolean))];
+  const failures: Array<{ message: string; runId: string }> = [];
+  for (const runId of uniqueRunIds) {
+    try {
+      await runs.cancel(runId);
+    } catch (error) {
+      failures.push({ message: errorMessage(error), runId });
+    }
+  }
+  return { cancelled: uniqueRunIds.length - failures.length, failures };
+}
 
 export async function dispatchCampaignRun(input: {
   campaignRunId: string;

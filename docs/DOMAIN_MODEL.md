@@ -65,3 +65,26 @@ Company Profile v2 stores its explicit domain model as validated structured JSON
 - `MessagingBrief` and `SequenceStrategy`: typed foundations for later guided outreach setup; persistence and full workflows remain deferred.
 
 Recipient recommendations are deterministic read models derived from persisted approved leads and contact routes; accepted or overridden selection state is persisted per lead. Draft generation tasks freeze profile and strategy identifiers, preserve AI prompt/output provenance, and idempotently replace the primary campaign-lead variant for review. Drafts, enrichment lifecycle, frozen export records, and usage events are persisted. CSV download bytes are generated locally from the frozen authorized data.
+
+# Company Profile, Offering, and Campaign Target boundaries
+
+The Company Profile stores stable business knowledge, including capabilities, existing
+offerings, factual current customer groups, evidence, constraints, and plausible B2B
+applications. Consumer audiences are valid profile facts.
+
+An Offering describes what the company can sell and why an organization would buy it.
+It separates buyer organization types, decision-maker roles, and beneficiaries or end
+users. Offerings may be confirmed, inferred, proposed, or rejected. Inferred and newly
+packaged B2B Offerings require user confirmation.
+
+A Campaign owns its market, one primary Offering, optional supporting capabilities, and
+one or more distinct Target Segments. Each Target Segment has a B2B relationship type,
+organization types, industries, observable characteristics, buying signals, likely
+buyer roles, exclusions, rationale, evidence, confidence, and discoverability.
+
+Campaign markets and Target Segments are not written back into the Company Profile.
+Current customer groups are not promoted into Campaign targets automatically.
+
+Confirmed Company Profiles and Campaign Strategies are immutable versions. Website
+facts, user confirmations, AI inference, AI proposals, rejections, and restorations
+retain provenance in the structured version and applied-change audit.

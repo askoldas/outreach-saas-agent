@@ -180,3 +180,23 @@ shell: Overview shows stage, counters, blockers, and controls; Market Analysis s
 versioned operational analysis; Discovery shows paths, iterations, classifications, and
 filtered-candidate reasons; Companies presents progressive qualification review;
 Contacts and Outreach retain the explicit post-approval workflows.
+
+# AI-guided structured mutation boundary
+
+Company Profile and Campaign setup use validated structured JSON contracts. AI
+operations may generate profile business context, high-impact clarification questions,
+Offering proposals, Target Segment proposals, or structured change sets.
+
+Free text cannot mutate confirmed state. It is interpreted into explicit add, update,
+remove, restore, or keep operations. The UI previews those operations and the user
+selects which changes to apply. Application checks the base version for staleness and
+creates a new immutable Company Profile or Campaign Strategy version.
+
+The clean `company_profile_versions`, `campaign_strategy_versions`,
+`ai_guided_drafts`, and `ai_applied_changes` entities provide the required versioning,
+draft, provenance, stale-write, and audit boundaries. No polling-worker or retired
+profile model is introduced.
+
+Discovery remains organization-focused. Validation rejects consumer-only targets,
+targets without a B2B relationship type, and low-discoverability confirmed segments
+before a Campaign is created.

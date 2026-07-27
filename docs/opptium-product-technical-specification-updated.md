@@ -36,6 +36,23 @@ The central product promise is:
 
 The product should feel like an **AI campaign operator**, not a collection of disconnected tools.
 
+### Organization-first discovery constraint
+
+Opptium may record consumers as an existing Company Profile audience, but every
+discovery Campaign must resolve to searchable organizations or institutions in a
+customer, partner, distributor, reseller, supplier, contractor, or public-institution
+relationship. Individual consumers, families, private customers, end users, and
+demographic groups cannot be the primary discovery entity.
+
+Company Profile facts, Offerings, and Campaign Targets remain separate. Campaign market
+and Target Segments are Campaign-specific. One primary Offering is frozen into the
+Campaign snapshot.
+
+The approved setup interaction is: AI proposes; the user selects and adjusts; AI
+interprets additions into a structured change preview; the user confirms; Opptium saves
+a new immutable version. Natural-language input never directly overwrites confirmed
+structured data.
+
 ---
 
 ## 2. Primary user journey

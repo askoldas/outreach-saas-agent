@@ -31,7 +31,7 @@ behavior and deterministic tests are implemented.
 | WP-12 — WebSearchProvider                                | complete    | Registered WebSearchProvider, deterministic semantic/localized query generation, Tavily transport use, bounded parallel execution, raw normalization, source classification, and tests added. |
 | WP-13 — Semantic discovery plan and coverage             | complete    | Confirmed-strategy planning, frozen provider routes/capabilities, durable runs/query audit, explicit progress counters, metric coverage, gap actions, and stopping decisions added.           |
 | WP-14 — Organization graph and entity resolution         | complete    | Canonical graph persistence, deterministic exact matching, explicit ambiguity, buying-authority hypotheses, reversible merge/split RPCs, tenant guards, and regression fixtures added.        |
-| WP-15 — Candidate research and reusable intelligence     | not_started | Research plan, claims, freshness, and reusable versions remain.                                                                                                                               |
+| WP-15 — Candidate research and reusable intelligence     | complete    | Question-driven research plans, bounded first-party fetch contracts, evidence reuse/freshness, claim projections, immutable snapshots, campaign scoping, and tests added.                     |
 | WP-16 — Qualification V2 factor engine                   | not_started | Relationship-first evaluation, exclusions, deterministic scoring, confidence, traces, and lanes remain.                                                                                       |
 | WP-17 — Comparative ranking and consistency checks       | not_started | Ranking persistence, inversion checks, and failure isolation remain.                                                                                                                          |
 | WP-18 — V2 Campaign Trigger workflow                     | not_started | Versioned V2 parent/children and workflow tests remain.                                                                                                                                       |
@@ -317,7 +317,28 @@ behavior and deterministic tests are implemented.
 - WP-14 does not activate V2 campaign execution. Its graph will be consumed by the
   candidate research and qualification packages.
 
+## WP-15 delivery record
+
+- Candidate research plans are compiled from unresolved required questions, stale
+  evidence, conflicts, optional gaps, and procurement uncertainty. Page selection is
+  question-driven and bounded rather than a blind website crawl.
+- First-party fetch contracts permit only HTTP pages on the canonical organization
+  domain or its subdomains, remove fragments, deduplicate question keys, and bound
+  response size and runtime.
+- Field-specific freshness distinguishes stable, slow-changing, dynamic, and volatile
+  claims. Only available evidence meeting the required freshness state is reusable.
+- Candidate claims project the shared append-only Intelligence claim ledger instead
+  of creating an incompatible evidence system. Direct facts, evidence-backed
+  inferences, hypotheses, unknowns, and conflicts remain distinguishable.
+- Migration 13 adds reusable page-fetch records, research plans/tasks, Candidate
+  Intelligence versions, campaign candidates, discovery lineage, and a separate
+  campaign-specific claim projection. Tenant guards prevent cross-workspace subjects.
+- Immutable Candidate Intelligence snapshots retain exact claim/evidence IDs, source
+  cutoff, unresolved questions, conflicts, deterministic content hash, and version.
+- WP-15 does not activate fetching or V2 orchestration; those durable tasks are wired
+  into the versioned Trigger workflow in WP-18.
+
 ## Next package entry point
 
-Begin WP-15 with candidate research and reusable intelligence. V1 remains the default
+Begin WP-16 with the Candidate Qualification V2 factor engine. V1 remains the default
 path until its successor packages are complete and the V2 rollout is explicitly enabled.

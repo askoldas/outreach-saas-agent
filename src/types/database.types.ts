@@ -2516,10 +2516,15 @@ export type Database = {
           description: string;
           estimated_size: string | null;
           id: string;
+          identity_confidence: number;
+          identity_review_state: string;
           industry: string | null;
+          merged_into_company_id: string | null;
           metadata: Json;
           name: string;
           normalized_name: string;
+          operating_status: string;
+          organization_type: string;
           updated_at: string;
           website_url: string | null;
           workspace_id: string;
@@ -2532,10 +2537,15 @@ export type Database = {
           description?: string;
           estimated_size?: string | null;
           id?: string;
+          identity_confidence?: number;
+          identity_review_state?: string;
           industry?: string | null;
+          merged_into_company_id?: string | null;
           metadata?: Json;
           name: string;
           normalized_name: string;
+          operating_status?: string;
+          organization_type?: string;
           updated_at?: string;
           website_url?: string | null;
           workspace_id: string;
@@ -2548,15 +2558,27 @@ export type Database = {
           description?: string;
           estimated_size?: string | null;
           id?: string;
+          identity_confidence?: number;
+          identity_review_state?: string;
           industry?: string | null;
+          merged_into_company_id?: string | null;
           metadata?: Json;
           name?: string;
           normalized_name?: string;
+          operating_status?: string;
+          organization_type?: string;
           updated_at?: string;
           website_url?: string | null;
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "companies_merged_into_company_id_fkey";
+            columns: ["merged_into_company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "companies_workspace_id_fkey";
             columns: ["workspace_id"];
@@ -2700,10 +2722,13 @@ export type Database = {
           company_id: string;
           created_at: string;
           domain: string;
+          domain_role: string;
+          evidence_ids_json: Json;
           id: string;
           is_primary: boolean;
           metadata: Json;
           normalized_domain: string;
+          redirects_to_domain_id: string | null;
           verification_status: string;
           workspace_id: string;
         };
@@ -2712,10 +2737,13 @@ export type Database = {
           company_id: string;
           created_at?: string;
           domain: string;
+          domain_role?: string;
+          evidence_ids_json?: Json;
           id?: string;
           is_primary?: boolean;
           metadata?: Json;
           normalized_domain: string;
+          redirects_to_domain_id?: string | null;
           verification_status?: string;
           workspace_id: string;
         };
@@ -2724,10 +2752,13 @@ export type Database = {
           company_id?: string;
           created_at?: string;
           domain?: string;
+          domain_role?: string;
+          evidence_ids_json?: Json;
           id?: string;
           is_primary?: boolean;
           metadata?: Json;
           normalized_domain?: string;
+          redirects_to_domain_id?: string | null;
           verification_status?: string;
           workspace_id?: string;
         };
@@ -2737,6 +2768,13 @@ export type Database = {
             columns: ["company_id"];
             isOneToOne: false;
             referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_domains_redirects_to_domain_id_fkey";
+            columns: ["redirects_to_domain_id"];
+            isOneToOne: false;
+            referencedRelation: "company_domains";
             referencedColumns: ["id"];
           },
           {
@@ -4185,6 +4223,218 @@ export type Database = {
           },
         ];
       };
+      entity_match_assessments: {
+        Row: {
+          aggregate_confidence: number;
+          candidate_organization_id: string;
+          contradiction_severity: string;
+          created_at: string;
+          id: string;
+          model_version: string | null;
+          reasoning_summary: string;
+          recommendation: string;
+          resolution_case_id: string;
+          rules_version: string;
+          signals_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          aggregate_confidence: number;
+          candidate_organization_id: string;
+          contradiction_severity: string;
+          created_at?: string;
+          id?: string;
+          model_version?: string | null;
+          reasoning_summary: string;
+          recommendation: string;
+          resolution_case_id: string;
+          rules_version: string;
+          signals_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          aggregate_confidence?: number;
+          candidate_organization_id?: string;
+          contradiction_severity?: string;
+          created_at?: string;
+          id?: string;
+          model_version?: string | null;
+          reasoning_summary?: string;
+          recommendation?: string;
+          resolution_case_id?: string;
+          rules_version?: string;
+          signals_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "entity_match_assessments_candidate_organization_id_fkey";
+            columns: ["candidate_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_match_assessments_resolution_case_id_fkey";
+            columns: ["resolution_case_id"];
+            isOneToOne: false;
+            referencedRelation: "entity_resolution_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_match_assessments_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      entity_resolution_cases: {
+        Row: {
+          campaign_id: string | null;
+          id: string;
+          normalized_candidate_id: string;
+          opened_at: string;
+          resolved_at: string | null;
+          rules_version: string;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_id?: string | null;
+          id?: string;
+          normalized_candidate_id: string;
+          opened_at?: string;
+          resolved_at?: string | null;
+          rules_version: string;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_id?: string | null;
+          id?: string;
+          normalized_candidate_id?: string;
+          opened_at?: string;
+          resolved_at?: string | null;
+          rules_version?: string;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "entity_resolution_cases_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_cases_normalized_candidate_id_fkey";
+            columns: ["normalized_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "normalized_provider_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_cases_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      entity_resolution_decisions: {
+        Row: {
+          action: string;
+          confidence: number;
+          created_at: string;
+          decided_by: string;
+          evidence_ids_json: Json;
+          id: string;
+          model_version: string | null;
+          normalized_candidate_id: string;
+          reasoning_summary: string;
+          related_organization_id: string | null;
+          relationship_type: string | null;
+          resolution_case_id: string;
+          rules_version: string;
+          target_organization_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          action: string;
+          confidence: number;
+          created_at?: string;
+          decided_by: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          model_version?: string | null;
+          normalized_candidate_id: string;
+          reasoning_summary: string;
+          related_organization_id?: string | null;
+          relationship_type?: string | null;
+          resolution_case_id: string;
+          rules_version: string;
+          target_organization_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          action?: string;
+          confidence?: number;
+          created_at?: string;
+          decided_by?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          model_version?: string | null;
+          normalized_candidate_id?: string;
+          reasoning_summary?: string;
+          related_organization_id?: string | null;
+          relationship_type?: string | null;
+          resolution_case_id?: string;
+          rules_version?: string;
+          target_organization_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "entity_resolution_decisions_normalized_candidate_id_fkey";
+            columns: ["normalized_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "normalized_provider_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_decisions_related_organization_id_fkey";
+            columns: ["related_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_decisions_resolution_case_id_fkey";
+            columns: ["resolution_case_id"];
+            isOneToOne: true;
+            referencedRelation: "entity_resolution_cases";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_decisions_target_organization_id_fkey";
+            columns: ["target_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_decisions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       evidence_items: {
         Row: {
           company_source_id: string | null;
@@ -5062,6 +5312,538 @@ export type Database = {
           },
           {
             foreignKeyName: "operation_idempotency_keys_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_aliases: {
+        Row: {
+          alias: string;
+          alias_type: string;
+          confidence: number;
+          country: string | null;
+          created_at: string;
+          evidence_ids_json: Json;
+          id: string;
+          normalized_alias: string;
+          organization_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          alias: string;
+          alias_type: string;
+          confidence: number;
+          country?: string | null;
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          normalized_alias: string;
+          organization_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          alias?: string;
+          alias_type?: string;
+          confidence?: number;
+          country?: string | null;
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          normalized_alias?: string;
+          organization_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_aliases_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_aliases_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_buying_hypotheses: {
+        Row: {
+          buying_organization_id: string;
+          campaign_id: string | null;
+          confidence: number;
+          created_at: string;
+          created_by: string;
+          evidence_ids_json: Json;
+          id: string;
+          procurement_autonomy: string;
+          procurement_scope_json: Json;
+          reasoning_summary: string;
+          status: string;
+          target_organization_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          buying_organization_id: string;
+          campaign_id?: string | null;
+          confidence: number;
+          created_at?: string;
+          created_by: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          procurement_autonomy?: string;
+          procurement_scope_json?: Json;
+          reasoning_summary?: string;
+          status?: string;
+          target_organization_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          buying_organization_id?: string;
+          campaign_id?: string | null;
+          confidence?: number;
+          created_at?: string;
+          created_by?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          procurement_autonomy?: string;
+          procurement_scope_json?: Json;
+          reasoning_summary?: string;
+          status?: string;
+          target_organization_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_buying_hypotheses_buying_organization_id_fkey";
+            columns: ["buying_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_buying_hypotheses_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_buying_hypotheses_target_organization_id_fkey";
+            columns: ["target_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_buying_hypotheses_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_identifiers: {
+        Row: {
+          created_at: string;
+          evidence_ids_json: Json;
+          id: string;
+          identifier_type: string;
+          jurisdiction: string;
+          normalized_value: string;
+          organization_id: string;
+          source_record_id: string | null;
+          verification_status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          identifier_type: string;
+          jurisdiction?: string;
+          normalized_value: string;
+          organization_id: string;
+          source_record_id?: string | null;
+          verification_status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          identifier_type?: string;
+          jurisdiction?: string;
+          normalized_value?: string;
+          organization_id?: string;
+          source_record_id?: string | null;
+          verification_status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_identifiers_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_identifiers_source_record_id_fkey";
+            columns: ["source_record_id"];
+            isOneToOne: false;
+            referencedRelation: "provider_source_records";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_identifiers_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_locations: {
+        Row: {
+          address_line: string | null;
+          confidence: number;
+          country: string | null;
+          created_at: string;
+          evidence_ids_json: Json;
+          id: string;
+          locality: string | null;
+          location_type: string;
+          normalized_address: string | null;
+          organization_id: string;
+          phone: string | null;
+          postal_code: string | null;
+          region: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          address_line?: string | null;
+          confidence: number;
+          country?: string | null;
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          locality?: string | null;
+          location_type: string;
+          normalized_address?: string | null;
+          organization_id: string;
+          phone?: string | null;
+          postal_code?: string | null;
+          region?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          address_line?: string | null;
+          confidence?: number;
+          country?: string | null;
+          created_at?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          locality?: string | null;
+          location_type?: string;
+          normalized_address?: string | null;
+          organization_id?: string;
+          phone?: string | null;
+          postal_code?: string | null;
+          region?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_locations_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_locations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_merge_events: {
+        Row: {
+          actor_id: string | null;
+          actor_type: string;
+          created_at: string;
+          id: string;
+          merge_reason: string;
+          pre_merge_snapshot_json: Json;
+          resolution_decision_id: string | null;
+          reversed_at: string | null;
+          rules_version: string;
+          signals_json: Json;
+          source_organization_id: string;
+          target_organization_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor_id?: string | null;
+          actor_type: string;
+          created_at?: string;
+          id?: string;
+          merge_reason: string;
+          pre_merge_snapshot_json: Json;
+          resolution_decision_id?: string | null;
+          reversed_at?: string | null;
+          rules_version: string;
+          signals_json: Json;
+          source_organization_id: string;
+          target_organization_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          actor_type?: string;
+          created_at?: string;
+          id?: string;
+          merge_reason?: string;
+          pre_merge_snapshot_json?: Json;
+          resolution_decision_id?: string | null;
+          reversed_at?: string | null;
+          rules_version?: string;
+          signals_json?: Json;
+          source_organization_id?: string;
+          target_organization_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_merge_events_resolution_decision_id_fkey";
+            columns: ["resolution_decision_id"];
+            isOneToOne: false;
+            referencedRelation: "entity_resolution_decisions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_merge_events_source_organization_id_fkey";
+            columns: ["source_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_merge_events_target_organization_id_fkey";
+            columns: ["target_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_merge_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_relationships: {
+        Row: {
+          confidence: number;
+          created_at: string;
+          created_by: string;
+          evidence_ids_json: Json;
+          id: string;
+          model_version: string | null;
+          relationship_type: string;
+          source_organization_id: string;
+          status: string;
+          target_organization_id: string;
+          valid_from: string | null;
+          valid_to: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          confidence: number;
+          created_at?: string;
+          created_by: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          model_version?: string | null;
+          relationship_type: string;
+          source_organization_id: string;
+          status?: string;
+          target_organization_id: string;
+          valid_from?: string | null;
+          valid_to?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          confidence?: number;
+          created_at?: string;
+          created_by?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          model_version?: string | null;
+          relationship_type?: string;
+          source_organization_id?: string;
+          status?: string;
+          target_organization_id?: string;
+          valid_from?: string | null;
+          valid_to?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_relationships_source_organization_id_fkey";
+            columns: ["source_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_relationships_target_organization_id_fkey";
+            columns: ["target_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_relationships_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_source_links: {
+        Row: {
+          confidence: number;
+          id: string;
+          link_status: string;
+          linked_at: string;
+          normalized_candidate_id: string | null;
+          organization_id: string;
+          provider_source_record_id: string;
+          resolution_decision_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          confidence: number;
+          id?: string;
+          link_status?: string;
+          linked_at?: string;
+          normalized_candidate_id?: string | null;
+          organization_id: string;
+          provider_source_record_id: string;
+          resolution_decision_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          confidence?: number;
+          id?: string;
+          link_status?: string;
+          linked_at?: string;
+          normalized_candidate_id?: string | null;
+          organization_id?: string;
+          provider_source_record_id?: string;
+          resolution_decision_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_source_links_normalized_candidate_id_fkey";
+            columns: ["normalized_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "normalized_provider_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_source_links_organization_id_fkey";
+            columns: ["organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_source_links_provider_source_record_id_fkey";
+            columns: ["provider_source_record_id"];
+            isOneToOne: false;
+            referencedRelation: "provider_source_records";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_source_links_resolution_decision_id_fkey";
+            columns: ["resolution_decision_id"];
+            isOneToOne: false;
+            referencedRelation: "entity_resolution_decisions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_source_links_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      organization_split_events: {
+        Row: {
+          actor_id: string | null;
+          created_at: string;
+          id: string;
+          merge_event_id: string;
+          reassignment_plan_json: Json;
+          restored_organization_id: string;
+          split_reason: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor_id?: string | null;
+          created_at?: string;
+          id?: string;
+          merge_event_id: string;
+          reassignment_plan_json: Json;
+          restored_organization_id: string;
+          split_reason: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor_id?: string | null;
+          created_at?: string;
+          id?: string;
+          merge_event_id?: string;
+          reassignment_plan_json?: Json;
+          restored_organization_id?: string;
+          split_reason?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "organization_split_events_merge_event_id_fkey";
+            columns: ["merge_event_id"];
+            isOneToOne: true;
+            referencedRelation: "organization_merge_events";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_split_events_restored_organization_id_fkey";
+            columns: ["restored_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "organization_split_events_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -6758,6 +7540,37 @@ export type Database = {
         Args: { target_workspace_id: string };
         Returns: boolean;
       };
+      merge_organizations_v2: {
+        Args: {
+          merge_reason: string;
+          rules_version: string;
+          signals: Json;
+          source_organization_id: string;
+          target_organization_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          actor_id: string | null;
+          actor_type: string;
+          created_at: string;
+          id: string;
+          merge_reason: string;
+          pre_merge_snapshot_json: Json;
+          resolution_decision_id: string | null;
+          reversed_at: string | null;
+          rules_version: string;
+          signals_json: Json;
+          source_organization_id: string;
+          target_organization_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "organization_merge_events";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       persist_discovery_provider_response: {
         Args: {
           target_adapter_version: string;
@@ -7033,6 +7846,30 @@ export type Database = {
         };
       };
       slugify_workspace_name: { Args: { input: string }; Returns: string };
+      split_organization_merge_v2: {
+        Args: {
+          reassignment_plan?: Json;
+          split_reason: string;
+          target_merge_event_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          actor_id: string | null;
+          created_at: string;
+          id: string;
+          merge_event_id: string;
+          reassignment_plan_json: Json;
+          restored_organization_id: string;
+          split_reason: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "organization_split_events";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       update_company_profile_v3_core: {
         Args: {
           target_canonical_domain: string;

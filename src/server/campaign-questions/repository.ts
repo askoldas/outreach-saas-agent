@@ -22,10 +22,11 @@ export async function getOpenCampaignQuestion(input: {
   if (!campaign) return null;
   const { data, error } = await supabase
     .from("campaign_questions")
-    .select("id,question,campaign_run_id,campaign_runs!inner(campaign_id)")
+    .select("id,question,campaign_run_id,campaign_runs!inner(campaign_id,status)")
     .eq("workspace_id", input.workspaceId)
     .eq("campaign_runs.campaign_id", campaign.id)
-    .eq("status", "open")
+    .eq("campaign_runs.status", "waiting_for_input")
+    .in("status", ["open", "answered"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

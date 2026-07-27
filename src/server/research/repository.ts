@@ -54,12 +54,46 @@ export async function enqueueCampaignAgentResume(input: {
   questionId: string;
   workspaceId: string;
 }) {
-  return dispatchCampaignRun({
-    campaignRunId: input.campaignRunId,
-    idempotencyKey: `execute-campaign-resume:${input.campaignRunId}:${input.questionId}`,
-    tags: [`campaign_question:${input.questionId}`],
-    workspaceId: input.workspaceId,
-  });
+  const supabase = createServiceRoleClient();
+  const { data: run, error: stateError } = await supabase
+    .from("campaign_runs")
+    .update({
+      status: "queued",
+      current_phase: "discovery_queued",
+      error_code: null,
+      error_message: null,
+    })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.campaignRunId)
+    .eq("status", "waiting_for_input")
+    .select("id")
+    .maybeSingle();
+  if (stateError)
+    throw new Error(`Could not queue Campaign Agent resume: ${stateError.message}`);
+  if (!run) throw new Error("Campaign Run is no longer waiting for this clarification.");
+
+  try {
+    return await dispatchCampaignRun({
+      campaignRunId: input.campaignRunId,
+      idempotencyKey: `execute-campaign-resume:${input.campaignRunId}:${input.questionId}`,
+      tags: [`campaign_question:${input.questionId}`],
+      workspaceId: input.workspaceId,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message.slice(0, 2_000) : "Trigger dispatch failed.";
+    await supabase
+      .from("campaign_runs")
+      .update({
+        status: "waiting_for_input",
+        current_phase: "waiting_for_input",
+        last_dispatch_error: message,
+      })
+      .eq("workspace_id", input.workspaceId)
+      .eq("id", input.campaignRunId)
+      .eq("status", "queued");
+    throw error;
+  }
 }
 
 export async function resumePausedCampaignRun(input: {

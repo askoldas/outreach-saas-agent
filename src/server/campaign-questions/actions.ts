@@ -20,7 +20,7 @@ export async function answerCampaignQuestionAction(formData: FormData) {
     .select("id,campaign_run_id,campaign_runs!inner(campaigns!inner(external_id))")
     .eq("workspace_id", currentWorkspace.id)
     .eq("id", questionId)
-    .eq("status", "open")
+    .in("status", ["open", "answered"])
     .eq("campaign_runs.campaigns.external_id", campaignId)
     .single();
   if (lookupError)
@@ -36,7 +36,7 @@ export async function answerCampaignQuestionAction(formData: FormData) {
     })
     .eq("workspace_id", currentWorkspace.id)
     .eq("id", question.id)
-    .eq("status", "open");
+    .in("status", ["open", "answered"]);
   if (updateError)
     throw new Error(`Could not save Campaign clarification: ${updateError.message}`);
   try {
@@ -45,11 +45,6 @@ export async function answerCampaignQuestionAction(formData: FormData) {
       questionId: question.id,
       workspaceId: currentWorkspace.id,
     });
-    await supabase
-      .from("campaign_runs")
-      .update({ status: "queued", current_phase: "discovery_queued" })
-      .eq("workspace_id", currentWorkspace.id)
-      .eq("id", question.campaign_run_id);
   } catch (error) {
     await supabase
       .from("campaign_questions")

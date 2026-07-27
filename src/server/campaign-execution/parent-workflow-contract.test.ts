@@ -67,6 +67,18 @@ test("pause preserves the current run and continue dispatches an idempotent resu
   assert.match(repository, /\.eq\("current_phase", "paused"\)/);
 });
 
+test("clarification resume is durably queued before Trigger dispatch", () => {
+  const resume = repository.slice(
+    repository.indexOf("export async function enqueueCampaignAgentResume"),
+    repository.indexOf("export async function resumePausedCampaignRun"),
+  );
+  assert.match(resume, /status: "queued"/);
+  assert.match(resume, /\.eq\("status", "waiting_for_input"\)/);
+  assert.ok(resume.indexOf('status: "queued"') < resume.indexOf("dispatchCampaignRun"));
+  assert.match(resume, /status: "waiting_for_input"/);
+  assert.match(resume, /last_dispatch_error: message/);
+});
+
 test("Campaign Agent path is explicit, checkpointed, and disabled by default", () => {
   assert.match(parent, /isCampaignAgentEnabled\(\)/);
   assert.match(parent, /executeAgentCampaign\(context\)/);

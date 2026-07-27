@@ -1,0 +1,61 @@
+{
+  "id": "olainfarm-lithuania-pharmaceutical-retail-v1",
+  "name": "Olainfarm pharmaceutical retail and distribution in Lithuania",
+  "campaignBrief": {
+    "offering": "Olainfarm pharmaceutical products for Lithuanian retail and distribution partners",
+    "targetCountries": ["LT"],
+    "targetCompanyCategories": [
+      "pharmacy_chain",
+      "pharmaceutical_distributor",
+      "online_pharmacy",
+      "health_beauty_retailer"
+    ],
+    "discoveryLanguages": ["Lithuanian", "English"]
+  },
+  "expectedCompanies": [
+    {
+      "name": "Eurovaistine",
+      "domain": "eurovaistine.lt",
+      "category": "pharmacy_chain",
+      "countryCode": "LT",
+      "relevanceNotes": "Previously identified useful pharmacy-chain candidate."
+    },
+    {
+      "name": "Gintarine Vaistine",
+      "domain": "gintarine.lt",
+      "category": "pharmacy_chain",
+      "countryCode": "LT",
+      "relevanceNotes": "Previously identified useful pharmacy-chain candidate."
+    },
+    {
+      "name": "Camelia",
+      "domain": "camelia.lt",
+      "category": "online_pharmacy",
+      "countryCode": "LT",
+      "relevanceNotes": "Previously identified useful retail and online-pharmacy candidate."
+    },
+    {
+      "name": "BENU Lithuania",
+      "domain": "benu.lt",
+      "category": "pharmacy_chain",
+      "countryCode": "LT",
+      "relevanceNotes": "Previously identified useful pharmacy-chain candidate."
+    }
+  ],
+  "excludedCompanies": [
+    {
+      "name": "Olainfarm",
+      "domain": "olainfarm.com",
+      "category": "seller",
+      "countryCode": "LV",
+      "relevanceNotes": "Campaign seller; must never be accepted as its own prospect."
+    },
+    {
+      "name": "LinkedIn",
+      "domain": "linkedin.com",
+      "category": "social_platform",
+      "countryCode": "US",
+      "relevanceNotes": "Source page rather than a target company website."
+    }
+  ]
+}

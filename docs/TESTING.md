@@ -267,3 +267,11 @@ The labeled synthetic discovery evaluation can be run independently with
 source eligibility and checks directory extraction against expected company domains.
 Add a fixture whenever a production-safe false positive or false negative is converted
 into a synthetic regression case.
+
+The same command also runs the permanent Olainfarm/Lithuania benchmark fixture. Its
+order-independent evaluator reports expected-company recall, accepted-company precision,
+raw and deduplicated candidate counts, duplicate rate, false positives/negatives, provider
+cost and request efficiency, plus coverage by category, country, discovery language, and
+source path. Candidate traces distinguish companies that were never discovered from those
+deduplicated or rejected during classification or qualification. The checked-in trace is
+deterministic; captured production-safe traces can be evaluated with the same framework.

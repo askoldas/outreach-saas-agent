@@ -12,7 +12,7 @@ test("Company Profile analysis dispatches through Trigger.dev with clean executi
     readFile(new URL("./analysis-service.ts", import.meta.url), "utf8"),
   ]);
 
-  assert.match(repository, /tasks\.trigger<.*analyzeCompanyProfileTask>/s);
+  assert.match(repository, /dispatchProviderExecution/);
   assert.match(repository, /\.from\("provider_executions"\)/);
   assert.match(repository, /operation:\s*"company_profile_analysis"/);
   assert.doesNotMatch(

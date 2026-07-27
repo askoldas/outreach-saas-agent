@@ -978,11 +978,16 @@ export type Database = {
           currency: string;
           current_iteration: number;
           current_phase: string;
+          dispatch_attempts: number;
+          dispatch_key: string | null;
+          dispatch_state: string;
+          dispatch_updated_at: string;
           error_code: string | null;
           error_message: string | null;
           failed_at: string | null;
           id: string;
           llm_cost: number;
+          last_dispatch_error: string | null;
           metadata: Json;
           profile_snapshot_id: string;
           progress_percentage: number;
@@ -1006,11 +1011,16 @@ export type Database = {
           currency?: string;
           current_iteration?: number;
           current_phase?: string;
+          dispatch_attempts?: number;
+          dispatch_key?: string | null;
+          dispatch_state?: string;
+          dispatch_updated_at?: string;
           error_code?: string | null;
           error_message?: string | null;
           failed_at?: string | null;
           id?: string;
           llm_cost?: number;
+          last_dispatch_error?: string | null;
           metadata?: Json;
           profile_snapshot_id: string;
           progress_percentage?: number;
@@ -1034,11 +1044,16 @@ export type Database = {
           currency?: string;
           current_iteration?: number;
           current_phase?: string;
+          dispatch_attempts?: number;
+          dispatch_key?: string | null;
+          dispatch_state?: string;
+          dispatch_updated_at?: string;
           error_code?: string | null;
           error_message?: string | null;
           failed_at?: string | null;
           id?: string;
           llm_cost?: number;
+          last_dispatch_error?: string | null;
           metadata?: Json;
           profile_snapshot_id?: string;
           progress_percentage?: number;
@@ -2298,12 +2313,17 @@ export type Database = {
           completed_at: string | null;
           created_at: string;
           currency: string;
+          dispatch_attempts: number;
+          dispatch_key: string | null;
+          dispatch_state: string;
+          dispatch_updated_at: string;
           error_code: string | null;
           error_message: string | null;
           estimated_cost: number;
           id: string;
           idempotency_key: string;
           input_units: number | null;
+          last_dispatch_error: string | null;
           metadata: Json;
           operation: string;
           parent_execution_id: string | null;
@@ -2315,6 +2335,7 @@ export type Database = {
           request_hash: string;
           started_at: string | null;
           status: string;
+          trigger_run_id: string | null;
           workspace_id: string;
         };
         Insert: {
@@ -2325,12 +2346,17 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
           currency?: string;
+          dispatch_attempts?: number;
+          dispatch_key?: string | null;
+          dispatch_state?: string;
+          dispatch_updated_at?: string;
           error_code?: string | null;
           error_message?: string | null;
           estimated_cost?: number;
           id?: string;
           idempotency_key: string;
           input_units?: number | null;
+          last_dispatch_error?: string | null;
           metadata?: Json;
           operation: string;
           parent_execution_id?: string | null;
@@ -2342,6 +2368,7 @@ export type Database = {
           request_hash: string;
           started_at?: string | null;
           status: string;
+          trigger_run_id?: string | null;
           workspace_id: string;
         };
         Update: {
@@ -2352,12 +2379,17 @@ export type Database = {
           completed_at?: string | null;
           created_at?: string;
           currency?: string;
+          dispatch_attempts?: number;
+          dispatch_key?: string | null;
+          dispatch_state?: string;
+          dispatch_updated_at?: string;
           error_code?: string | null;
           error_message?: string | null;
           estimated_cost?: number;
           id?: string;
           idempotency_key?: string;
           input_units?: number | null;
+          last_dispatch_error?: string | null;
           metadata?: Json;
           operation?: string;
           parent_execution_id?: string | null;
@@ -2369,6 +2401,7 @@ export type Database = {
           request_hash?: string;
           started_at?: string | null;
           status?: string;
+          trigger_run_id?: string | null;
           workspace_id?: string;
         };
         Relationships: [

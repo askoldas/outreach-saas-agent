@@ -12,8 +12,19 @@ export async function runProviderTask<T>(
   context: ProviderTaskContext,
   execute: () => Promise<T>,
 ): Promise<T> {
+  await updateProviderDispatch(providerExecutionId, {
+    dispatch_state: "running",
+    dispatch_updated_at: new Date().toISOString(),
+    trigger_run_id: context.run.id,
+  });
   try {
-    return await execute();
+    const result = await execute();
+    await updateProviderDispatch(providerExecutionId, {
+      dispatch_state: "completed",
+      dispatch_updated_at: new Date().toISOString(),
+      last_dispatch_error: null,
+    });
+    return result;
   } catch (error) {
     await recordAttemptFailure(providerExecutionId, operation, context, error);
     throw errorForTrigger(error);
@@ -43,6 +54,9 @@ export async function finalizeProviderTaskFailure(
       completed_at: completedAt,
       error_code: classified.category,
       error_message: classified.message.slice(0, 2_000),
+      dispatch_state: "failed",
+      dispatch_updated_at: completedAt,
+      last_dispatch_error: classified.message.slice(0, 2_000),
     })
     .eq("id", execution.id)
     .in("status", ["pending", "running"])
@@ -97,6 +111,22 @@ export async function finalizeProviderTaskFailure(
         visible_to_user: true,
       });
   }
+}
+
+async function updateProviderDispatch(
+  providerExecutionId: string,
+  values: {
+    dispatch_state: string;
+    dispatch_updated_at: string;
+    last_dispatch_error?: string | null;
+    trigger_run_id?: string;
+  },
+) {
+  const { error } = await createServiceRoleClient()
+    .from("provider_executions")
+    .update(values)
+    .eq("id", providerExecutionId);
+  if (error) throw new Error(`Could not update provider dispatch: ${error.message}`);
 }
 
 async function recordAttemptFailure(

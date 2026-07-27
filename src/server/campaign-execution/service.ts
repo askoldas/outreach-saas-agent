@@ -278,12 +278,36 @@ export async function pauseCampaignExecutionIfRequested(
 export async function markCampaignOrchestrationStarted(
   context: CampaignExecutionContext,
 ) {
+  const { error } = await createServiceRoleClient()
+    .from("campaign_runs")
+    .update({
+      dispatch_state: "running",
+      dispatch_updated_at: new Date().toISOString(),
+      last_dispatch_error: null,
+    })
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", context.campaignRunId);
+  if (error)
+    throw new Error(`Could not mark Campaign dispatch running: ${error.message}`);
   await appendEventOnce(context, {
     eventType: "campaign_orchestration_started",
     phase: "discovery_queued",
     level: "info",
     summary: "Campaign execution started.",
   });
+}
+
+export async function completeCampaignDispatch(context: CampaignExecutionContext) {
+  const { error } = await createServiceRoleClient()
+    .from("campaign_runs")
+    .update({
+      dispatch_state: "completed",
+      dispatch_updated_at: new Date().toISOString(),
+      last_dispatch_error: null,
+    })
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", context.campaignRunId);
+  if (error) throw new Error(`Could not complete Campaign dispatch: ${error.message}`);
 }
 
 async function appendEventOnce(
@@ -499,6 +523,9 @@ export async function failCampaignOrchestration(
           completed_at: failedAt,
           error_code: "campaign_orchestration_failed",
           error_message: message,
+          dispatch_state: "failed",
+          dispatch_updated_at: failedAt,
+          last_dispatch_error: message,
         })
         .eq("workspace_id", context.workspaceId)
         .eq("id", context.discoveryExecutionId)
@@ -510,6 +537,9 @@ export async function failCampaignOrchestration(
           completed_at: failedAt,
           error_code: "campaign_orchestration_aborted",
           error_message: message,
+          dispatch_state: "failed",
+          dispatch_updated_at: failedAt,
+          last_dispatch_error: message,
         })
         .eq("workspace_id", context.workspaceId)
         .eq("parent_execution_id", context.discoveryExecutionId)
@@ -522,6 +552,9 @@ export async function failCampaignOrchestration(
           failed_at: failedAt,
           error_code: "campaign_orchestration_failed",
           error_message: message,
+          dispatch_state: "failed",
+          dispatch_updated_at: failedAt,
+          last_dispatch_error: message,
         })
         .eq("workspace_id", context.workspaceId)
         .eq("id", context.campaignRunId),

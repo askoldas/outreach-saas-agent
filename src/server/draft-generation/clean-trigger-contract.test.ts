@@ -19,7 +19,7 @@ test("draft generation dispatches selected clean Campaign contacts through Trigg
   );
   assert.match(section, /\.from\("campaign_contacts"\)/);
   assert.match(section, /\.from\("provider_executions"\)/);
-  assert.match(section, /tasks\.trigger<typeof generateOutreachDraftTask>/);
+  assert.match(section, /dispatchProviderExecution/);
   assert.doesNotMatch(
     section,
     /research_runs|research_tasks|lead_outreach_states|\.from\("leads"\)/,

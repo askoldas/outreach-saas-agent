@@ -1,11 +1,10 @@
 import { createHash } from "node:crypto";
-import { tasks } from "@trigger.dev/sdk";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { ResearchProgress } from "@/types/domain";
-import type { analyzeCompanyProfileTask } from "@/trigger/analyze-company-profile";
-import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
-import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
-import type { executeCampaignTask } from "@/trigger/execute-campaign";
+import {
+  dispatchCampaignRun,
+  dispatchProviderExecution,
+} from "@/server/trigger/dispatch";
 
 type CampaignRunRow = {
   candidates_classified: number;
@@ -37,44 +36,10 @@ export async function enqueueCampaignDiscoveryRun(input: {
   });
   if (error) throw new Error(`Could not create Campaign Run: ${error.message}`);
   const campaignRun = data as { id: string };
-  const idempotencyKey = `campaign-discovery:${campaignRun.id}`;
-  const requestHash = createHash("sha256")
-    .update(
-      JSON.stringify({
-        campaignRunId: campaignRun.id,
-        desiredCompanyCount: input.desiredLeadCount,
-      }),
-    )
-    .digest("hex");
-  const { error: executionError } = await supabase.from("provider_executions").insert({
-    workspace_id: input.workspaceId,
-    campaign_run_id: campaignRun.id,
-    provider: "tavily_openrouter",
-    operation: "campaign_discovery",
-    idempotency_key: idempotencyKey,
-    request_hash: requestHash,
-    status: "pending",
-    metadata: { desiredCompanyCount: input.desiredLeadCount },
+  await dispatchCampaignRun({
+    campaignRunId: campaignRun.id,
+    workspaceId: input.workspaceId,
   });
-  if (executionError)
-    throw new Error(
-      `Could not create Campaign discovery execution: ${executionError.message}`,
-    );
-  const handle = await tasks.trigger<typeof executeCampaignTask>(
-    "execute-campaign",
-    { campaignRunId: campaignRun.id },
-    {
-      idempotencyKey: `execute-campaign:${campaignRun.id}`,
-      tags: [`workspace:${input.workspaceId}`, `campaign_run:${campaignRun.id}`],
-    },
-  );
-  const { error: runReferenceError } = await supabase
-    .from("campaign_runs")
-    .update({ trigger_run_id: handle.id })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", campaignRun.id);
-  if (runReferenceError)
-    throw new Error(`Could not link Campaign Run: ${runReferenceError.message}`);
   return { runId: campaignRun.id };
 }
 
@@ -83,18 +48,12 @@ export async function enqueueCampaignAgentResume(input: {
   questionId: string;
   workspaceId: string;
 }) {
-  return tasks.trigger<typeof executeCampaignTask>(
-    "execute-campaign",
-    { campaignRunId: input.campaignRunId },
-    {
-      idempotencyKey: `execute-campaign-resume:${input.campaignRunId}:${input.questionId}`,
-      tags: [
-        `workspace:${input.workspaceId}`,
-        `campaign_run:${input.campaignRunId}`,
-        `campaign_question:${input.questionId}`,
-      ],
-    },
-  );
+  return dispatchCampaignRun({
+    campaignRunId: input.campaignRunId,
+    idempotencyKey: `execute-campaign-resume:${input.campaignRunId}:${input.questionId}`,
+    tags: [`campaign_question:${input.questionId}`],
+    workspaceId: input.workspaceId,
+  });
 }
 
 export async function resumePausedCampaignRun(input: {
@@ -134,18 +93,12 @@ export async function resumePausedCampaignRun(input: {
     .eq("workspace_id", input.workspaceId)
     .eq("id", run.id);
   if (stateError) throw new Error(`Could not resume Campaign Run: ${stateError.message}`);
-  await tasks.trigger<typeof executeCampaignTask>(
-    "execute-campaign",
-    { campaignRunId: run.id },
-    {
-      idempotencyKey: `execute-campaign-resume:${run.id}:${run.current_iteration}`,
-      tags: [
-        `workspace:${input.workspaceId}`,
-        `campaign_run:${run.id}`,
-        "campaign_resume",
-      ],
-    },
-  );
+  await dispatchCampaignRun({
+    campaignRunId: run.id,
+    idempotencyKey: `execute-campaign-resume:${run.id}:${run.current_iteration}`,
+    tags: ["campaign_resume"],
+    workspaceId: input.workspaceId,
+  });
   return { runId: run.id };
 }
 
@@ -182,18 +135,20 @@ export async function enqueueLeadContactEnrichmentRun(input: {
     .digest("hex");
   const { data: previous, error: previousError } = await supabase
     .from("provider_executions")
-    .select("id,status,attempt")
+    .select("id,status,dispatch_state")
     .eq("workspace_id", input.workspaceId)
     .eq("operation", "contact_enrichment")
     .eq("idempotency_key", idempotencyKey)
-    .order("attempt", { ascending: false })
-    .limit(1)
     .maybeSingle();
   if (previousError)
     throw new Error(
       `Could not check contact enrichment execution: ${previousError.message}`,
     );
-  if (previous && ["pending", "running", "completed"].includes(previous.status))
+  if (
+    previous &&
+    ["pending", "running", "completed"].includes(previous.status) &&
+    !["created", "dispatch_failed"].includes(previous.dispatch_state)
+  )
     return { runId: previous.id };
 
   const { data: enrichment, error: enrichmentError } = await supabase
@@ -214,44 +169,41 @@ export async function enqueueLeadContactEnrichmentRun(input: {
   if (enrichmentError)
     throw new Error(`Could not create contact enrichment: ${enrichmentError.message}`);
 
-  const attempt = (previous?.attempt ?? 0) + 1;
-  const { data: execution, error: executionError } = await supabase
-    .from("provider_executions")
-    .insert({
-      workspace_id: input.workspaceId,
-      campaign_run_id: campaignRun?.id ?? null,
-      provider: "tavily",
-      operation: "contact_enrichment",
-      idempotency_key: idempotencyKey,
-      request_hash: requestHash,
-      status: "pending",
-      attempt,
-      metadata: {
-        campaignCompanyId: input.leadId,
-        contactEnrichmentId: enrichment.id,
-      },
-    })
+  const executionValues = {
+    workspace_id: input.workspaceId,
+    campaign_run_id: campaignRun?.id ?? null,
+    provider: "tavily",
+    operation: "contact_enrichment",
+    idempotency_key: idempotencyKey,
+    request_hash: requestHash,
+    status: "pending",
+    dispatch_state: "created",
+    error_code: null,
+    error_message: null,
+    completed_at: null,
+    metadata: {
+      campaignCompanyId: input.leadId,
+      contactEnrichmentId: enrichment.id,
+    },
+  };
+  const executionQuery = previous
+    ? supabase
+        .from("provider_executions")
+        .update(executionValues)
+        .eq("workspace_id", input.workspaceId)
+        .eq("id", previous.id)
+    : supabase.from("provider_executions").insert(executionValues);
+  const { data: execution, error: executionError } = await executionQuery
     .select("id")
     .single();
   if (executionError)
     throw new Error(`Could not create contact execution: ${executionError.message}`);
 
   const runId = execution.id;
-  const handle = await tasks.trigger<typeof enrichCompanyContactsTask>(
-    "enrich-company-contacts",
-    { providerExecutionId: runId },
-    {
-      idempotencyKey: `${idempotencyKey}:attempt:${attempt}`,
-      tags: [`workspace:${input.workspaceId}`, `campaign_company:${input.leadId}`],
-    },
-  );
-  const { error: referenceError } = await supabase
-    .from("provider_executions")
-    .update({ provider_reference: handle.id })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", runId);
-  if (referenceError)
-    throw new Error(`Could not link Trigger.dev run: ${referenceError.message}`);
+  await dispatchProviderExecution({
+    providerExecutionId: runId,
+    workspaceId: input.workspaceId,
+  });
   if (campaignRun?.id) {
     const { error: runStateError } = await supabase
       .from("campaign_runs")
@@ -342,64 +294,59 @@ export async function enqueueCampaignDraftGenerationRun(input: {
       .digest("hex");
     const { data: previous, error: previousError } = await supabase
       .from("provider_executions")
-      .select("id,status,attempt")
+      .select("id,status,dispatch_state")
       .eq("workspace_id", input.workspaceId)
       .eq("operation", "draft_generation")
       .eq("idempotency_key", idempotencyKey)
-      .order("attempt", { ascending: false })
-      .limit(1)
       .maybeSingle();
     if (previousError)
       throw new Error(`Could not check draft execution: ${previousError.message}`);
-    if (previous && ["pending", "running", "completed"].includes(previous.status)) {
+    if (
+      previous &&
+      ["pending", "running", "completed"].includes(previous.status) &&
+      !["created", "dispatch_failed"].includes(previous.dispatch_state)
+    ) {
       executionIds.push(previous.id);
       continue;
     }
 
-    const attempt = (previous?.attempt ?? 0) + 1;
-    const { data: execution, error: executionError } = await supabase
-      .from("provider_executions")
-      .insert({
-        workspace_id: input.workspaceId,
-        campaign_run_id: campaignRun.id,
-        provider: "openrouter",
-        operation: "draft_generation",
-        idempotency_key: idempotencyKey,
-        request_hash: requestHash,
-        status: "pending",
-        attempt,
-        metadata: {
-          campaignId: campaign.id,
-          campaignCompanyId: recipient.campaign_company_id,
-          campaignContactId: recipient.id,
-          profileSnapshotId: campaignRun.profile_snapshot_id,
-          strategyVersionId: campaignRun.strategy_version_id,
-        },
-      })
+    const executionValues = {
+      workspace_id: input.workspaceId,
+      campaign_run_id: campaignRun.id,
+      provider: "openrouter",
+      operation: "draft_generation",
+      idempotency_key: idempotencyKey,
+      request_hash: requestHash,
+      status: "pending",
+      dispatch_state: "created",
+      error_code: null,
+      error_message: null,
+      completed_at: null,
+      metadata: {
+        campaignId: campaign.id,
+        campaignCompanyId: recipient.campaign_company_id,
+        campaignContactId: recipient.id,
+        profileSnapshotId: campaignRun.profile_snapshot_id,
+        strategyVersionId: campaignRun.strategy_version_id,
+      },
+    };
+    const executionQuery = previous
+      ? supabase
+          .from("provider_executions")
+          .update(executionValues)
+          .eq("workspace_id", input.workspaceId)
+          .eq("id", previous.id)
+      : supabase.from("provider_executions").insert(executionValues);
+    const { data: execution, error: executionError } = await executionQuery
       .select("id")
       .single();
     if (executionError)
       throw new Error(`Could not create draft execution: ${executionError.message}`);
 
-    const handle = await tasks.trigger<typeof generateOutreachDraftTask>(
-      "generate-outreach-draft",
-      { providerExecutionId: execution.id },
-      {
-        idempotencyKey: `${idempotencyKey}:attempt:${attempt}`,
-        tags: [
-          `workspace:${input.workspaceId}`,
-          `campaign_run:${campaignRun.id}`,
-          `campaign_company:${recipient.campaign_company_id}`,
-        ],
-      },
-    );
-    const { error: referenceError } = await supabase
-      .from("provider_executions")
-      .update({ provider_reference: handle.id })
-      .eq("workspace_id", input.workspaceId)
-      .eq("id", execution.id);
-    if (referenceError)
-      throw new Error(`Could not link Trigger.dev draft: ${referenceError.message}`);
+    await dispatchProviderExecution({
+      providerExecutionId: execution.id,
+      workspaceId: input.workspaceId,
+    });
     executionIds.push(execution.id);
   }
 
@@ -421,36 +368,46 @@ export async function enqueueCompanyProfileAnalysisRun(input: {
     .digest("hex");
   const { data: previous, error: previousError } = await supabase
     .from("provider_executions")
-    .select("id,status,attempt")
+    .select("id,status,dispatch_state")
     .eq("workspace_id", input.workspaceId)
     .eq("operation", "company_profile_analysis")
     .eq("idempotency_key", idempotencyKey)
-    .order("attempt", { ascending: false })
-    .limit(1)
     .maybeSingle();
   if (previousError)
     throw new Error(
       `Could not check Company Profile analysis execution: ${previousError.message}`,
     );
-  if (previous && ["pending", "running", "completed"].includes(previous.status))
+  if (
+    previous &&
+    ["pending", "running", "completed"].includes(previous.status) &&
+    !["created", "dispatch_failed"].includes(previous.dispatch_state)
+  )
     return { runId: previous.id };
 
-  const attempt = (previous?.attempt ?? 0) + 1;
-  const { data: execution, error: executionError } = await supabase
-    .from("provider_executions")
-    .insert({
-      workspace_id: input.workspaceId,
-      provider: "tavily_openrouter",
-      operation: "company_profile_analysis",
-      idempotency_key: idempotencyKey,
-      request_hash: requestHash,
-      status: "pending",
-      attempt,
-      metadata: {
-        profileVersionId: input.profileVersionId,
-        website: input.website,
-      },
-    })
+  const executionValues = {
+    workspace_id: input.workspaceId,
+    provider: "tavily_openrouter",
+    operation: "company_profile_analysis",
+    idempotency_key: idempotencyKey,
+    request_hash: requestHash,
+    status: "pending",
+    dispatch_state: "created",
+    error_code: null,
+    error_message: null,
+    completed_at: null,
+    metadata: {
+      profileVersionId: input.profileVersionId,
+      website: input.website,
+    },
+  };
+  const executionQuery = previous
+    ? supabase
+        .from("provider_executions")
+        .update(executionValues)
+        .eq("workspace_id", input.workspaceId)
+        .eq("id", previous.id)
+    : supabase.from("provider_executions").insert(executionValues);
+  const { data: execution, error: executionError } = await executionQuery
     .select("id")
     .single();
   if (executionError)
@@ -458,25 +415,11 @@ export async function enqueueCompanyProfileAnalysisRun(input: {
       `Could not create Company Profile analysis execution: ${executionError.message}`,
     );
 
-  const runId = (execution as { id: string }).id;
-  const handle = await tasks.trigger<typeof analyzeCompanyProfileTask>(
-    "analyze-company-profile",
-    { providerExecutionId: runId },
-    {
-      idempotencyKey: `${idempotencyKey}:attempt:${attempt}`,
-      tags: [
-        `workspace:${input.workspaceId}`,
-        `profile_version:${input.profileVersionId}`,
-      ],
-    },
-  );
-  const { error: referenceError } = await supabase
-    .from("provider_executions")
-    .update({ provider_reference: handle.id })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", runId);
-  if (referenceError)
-    throw new Error(`Could not link Trigger.dev run: ${referenceError.message}`);
+  const runId = execution.id;
+  await dispatchProviderExecution({
+    providerExecutionId: runId,
+    workspaceId: input.workspaceId,
+  });
 
   return { runId };
 }

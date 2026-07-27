@@ -18,6 +18,7 @@ import {
 } from "@/server/campaign-agent/checkpoint-repository";
 import {
   cancelQueuedDiscovery,
+  completeCampaignDispatch,
   completeCampaignAgentParentExecution,
   createCampaignAgentIterationExecution,
   failCampaignOrchestration,
@@ -54,6 +55,7 @@ export const executeCampaignTask = task({
     if (!payload.campaignRunId) throw new Error("campaignRunId is required.");
     const context = await loadCampaignExecutionContext(payload.campaignRunId);
     if (await cancelQueuedDiscovery(context)) {
+      await completeCampaignDispatch(context);
       return {
         campaignRunId: context.campaignRunId,
         status: "cancelled",
@@ -61,11 +63,11 @@ export const executeCampaignTask = task({
     }
     await markCampaignOrchestrationStarted(context);
 
-    if (isCampaignAgentEnabled()) {
-      return executeAgentCampaign(context);
-    }
-
-    return executeDeterministicCampaign(context);
+    const result = isCampaignAgentEnabled()
+      ? await executeAgentCampaign(context)
+      : await executeDeterministicCampaign(context);
+    await completeCampaignDispatch(context);
+    return result;
   },
 });
 

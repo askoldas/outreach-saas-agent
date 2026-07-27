@@ -11,6 +11,7 @@ const trigger = readFileSync(
   new URL("../../trigger/discover-campaign-companies.ts", import.meta.url),
   "utf8",
 );
+const dispatch = readFileSync(new URL("../trigger/dispatch.ts", import.meta.url), "utf8");
 
 test("Campaign discovery creates a clean run and dispatches Trigger.dev", () => {
   const section = research.slice(
@@ -18,10 +19,10 @@ test("Campaign discovery creates a clean run and dispatches Trigger.dev", () => 
     research.indexOf("export async function enqueueLeadContactEnrichmentRun"),
   );
   assert.match(section, /create_clean_campaign_run/);
-  assert.match(section, /\.from\("provider_executions"\)/);
-  assert.match(section, /tasks\.trigger<typeof executeCampaignTask>/);
-  assert.match(section, /"execute-campaign"/);
-  assert.match(section, /trigger_run_id: handle\.id/);
+  assert.match(section, /dispatchCampaignRun/);
+  assert.match(dispatch, /tasks\.trigger<typeof executeCampaignTask>/);
+  assert.match(dispatch, /"execute-campaign"/);
+  assert.match(dispatch, /trigger_run_id: handle\.id/);
   assert.doesNotMatch(section, /research_runs|research_tasks/);
   assert.match(trigger, /executeCampaignDiscovery/);
 });

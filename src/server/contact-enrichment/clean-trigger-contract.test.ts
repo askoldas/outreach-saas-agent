@@ -19,7 +19,7 @@ test("contact enrichment dispatches through Trigger.dev with clean execution sta
   );
   assert.match(section, /\.from\("contact_enrichments"\)/);
   assert.match(section, /\.from\("provider_executions"\)/);
-  assert.match(section, /tasks\.trigger<typeof enrichCompanyContactsTask>/);
+  assert.match(section, /dispatchProviderExecution/);
   assert.doesNotMatch(
     section,
     /research_runs|research_tasks|lead_outreach_states|\.from\("leads"\)/,

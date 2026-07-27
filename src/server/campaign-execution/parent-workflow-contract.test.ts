@@ -17,8 +17,7 @@ test("Campaign Run creation dispatches one deterministic parent workflow", () =>
     repository.indexOf("export async function enqueueCampaignDiscoveryRun"),
     repository.indexOf("export async function enqueueLeadContactEnrichmentRun"),
   );
-  assert.match(enqueue, /tasks\.trigger<typeof executeCampaignTask>/);
-  assert.match(enqueue, /"execute-campaign"/);
+  assert.match(enqueue, /dispatchCampaignRun/);
   assert.match(enqueue, /campaignRunId: campaignRun\.id/);
   assert.doesNotMatch(enqueue, /"discover-campaign-companies"/);
 });

@@ -1,6 +1,14 @@
 import { createHash } from "node:crypto";
 import { parseCompleteJsonObject } from "@/lib/ai/structured-json";
-import { profileV3TaskDefinitions } from "@/lib/intelligence/company-profile-v3/task-contracts";
+import { compileProfileV3Draft } from "@/lib/intelligence/company-profile-v3/draft-compiler";
+import {
+  profileBuyerLogicOutputSchema,
+  profileClarificationOutputSchema,
+  profileCommercialSynthesisOutputSchema,
+  profileConsistencyOutputSchema,
+  profileOfferingDecompositionOutputSchema,
+  profileV3TaskDefinitions,
+} from "@/lib/intelligence/company-profile-v3/task-contracts";
 import { resolveWorkspaceIntelligenceSettings } from "@/lib/intelligence/rollout";
 import { generateTextResult } from "@/lib/providers/openrouter";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -202,6 +210,77 @@ export async function finalizeProfileV3Draft(input: {
   profileDraftId: string;
 }) {
   const supabase = createServiceRoleClient();
+  const [{ data: draft, error: draftError }, { data: stages, error: stagesError }] =
+    await Promise.all([
+      supabase
+        .from("company_profile_drafts")
+        .select("id,company_profile_id,compiled_snapshot_json")
+        .eq("workspace_id", input.workspaceId)
+        .eq("id", input.profileDraftId)
+        .single(),
+      supabase
+        .from("profile_task_runs")
+        .select("task_id,output_json,completed_at")
+        .eq("workspace_id", input.workspaceId)
+        .eq("profile_draft_id", input.profileDraftId)
+        .eq("status", "completed")
+        .order("completed_at", { ascending: false }),
+    ]);
+  if (draftError)
+    throw new Error(
+      `Could not load profile draft for compilation: ${draftError.message}`,
+    );
+  if (stagesError)
+    throw new Error(
+      `Could not load profile stages for compilation: ${stagesError.message}`,
+    );
+
+  const outputs = new Map<string, Json>();
+  for (const stage of stages ?? []) {
+    if (!outputs.has(stage.task_id) && stage.output_json !== null) {
+      outputs.set(stage.task_id, stage.output_json);
+    }
+  }
+  const commercial = profileCommercialSynthesisOutputSchema.parse(
+    requiredOutput(outputs, "profile.commercial_synthesis"),
+  );
+  const offerings = profileOfferingDecompositionOutputSchema.parse(
+    requiredOutput(outputs, "profile.offering_decomposition"),
+  );
+  const buyerLogic = profileBuyerLogicOutputSchema.parse(
+    requiredOutput(outputs, "profile.buyer_logic"),
+  );
+  const clarification = profileClarificationOutputSchema.parse(
+    requiredOutput(outputs, "profile.clarification"),
+  );
+  const consistency = profileConsistencyOutputSchema.parse(
+    requiredOutput(outputs, "profile.consistency_audit"),
+  );
+  const compilation = compileProfileV3Draft({
+    workspaceId: input.workspaceId,
+    profileDraftId: input.profileDraftId,
+    companyProfileId: draft.company_profile_id,
+    baseSnapshot: draft.compiled_snapshot_json,
+    commercial,
+    offerings,
+    buyerLogic,
+    clarification,
+    consistency,
+  });
+  const compileRpc = supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>;
+  const { error: compileError } = await compileRpc("compile_company_profile_v3_draft", {
+    target_workspace_id: input.workspaceId,
+    target_profile_draft_id: input.profileDraftId,
+    target_compilation: compilation,
+  });
+  if (compileError)
+    throw new Error(
+      `Could not compile Company Intelligence draft: ${compileError.message}`,
+    );
+
   const { data: audit, error: auditError } = await supabase
     .from("profile_task_runs")
     .select("output_json")
@@ -281,4 +360,12 @@ function stringField(value: unknown, key: string) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? String((value as Record<string, unknown>)[key] ?? "")
     : "";
+}
+
+function requiredOutput(outputs: Map<string, Json>, taskId: string) {
+  const output = outputs.get(taskId);
+  if (output === undefined) {
+    throw new Error(`Required Company Intelligence stage ${taskId} is missing.`);
+  }
+  return output;
 }

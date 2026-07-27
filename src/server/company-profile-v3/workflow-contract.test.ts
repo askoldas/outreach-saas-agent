@@ -23,6 +23,8 @@ test("stage execution freezes versions, reuses completed outputs, and audits AI"
   assert.match(service, /contextCompilerVersion/);
   assert.match(service, /promptContentHash/);
   assert.match(service, /\.from\("evidence_items"\)/);
+  assert.match(service, /compileProfileV3Draft/);
+  assert.match(service, /compile_company_profile_v3_draft/);
 });
 
 test("V3 dispatch is guarded by environment and workspace rollout", () => {

@@ -35,7 +35,7 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
     "create-company-intelligence-v3",
     { workspaceId, profileDraftId: draft.id },
     {
-      idempotencyKey: `profile-v3:${draft.id}:${inputHash}:v1`,
+      idempotencyKey: `profile-v3:${draft.id}:${inputHash}:v2`,
       tags: [`workspace:${workspaceId}`, `profile_draft:${draft.id}`],
     },
   );

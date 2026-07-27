@@ -21,7 +21,7 @@ export const createCompanyIntelligenceV3Task = task({
       const child = await runCompanyProfileV3StageTask.triggerAndWait(
         { ...payload, taskId },
         {
-          idempotencyKey: `profile-v3:${payload.profileDraftId}:${taskId}:v1`,
+          idempotencyKey: `profile-v3:${payload.profileDraftId}:${taskId}:v2`,
           tags: [
             `workspace:${payload.workspaceId}`,
             `profile_draft:${payload.profileDraftId}`,

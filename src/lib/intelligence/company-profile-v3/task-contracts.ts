@@ -150,6 +150,7 @@ export const profileBuyerLogicOutputSchema = z
     archetypes: z.array(
       z.object({
         archetypeKey: z.string(),
+        offeringKey: z.string().min(1),
         name: z.string(),
         relationshipType: z.string(),
         priority: z.enum(["priority", "conditional", "exclude_by_default"]),
@@ -280,7 +281,7 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
   ),
   definition(
     "profile.buyer_logic",
-    "profile-buyer-logic-schema-v1",
+    "profile-buyer-logic-schema-v2",
     "profile_commercial_reasoning",
     profileBuyerLogicOutputSchema,
     "Build offering-specific buyer and relationship hypotheses.",
@@ -310,7 +311,7 @@ function definition(
 ): PromptDefinition<unknown, unknown> {
   return {
     taskId,
-    promptVersion: `${taskId.replaceAll(".", "-")}-v1`,
+    promptVersion: `${taskId.replaceAll(".", "-")}-${taskId === "profile.buyer_logic" ? "v2" : "v1"}`,
     schemaVersion,
     contextCompilerVersion: versions.contextCompilerVersion,
     modelRole,

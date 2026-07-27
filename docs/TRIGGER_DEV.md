@@ -102,6 +102,11 @@ appends one deduplicated visible failure event.
 The `execute-campaign` parent follows the same rule: orchestration state is failed
 only in its final `onFailure` hook, never inside an individual attempt.
 
+Provider services cache successful provider output before later database projections.
+If a later write fails, the Trigger retry reuses the cached output. Profile versions,
+drafts, AI audit rows, raw candidates, candidate evidence, canonical domains, Campaign
+company associations, and contact routes have database-backed idempotency boundaries.
+
 Each Trigger task is a thin wrapper around a typed application service. Payloads carry
 only a `provider_executions.id`; services resolve workspace ownership and domain
 references from stored records rather than trusting tenant IDs in task input.

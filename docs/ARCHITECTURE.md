@@ -153,6 +153,19 @@ OpenRouter adapter owns one transport attempt, failure classification, and usage
 metadata. Trigger.dev owns durable retry/backoff. Attempt failures remain diagnostic;
 only task-level final-failure hooks persist terminal execution and Campaign Run state.
 
+Provider-backed services persist JSON-safe results into the logical
+`provider_executions` metadata before downstream domain writes. A retry with the same
+stable input hash reuses that result instead of calling OpenRouter, Tavily, or contact
+providers again. Completed executions also retain a compact result reference for
+idempotent task replay. Profile analysis versions are unique per logical execution,
+and completed AI audit rows are unique per execution, role, request hash, and status.
+
+Raw discovery candidates have a deterministic per-iteration identity. Overlapping
+queries upsert one candidate and append separate `discovery_candidate_evidence`
+records, preserving every source path and query. Canonical company resolution is a
+service-role database function that prefers normalized domains, falls back to exact
+name/country only when no domain exists, and removes race-created orphan rows.
+
 This boundary is provider-independent above the transport layer and is intentionally
 not coupled to an agent framework. Prompts, prompt versions, schema parsers, and
 business decisions remain in their existing AI service modules.

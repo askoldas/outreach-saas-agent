@@ -27,16 +27,33 @@ import {
 } from "@/lib/campaign-workflow/market-planning";
 import { extractWebPages, searchWeb, type SearchResult } from "@/lib/providers/tavily";
 import { createServiceRoleClient } from "@/lib/supabase/service";
+import {
+  loadProviderResult,
+  storeProviderResult,
+} from "@/server/execution/provider-result-cache";
 import type { Campaign, CompanyProfile, Confidence } from "@/types/domain";
+
+export type CampaignDiscoveryResult = {
+  discoveredCount: number;
+  decision: string;
+  failedCount: number;
+  inspectedCount: number;
+  iterationNumber: number;
+  qualifiedCount: number;
+  rejectedCount: number;
+  totalDiscoveredCount: number;
+  totalQualifiedCount: number;
+  queriesExecuted: string[];
+};
 
 export async function executeCampaignDiscovery(
   providerExecutionId: string,
   agentPlan?: CampaignAgentPlan,
-) {
+): Promise<CampaignDiscoveryResult> {
   const supabase = createServiceRoleClient();
   const { data: execution, error: executionError } = await supabase
     .from("provider_executions")
-    .select("id,workspace_id,campaign_run_id,idempotency_key,metadata")
+    .select("id,workspace_id,campaign_run_id,idempotency_key,metadata,status")
     .eq("id", providerExecutionId)
     .eq("operation", "campaign_discovery")
     .single();
@@ -45,6 +62,8 @@ export async function executeCampaignDiscovery(
   if (!execution.campaign_run_id)
     throw new Error("Discovery execution is missing its Campaign Run.");
   const executionMetadata = asRecord(execution.metadata);
+  const completedResult = asDiscoveryResult(executionMetadata.result);
+  if (execution.status === "completed" && completedResult) return completedResult;
   const iterationNumber = positiveInteger(executionMetadata.agentIteration, 1);
 
   const context = await loadContext(execution.workspace_id, execution.campaign_run_id);
@@ -97,16 +116,38 @@ export async function executeCampaignDiscovery(
       agentPlan?.resultsPerQuery ?? bounds.resultsPerQuery,
       bounds.resultsPerQuery,
     );
-    const resultGroups = await Promise.all(
-      queries.map(async (query) =>
-        (await searchWeb(query, resultsPerQuery)).map((result) => ({
-          ...result,
-          query,
-        })),
-      ),
-    );
-    const rawResults = resultGroups.flat();
-    const directoryEntities = await expandDirectorySources(rawResults, bounds.companies);
+    const searchInputHash = hash({
+      iterationNumber,
+      queries,
+      resultsPerQuery,
+      campaignRunId: context.runId,
+    });
+    let searchBatch = await loadProviderResult<{
+      directoryEntities: Array<SearchResult & { query: string }>;
+      rawResults: Array<SearchResult & { query: string }>;
+    }>(providerExecutionId, searchInputHash, "search");
+    if (!searchBatch) {
+      const resultGroups = await Promise.all(
+        queries.map(async (query) =>
+          (await searchWeb(query, resultsPerQuery)).map((result) => ({
+            ...result,
+            query,
+          })),
+        ),
+      );
+      const rawResults = resultGroups.flat();
+      searchBatch = {
+        rawResults,
+        directoryEntities: await expandDirectorySources(rawResults, bounds.companies),
+      };
+      await storeProviderResult(
+        providerExecutionId,
+        searchInputHash,
+        searchBatch,
+        "search",
+      );
+    }
+    const { directoryEntities, rawResults } = searchBatch;
     const discoveryResults = [...rawResults, ...directoryEntities];
     const priorCandidateDomains = await loadCandidateDomains(context);
     const candidateBatch = await persistRawCandidatesAndClassifications(
@@ -117,15 +158,34 @@ export async function executeCampaignDiscovery(
       execution.id,
     );
     const classified = classifySearchResults(discoveryResults);
-    const accepted = await inspectFirstPartyCandidates(
-      classified.acceptedResults
-        .filter(
-          (result) =>
-            !priorCandidateDomains.has(normalizedDomain(result.url)) &&
-            candidateBatch.evaluatableCandidateKeys.has(candidateKey(result)),
-        )
-        .slice(0, bounds.companies),
+    const inspectable = classified.acceptedResults
+      .filter(
+        (result) =>
+          !priorCandidateDomains.has(normalizedDomain(result.url)) &&
+          candidateBatch.evaluatableCandidateKeys.has(candidateKey(result)),
+      )
+      .slice(0, bounds.companies);
+    const inspectionInputHash = hash(
+      inspectable.map((result) => ({
+        content: result.content,
+        query: result.query,
+        url: normalizedUrl(result.url),
+      })),
     );
+    let accepted = await loadProviderResult<InspectedSearchResult[]>(
+      providerExecutionId,
+      inspectionInputHash,
+      "first_party_inspection",
+    );
+    if (!accepted) {
+      accepted = await inspectFirstPartyCandidates(inspectable);
+      await storeProviderResult(
+        providerExecutionId,
+        inspectionInputHash,
+        accepted,
+        "first_party_inspection",
+      );
+    }
     const firstPartyInspectionCount = accepted.filter(
       (candidate) => candidate.firstPartyInspected,
     ).length;
@@ -318,6 +378,18 @@ export async function executeCampaignDiscovery(
         : `Qualification completed for ${accepted.length} candidate compan${accepted.length === 1 ? "y" : "ies"}.`,
       { failedCount, qualifiedCount: iterationQualifiedCount },
     );
+    const result: CampaignDiscoveryResult = {
+      discoveredCount: accepted.length,
+      decision: iterationDecision,
+      failedCount,
+      inspectedCount: classified.rawResults.length,
+      iterationNumber,
+      qualifiedCount: iterationQualifiedCount,
+      rejectedCount: classified.rejectedResults.length,
+      totalDiscoveredCount: cumulativeDiscovered,
+      totalQualifiedCount: cumulativeQualified,
+      queriesExecuted: queries,
+    };
     await updateExecution(providerExecutionId, {
       status: "completed",
       completed_at: completedAt,
@@ -331,6 +403,7 @@ export async function executeCampaignDiscovery(
         iterationDecision,
         iterationNumber,
         firstPartyInspectionCount,
+        result,
       },
     });
     const { error: usageError } = await supabase.from("usage_ledger").upsert(
@@ -354,18 +427,7 @@ export async function executeCampaignDiscovery(
     );
     if (usageError)
       throw new Error(`Could not record discovery usage: ${usageError.message}`);
-    return {
-      discoveredCount: accepted.length,
-      decision: iterationDecision,
-      failedCount,
-      inspectedCount: classified.rawResults.length,
-      iterationNumber,
-      qualifiedCount: iterationQualifiedCount,
-      rejectedCount: classified.rejectedResults.length,
-      totalDiscoveredCount: cumulativeDiscovered,
-      totalQualifiedCount: cumulativeQualified,
-      queriesExecuted: queries,
-    };
+    return result;
   } catch (error) {
     throw error;
   }
@@ -809,29 +871,35 @@ async function persistRawCandidatesAndClassifications(
     const path = paths.find((candidate) => candidate.id === query.discovery_path_id);
     const { data: candidate, error: candidateError } = await supabase
       .from("discovery_candidates")
-      .insert({
-        workspace_id: context.workspaceId,
-        campaign_id: context.campaignId,
-        campaign_run_id: context.runId,
-        discovery_iteration_id: stagedPlan.iterationId,
-        discovery_query_id: query.id,
-        company_name: normalizeName(result.title),
-        normalized_domain: domain || null,
-        source_url: result.url,
-        source_type: sourceClassification.sourceType,
-        source_query: result.query,
-        source_path: path?.external_id ?? "unknown",
-        snippet: result.content,
-        country_region: context.campaign.geography,
-        probable_category: sourceClassification.sourceType,
-        discovery_confidence:
-          sourceClassification.confidence === "high"
-            ? 0.95
-            : sourceClassification.confidence === "medium"
-              ? 0.7
-              : 0.4,
-        retrieved_at: now,
-      })
+      .upsert(
+        {
+          workspace_id: context.workspaceId,
+          campaign_id: context.campaignId,
+          campaign_run_id: context.runId,
+          discovery_iteration_id: stagedPlan.iterationId,
+          discovery_query_id: query.id,
+          candidate_key: candidateIdentityKey(result, context.campaign.geography),
+          company_name: normalizeName(result.title),
+          normalized_domain: domain || null,
+          source_url: result.url,
+          source_type: sourceClassification.sourceType,
+          source_query: result.query,
+          source_path: path?.external_id ?? "unknown",
+          snippet: result.content,
+          country_region: context.campaign.geography,
+          probable_category: sourceClassification.sourceType,
+          discovery_confidence:
+            sourceClassification.confidence === "high"
+              ? 0.95
+              : sourceClassification.confidence === "medium"
+                ? 0.7
+                : 0.4,
+          retrieved_at: now,
+        },
+        {
+          onConflict: "campaign_run_id,discovery_iteration_id,candidate_key",
+        },
+      )
       .select("id")
       .single();
     if (candidateError)
@@ -841,30 +909,64 @@ async function persistRawCandidatesAndClassifications(
       (duplicate
         ? ["Duplicate normalized company domain."]
         : [...sourceClassification.reasons, ...sourceClassification.riskFlags]);
+    const { error: evidenceError } = await supabase
+      .from("discovery_candidate_evidence")
+      .upsert(
+        {
+          workspace_id: context.workspaceId,
+          campaign_run_id: context.runId,
+          candidate_id: candidate.id,
+          discovery_query_id: query.id,
+          source_url: result.url,
+          source_query: result.query,
+          source_path: path?.external_id ?? "unknown",
+          snippet: result.content,
+          retrieved_at: now,
+        },
+        {
+          ignoreDuplicates: true,
+          onConflict: "candidate_id,discovery_query_id,source_url",
+        },
+      );
+    if (evidenceError)
+      throw new Error(
+        `Could not merge discovery candidate evidence: ${evidenceError.message}`,
+      );
+    const classificationInputHash = hash({
+      result,
+      sourceClassification,
+      duplicate,
+    });
     const { error: classificationError } = await supabase
       .from("candidate_classifications")
-      .insert({
-        workspace_id: context.workspaceId,
-        campaign_run_id: context.runId,
-        candidate_id: candidate.id,
-        status,
-        confidence: aiClassification?.confidence ?? (duplicate ? 0.95 : 0.8),
-        probable_category:
-          aiClassification?.probableCategory ?? sourceClassification.sourceType,
-        geography_match: aiClassification?.geographyMatch ?? null,
-        exclusion_reason:
-          aiClassification?.exclusionReason ??
-          (shouldEvaluate ? null : reasons.join("; ")),
-        reasons,
-        should_evaluate: shouldEvaluate,
-        model_role: aiClassification ? "search_result_classification" : null,
-        prompt_version: aiClassification
-          ? candidateClassificationPromptVersion
-          : "deterministic-search-result-classification-v1",
-        requested_model: aiClassification ? aiBatch?.requestedModel : null,
-        actual_model: aiClassification ? aiBatch?.actualModel : null,
-        input_hash: hash({ result, sourceClassification, duplicate }),
-      });
+      .upsert(
+        {
+          workspace_id: context.workspaceId,
+          campaign_run_id: context.runId,
+          candidate_id: candidate.id,
+          status,
+          confidence: aiClassification?.confidence ?? (duplicate ? 0.95 : 0.8),
+          probable_category:
+            aiClassification?.probableCategory ?? sourceClassification.sourceType,
+          geography_match: aiClassification?.geographyMatch ?? null,
+          exclusion_reason:
+            aiClassification?.exclusionReason ??
+            (shouldEvaluate ? null : reasons.join("; ")),
+          reasons,
+          should_evaluate: shouldEvaluate,
+          model_role: aiClassification ? "search_result_classification" : null,
+          prompt_version: aiClassification
+            ? candidateClassificationPromptVersion
+            : "deterministic-search-result-classification-v1",
+          requested_model: aiClassification ? aiBatch?.requestedModel : null,
+          actual_model: aiClassification ? aiBatch?.actualModel : null,
+          input_hash: classificationInputHash,
+        },
+        {
+          ignoreDuplicates: true,
+          onConflict: "candidate_id,input_hash",
+        },
+      );
     if (classificationError)
       throw new Error(
         `Could not save candidate classification: ${classificationError.message}`,
@@ -1008,50 +1110,27 @@ async function persistCandidate(
   const supabase = createServiceRoleClient();
   const website = origin(source.url);
   const domain = normalizedDomain(website);
-  let companyId = "";
-  if (domain) {
-    const { data } = await supabase
-      .from("company_domains")
-      .select("company_id")
-      .eq("workspace_id", context.workspaceId)
-      .eq("normalized_domain", domain)
-      .maybeSingle();
-    companyId = data?.company_id ?? "";
-  }
-  if (!companyId) {
-    const name = normalizeName(source.title);
-    const { data, error } = await supabase
-      .from("companies")
-      .insert({
-        workspace_id: context.workspaceId,
-        name,
-        normalized_name: normalizeNameKey(name),
-        website_url: website,
-        country: context.campaign.geography,
-        description: source.content || source.title,
-        metadata: {
-          discoveredBy: "tavily",
-          firstPartyInspected: source.firstPartyInspected,
-        },
-      })
-      .select("id")
-      .single();
-    if (error) throw new Error(`Could not save discovered company: ${error.message}`);
-    companyId = data.id;
-    if (domain) {
-      const { error: domainError } = await supabase.from("company_domains").insert({
-        workspace_id: context.workspaceId,
-        company_id: companyId,
-        domain,
-        normalized_domain: domain,
-        is_primary: true,
-        verification_status: "source_confirmed",
-        metadata: { sourceUrl: source.url },
-      });
-      if (domainError)
-        throw new Error(`Could not save company domain: ${domainError.message}`);
-    }
-  }
+  const name = normalizeName(source.title);
+  const { data: companyId, error: companyError } = await supabase.rpc(
+    "resolve_discovered_company",
+    {
+      target_workspace_id: context.workspaceId,
+      company_name_value: name,
+      normalized_name_value: normalizeNameKey(name),
+      website_url_value: website,
+      country_value: context.campaign.geography,
+      description_value: source.content || source.title,
+      metadata_value: {
+        discoveredBy: "tavily",
+        firstPartyInspected: source.firstPartyInspected,
+      },
+      normalized_domain_value: domain,
+    },
+  );
+  if (companyError || !companyId)
+    throw new Error(
+      `Could not resolve discovered company: ${companyError?.message ?? "no company returned"}`,
+    );
 
   const { data: companySource, error: sourceError } = await supabase
     .from("company_sources")
@@ -1622,6 +1701,17 @@ function candidateKey(result: { query: string; url: string }) {
   });
 }
 
+function candidateIdentityKey(
+  result: { title: string; url: string },
+  countryRegion: string,
+) {
+  return (
+    normalizedDomain(result.url) ||
+    normalizedUrl(result.url) ||
+    `${normalizeNameKey(result.title)}|${countryRegion.trim().toLowerCase()}`
+  );
+}
+
 function origin(value: string) {
   try {
     return new URL(value).origin;
@@ -1671,4 +1761,29 @@ function stringArray(value: unknown) {
   return Array.isArray(value)
     ? value.map((item) => stringValue(item)).filter(Boolean)
     : [];
+}
+
+function asDiscoveryResult(value: unknown): CampaignDiscoveryResult | null {
+  const result = asRecord(value);
+  const queriesExecuted = stringArray(result.queriesExecuted);
+  const numericFields = [
+    "discoveredCount",
+    "failedCount",
+    "inspectedCount",
+    "iterationNumber",
+    "qualifiedCount",
+    "rejectedCount",
+    "totalDiscoveredCount",
+    "totalQualifiedCount",
+  ] as const;
+  if (
+    typeof result.decision !== "string" ||
+    !numericFields.every((field) => typeof result[field] === "number")
+  )
+    return null;
+  return {
+    decision: result.decision,
+    queriesExecuted,
+    ...Object.fromEntries(numericFields.map((field) => [field, result[field]])),
+  } as CampaignDiscoveryResult;
 }

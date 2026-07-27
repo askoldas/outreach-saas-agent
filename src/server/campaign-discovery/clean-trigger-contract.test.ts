@@ -31,7 +31,6 @@ test("discovery and qualification persist only clean durable entities", () => {
     "campaign_runs",
     "campaign_run_events",
     "companies",
-    "company_domains",
     "company_sources",
     "campaign_companies",
     "qualification_results",
@@ -48,6 +47,8 @@ test("discovery and qualification persist only clean durable entities", () => {
     "candidate_classifications",
   ])
     assert.match(service, new RegExp(`\\.from\\("${table}"\\)`));
+  assert.match(service, /resolve_discovered_company/);
+  assert.match(service, /discovery_candidate_evidence/);
   assert.match(service, /evaluateLeadSourceWithAi/);
   assert.match(service, /preferred_outreach_language/);
   assert.match(service, /snapshot_data/);

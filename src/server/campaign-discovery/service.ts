@@ -47,6 +47,8 @@ export type CampaignDiscoveryResult = {
   queriesExecuted: string[];
 };
 
+const qualificationConcurrency = 4;
+
 export async function executeCampaignDiscovery(
   providerExecutionId: string,
   agentPlan?: CampaignAgentPlan,
@@ -235,40 +237,53 @@ export async function executeCampaignDiscovery(
     let iterationQualifiedCount = 0;
     let failedCount = 0;
     let evaluatedCount = 0;
-    for (const [index, source] of accepted.entries()) {
+    for (let offset = 0; offset < accepted.length; offset += qualificationConcurrency) {
       await assertCampaignRunCanContinue(context);
-      const association = await persistCandidate(context, source, index + 1);
-      try {
-        const qualificationStatus = await qualifyCandidate(
-          context,
-          execution.id,
-          association.campaignCompanyId,
-          association.companyId,
-          association.sourceId,
-          source,
-        );
-        if (qualificationStatus === "qualified") {
-          iterationQualifiedCount += 1;
-        }
-      } catch (error) {
-        failedCount += 1;
-        await persistQualificationFailure(
-          context,
-          execution.id,
-          association.campaignCompanyId,
-          association.sourceId,
-          source,
-          error,
-        );
-      }
-      evaluatedCount = index + 1;
+      if (await isCampaignPaused(context)) break;
+      const batch = accepted.slice(offset, offset + qualificationConcurrency);
+      const outcomes = await Promise.all(
+        batch.map(async (source, batchIndex) => {
+          const association = await persistCandidate(
+            context,
+            source,
+            offset + batchIndex + 1,
+          );
+          try {
+            const qualificationStatus = await qualifyCandidate(
+              context,
+              execution.id,
+              association.campaignCompanyId,
+              association.companyId,
+              association.sourceId,
+              source,
+            );
+            return {
+              failed: false,
+              qualified: qualificationStatus === "qualified",
+            };
+          } catch (error) {
+            await persistQualificationFailure(
+              context,
+              execution.id,
+              association.campaignCompanyId,
+              association.sourceId,
+              source,
+              error,
+            );
+            return { failed: true, qualified: false };
+          }
+        }),
+      );
+      iterationQualifiedCount += outcomes.filter((outcome) => outcome.qualified).length;
+      failedCount += outcomes.filter((outcome) => outcome.failed).length;
+      evaluatedCount += batch.length;
       await updateRun(context.runId, {
         status: "qualifying",
         current_phase: "qualifying",
         progress_percentage:
           accepted.length === 0
             ? 90
-            : 45 + Math.round(((index + 1) / accepted.length) * 45),
+            : 45 + Math.round((evaluatedCount / accepted.length) * 45),
         companies_discovered: accepted.length,
         companies_qualified: iterationQualifiedCount,
         companies_evaluated: context.priorCompaniesEvaluated + evaluatedCount,
@@ -441,16 +456,28 @@ export async function executeCampaignDiscovery(
 async function assertCampaignRunCanContinue(
   context: Awaited<ReturnType<typeof loadContext>>,
 ) {
-  const { data, error } = await createServiceRoleClient()
+  const { data: run, error: runError } = await createServiceRoleClient()
     .from("campaign_runs")
     .select("status")
     .eq("workspace_id", context.workspaceId)
     .eq("id", context.runId)
     .single();
-  if (error) throw new Error(`Could not verify Campaign cancellation: ${error.message}`);
-  if (data.status === "cancelled") {
+  if (runError)
+    throw new Error(`Could not verify Campaign cancellation: ${runError.message}`);
+  if (run.status === "cancelled") {
     throw new Error("[cancellation] Campaign stopped by the user.");
   }
+}
+
+async function isCampaignPaused(context: Awaited<ReturnType<typeof loadContext>>) {
+  const { data, error } = await createServiceRoleClient()
+    .from("campaigns")
+    .select("status")
+    .eq("workspace_id", context.workspaceId)
+    .eq("id", context.campaignId)
+    .single();
+  if (error) throw new Error(`Could not verify Campaign pause: ${error.message}`);
+  return data.status === "paused";
 }
 
 async function loadContext(workspaceId: string, runId: string) {

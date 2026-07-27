@@ -31,6 +31,7 @@ export const intelligenceMemorySchema = z
       })
       .strict()
       .optional(),
+    applicabilityStatus: z.enum(["known", "unknown"]).optional(),
     strength: z.enum(["hard", "soft"]),
     status: z.enum([
       "proposed",

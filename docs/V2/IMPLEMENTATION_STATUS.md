@@ -26,7 +26,7 @@ behavior and deterministic tests are implemented.
 | WP-07 — Campaign Strategy V2 contracts                   | complete    | Strict objective, geography, frozen offering, variant, archetype, signal, rubric, rule, source-plan, coverage, stopping, semantic-segment, strategy, and V1 adapter contracts added.      |
 | WP-08 — Campaign Strategy V2 persistence and compiler    | complete    | Deterministic context and strategy compilers, bounded market/strategy task contracts, normalized draft persistence, immutable confirmation, versioning, diffs, and audit added.           |
 | WP-09 — Campaign creation and Strategy V2 UI             | complete    | Rollout-routed geography-first creation, explicit objectives and offerings, campaign-scoped targeting, deterministic draft compilation, review, confirmation, and discovery gating added. |
-| WP-10 — Scoped memory V2                                 | not_started | Scope precedence, promotion, conflicts, and application events remain.                                                                                                                    |
+| WP-10 — Scoped memory V2                                 | complete    | Unified scoped memory, deterministic applicability and precedence, frozen Campaign snapshots, application audit, corrections, conflicts, and controlled promotion added.                  |
 | WP-11 — Discovery provider contracts                     | not_started | Provider capabilities, registry, router, normalized records, and tests remain.                                                                                                            |
 | WP-12 — WebSearchProvider                                | not_started | V2 query compilation inside the provider remains.                                                                                                                                         |
 | WP-13 — Semantic discovery plan and coverage             | not_started | Segment runs, coverage, gap analysis, and stopping policy remain.                                                                                                                         |
@@ -217,7 +217,26 @@ behavior and deterministic tests are implemented.
   implemented. This prevents a confirmed V2 strategy from entering the incompatible V1
   Trigger workflow.
 
+## WP-10 delivery record
+
+- Migration 9 adds unified scoped Intelligence Memory, evidence and correction links,
+  Campaign memory snapshots, application events, promotion proposals, conflicts, and
+  user corrections with tenant guards and RLS.
+- Legacy Campaign and workspace memories are imported once with their approval and
+  origin preserved. Their applicability is explicitly unknown, so they are excluded
+  from automatic retrieval, and the legacy stores become read-only after cutover.
+- Retrieval evaluates scope and applicability before deterministic conflict resolution.
+  Explicit user authority, confirmed status, scope and applicability specificity, and
+  hard constraints take precedence; recency is only a stable tie-breaker.
+- Campaign compilation freezes the exact applied, overridden, excluded, and conflicting
+  memory set and records an application event for each applied or overridden memory.
+- User corrections take effect at Campaign scope by default. Repeated corrections or an
+  explicit broader request create a review proposal; broader confirmed memory is created
+  only after an explicit acceptance.
+- Migration 9 requires SQL Editor application and database type regeneration. It does
+  not add or change Trigger.dev tasks.
+
 ## Next package entry point
 
-Begin WP-10 with scoped memory V2. V1 remains the default path until its successor
+Begin WP-11 with discovery provider contracts. V1 remains the default path until its successor
 packages are complete and the V2 rollout is explicitly enabled.

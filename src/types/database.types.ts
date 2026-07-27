@@ -741,6 +741,67 @@ export type Database = {
           },
         ];
       };
+      campaign_buyer_archetypes: {
+        Row: {
+          archetype_json: Json;
+          archetype_key: string;
+          campaign_strategy_draft_id: string | null;
+          campaign_strategy_version_id: string | null;
+          created_at: string;
+          id: string;
+          priority: string;
+          relationship_type: string;
+          user_confirmed: boolean;
+          workspace_id: string;
+        };
+        Insert: {
+          archetype_json: Json;
+          archetype_key: string;
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          priority: string;
+          relationship_type: string;
+          user_confirmed?: boolean;
+          workspace_id: string;
+        };
+        Update: {
+          archetype_json?: Json;
+          archetype_key?: string;
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          priority?: string;
+          relationship_type?: string;
+          user_confirmed?: boolean;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_buyer_archetypes_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_buyer_archetypes_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_buyer_archetypes_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_companies: {
         Row: {
           campaign_id: string;
@@ -886,6 +947,117 @@ export type Database = {
           },
         ];
       };
+      campaign_inputs: {
+        Row: {
+          campaign_id: string;
+          constraints_json: Json;
+          created_at: string;
+          created_by_user_id: string | null;
+          geography_json: Json;
+          id: string;
+          initial_hypothesis_json: Json;
+          input_hash: string;
+          objective_json: Json;
+          offer_variant_json: Json | null;
+          offering_references_json: Json;
+          requested_volume: number | null;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_id: string;
+          constraints_json?: Json;
+          created_at?: string;
+          created_by_user_id?: string | null;
+          geography_json: Json;
+          id?: string;
+          initial_hypothesis_json?: Json;
+          input_hash: string;
+          objective_json: Json;
+          offer_variant_json?: Json | null;
+          offering_references_json: Json;
+          requested_volume?: number | null;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_id?: string;
+          constraints_json?: Json;
+          created_at?: string;
+          created_by_user_id?: string | null;
+          geography_json?: Json;
+          id?: string;
+          initial_hypothesis_json?: Json;
+          input_hash?: string;
+          objective_json?: Json;
+          offer_variant_json?: Json | null;
+          offering_references_json?: Json;
+          requested_volume?: number | null;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_inputs_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_inputs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_market_findings: {
+        Row: {
+          campaign_strategy_draft_id: string;
+          created_at: string;
+          evidence_ids: string[];
+          finding_json: Json;
+          finding_key: string;
+          id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_strategy_draft_id: string;
+          created_at?: string;
+          evidence_ids?: string[];
+          finding_json: Json;
+          finding_key: string;
+          id?: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_strategy_draft_id?: string;
+          created_at?: string;
+          evidence_ids?: string[];
+          finding_json?: Json;
+          finding_key?: string;
+          id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_market_findings_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_market_findings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_memories: {
         Row: {
           approval_status: string;
@@ -962,6 +1134,55 @@ export type Database = {
           },
         ];
       };
+      campaign_objectives: {
+        Row: {
+          campaign_strategy_draft_id: string | null;
+          campaign_strategy_version_id: string | null;
+          created_at: string;
+          id: string;
+          objective_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          objective_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          objective_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_objectives_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_objectives_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_objectives_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_profile_snapshots: {
         Row: {
           campaign_id: string;
@@ -1004,6 +1225,122 @@ export type Database = {
           },
           {
             foreignKeyName: "campaign_profile_snapshots_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_qualification_factor_definitions: {
+        Row: {
+          created_at: string;
+          criticality: string;
+          factor_json: Json;
+          factor_key: string;
+          id: string;
+          purpose: string;
+          qualification_rubric_id: string;
+          sort_order: number;
+          weight: number;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          criticality: string;
+          factor_json: Json;
+          factor_key: string;
+          id?: string;
+          purpose: string;
+          qualification_rubric_id: string;
+          sort_order: number;
+          weight: number;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          criticality?: string;
+          factor_json?: Json;
+          factor_key?: string;
+          id?: string;
+          purpose?: string;
+          qualification_rubric_id?: string;
+          sort_order?: number;
+          weight?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_qualification_factor_defi_qualification_rubric_id_fkey";
+            columns: ["qualification_rubric_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_qualification_rubrics";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_qualification_factor_definitions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_qualification_rubrics: {
+        Row: {
+          campaign_strategy_draft_id: string | null;
+          campaign_strategy_version_id: string | null;
+          content_hash: string;
+          created_at: string;
+          id: string;
+          policy_json: Json;
+          scoring_version_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          content_hash: string;
+          created_at?: string;
+          id?: string;
+          policy_json: Json;
+          scoring_version_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          content_hash?: string;
+          created_at?: string;
+          id?: string;
+          policy_json?: Json;
+          scoring_version_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_qualification_rubric_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_qualification_rubrics_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_qualification_rubrics_scoring_version_id_fkey";
+            columns: ["scoring_version_id"];
+            isOneToOne: false;
+            referencedRelation: "scoring_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_qualification_rubrics_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -1061,6 +1398,67 @@ export type Database = {
           },
           {
             foreignKeyName: "campaign_questions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_rules_v2: {
+        Row: {
+          campaign_strategy_draft_id: string | null;
+          campaign_strategy_version_id: string | null;
+          created_at: string;
+          id: string;
+          rule_json: Json;
+          rule_key: string;
+          rule_type: string;
+          status: string;
+          strength: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          rule_json: Json;
+          rule_key: string;
+          rule_type: string;
+          status: string;
+          strength: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          rule_json?: Json;
+          rule_key?: string;
+          rule_type?: string;
+          status?: string;
+          strength?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_rules_v2_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_rules_v2_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_rules_v2_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -1271,14 +1669,303 @@ export type Database = {
           },
         ];
       };
+      campaign_source_plans: {
+        Row: {
+          campaign_strategy_draft_id: string | null;
+          campaign_strategy_version_id: string | null;
+          created_at: string;
+          id: string;
+          source_plan_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          source_plan_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          id?: string;
+          source_plan_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_source_plans_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_source_plans_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_source_plans_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_strategy_diffs: {
+        Row: {
+          campaign_id: string;
+          created_at: string;
+          diff_json: Json;
+          from_strategy_version_id: string | null;
+          id: string;
+          reevaluation_scope: string;
+          to_strategy_version_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_id: string;
+          created_at?: string;
+          diff_json: Json;
+          from_strategy_version_id?: string | null;
+          id?: string;
+          reevaluation_scope?: string;
+          to_strategy_version_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_id?: string;
+          created_at?: string;
+          diff_json?: Json;
+          from_strategy_version_id?: string | null;
+          id?: string;
+          reevaluation_scope?: string;
+          to_strategy_version_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_strategy_diffs_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_diffs_from_strategy_version_id_fkey";
+            columns: ["from_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_diffs_to_strategy_version_id_fkey";
+            columns: ["to_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_diffs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_strategy_drafts: {
+        Row: {
+          base_strategy_version_id: string | null;
+          campaign_id: string;
+          campaign_input_id: string;
+          compiled_context_hash: string | null;
+          compiled_context_json: Json;
+          compiled_draft_json: Json;
+          compiler_version: string;
+          content_hash: string | null;
+          context_compiler_version: string;
+          contract_version: string;
+          created_at: string;
+          created_by_run_id: string | null;
+          created_by_user_id: string | null;
+          id: string;
+          profile_intelligence_version_id: string;
+          state: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          base_strategy_version_id?: string | null;
+          campaign_id: string;
+          campaign_input_id: string;
+          compiled_context_hash?: string | null;
+          compiled_context_json?: Json;
+          compiled_draft_json?: Json;
+          compiler_version?: string;
+          content_hash?: string | null;
+          context_compiler_version?: string;
+          contract_version?: string;
+          created_at?: string;
+          created_by_run_id?: string | null;
+          created_by_user_id?: string | null;
+          id?: string;
+          profile_intelligence_version_id: string;
+          state?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          base_strategy_version_id?: string | null;
+          campaign_id?: string;
+          campaign_input_id?: string;
+          compiled_context_hash?: string | null;
+          compiled_context_json?: Json;
+          compiled_draft_json?: Json;
+          compiler_version?: string;
+          content_hash?: string | null;
+          context_compiler_version?: string;
+          contract_version?: string;
+          created_at?: string;
+          created_by_run_id?: string | null;
+          created_by_user_id?: string | null;
+          id?: string;
+          profile_intelligence_version_id?: string;
+          state?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_strategy_drafts_base_strategy_version_id_fkey";
+            columns: ["base_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_drafts_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_drafts_campaign_input_id_fkey";
+            columns: ["campaign_input_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_inputs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_drafts_profile_intelligence_version_id_fkey";
+            columns: ["profile_intelligence_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_drafts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      campaign_strategy_events: {
+        Row: {
+          actor_type: string;
+          actor_user_id: string | null;
+          affected_paths: string[];
+          campaign_id: string;
+          campaign_strategy_draft_id: string | null;
+          campaign_strategy_version_id: string | null;
+          created_at: string;
+          details_json: Json;
+          event_type: string;
+          id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor_type: string;
+          actor_user_id?: string | null;
+          affected_paths?: string[];
+          campaign_id: string;
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          details_json?: Json;
+          event_type: string;
+          id?: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor_type?: string;
+          actor_user_id?: string | null;
+          affected_paths?: string[];
+          campaign_id?: string;
+          campaign_strategy_draft_id?: string | null;
+          campaign_strategy_version_id?: string | null;
+          created_at?: string;
+          details_json?: Json;
+          event_type?: string;
+          id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "campaign_strategy_events_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_events_campaign_strategy_draft_id_fkey";
+            columns: ["campaign_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_events_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_strategy_versions: {
         Row: {
           campaign_id: string;
+          compiled_context_hash: string | null;
+          confirmation_status: string;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          content_hash: string | null;
+          contract_version: string;
           created_at: string;
           created_by: string | null;
           id: string;
           model_config_id: string | null;
+          profile_intelligence_version_id: string | null;
           prompt_version: string | null;
+          scoring_version_id: string | null;
           status: string;
           strategy: Json;
           version: number;
@@ -1286,11 +1973,19 @@ export type Database = {
         };
         Insert: {
           campaign_id: string;
+          compiled_context_hash?: string | null;
+          confirmation_status?: string;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          content_hash?: string | null;
+          contract_version?: string;
           created_at?: string;
           created_by?: string | null;
           id?: string;
           model_config_id?: string | null;
+          profile_intelligence_version_id?: string | null;
           prompt_version?: string | null;
+          scoring_version_id?: string | null;
           status?: string;
           strategy?: Json;
           version: number;
@@ -1298,11 +1993,19 @@ export type Database = {
         };
         Update: {
           campaign_id?: string;
+          compiled_context_hash?: string | null;
+          confirmation_status?: string;
+          confirmed_at?: string | null;
+          confirmed_by?: string | null;
+          content_hash?: string | null;
+          contract_version?: string;
           created_at?: string;
           created_by?: string | null;
           id?: string;
           model_config_id?: string | null;
+          profile_intelligence_version_id?: string | null;
           prompt_version?: string | null;
+          scoring_version_id?: string | null;
           status?: string;
           strategy?: Json;
           version?: number;
@@ -1324,6 +2027,20 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "campaign_strategy_versions_profile_intelligence_version_id_fkey";
+            columns: ["profile_intelligence_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_strategy_versions_scoring_version_id_fkey";
+            columns: ["scoring_version_id"];
+            isOneToOne: false;
+            referencedRelation: "scoring_versions";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "campaign_strategy_versions_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
@@ -1340,6 +2057,7 @@ export type Database = {
           company_characteristics: string[];
           created_at: string;
           created_by: string | null;
+          current_strategy_draft_id: string | null;
           current_strategy_version_id: string | null;
           exclusions: string[];
           external_id: string;
@@ -1368,6 +2086,7 @@ export type Database = {
           company_characteristics?: string[];
           created_at?: string;
           created_by?: string | null;
+          current_strategy_draft_id?: string | null;
           current_strategy_version_id?: string | null;
           exclusions?: string[];
           external_id: string;
@@ -1396,6 +2115,7 @@ export type Database = {
           company_characteristics?: string[];
           created_at?: string;
           created_by?: string | null;
+          current_strategy_draft_id?: string | null;
           current_strategy_version_id?: string | null;
           exclusions?: string[];
           external_id?: string;
@@ -1418,6 +2138,13 @@ export type Database = {
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "campaigns_current_strategy_draft_id_fkey";
+            columns: ["current_strategy_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_drafts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "campaigns_current_strategy_fk";
             columns: ["current_strategy_version_id"];
@@ -4858,6 +5585,39 @@ export type Database = {
         Args: { target_workspace_id: string };
         Returns: undefined;
       };
+      compile_campaign_strategy_v2_draft: {
+        Args: {
+          target_compilation: Json;
+          target_strategy_draft_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          base_strategy_version_id: string | null;
+          campaign_id: string;
+          campaign_input_id: string;
+          compiled_context_hash: string | null;
+          compiled_context_json: Json;
+          compiled_draft_json: Json;
+          compiler_version: string;
+          content_hash: string | null;
+          context_compiler_version: string;
+          contract_version: string;
+          created_at: string;
+          created_by_run_id: string | null;
+          created_by_user_id: string | null;
+          id: string;
+          profile_intelligence_version_id: string;
+          state: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "campaign_strategy_drafts";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       compile_company_profile_v3_draft: {
         Args: {
           target_compilation: Json;
@@ -4865,6 +5625,72 @@ export type Database = {
           target_workspace_id: string;
         };
         Returns: undefined;
+      };
+      confirm_campaign_strategy_v2: {
+        Args: { target_strategy_draft_id: string; target_workspace_id: string };
+        Returns: {
+          campaign_id: string;
+          compiled_context_hash: string | null;
+          confirmation_status: string;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          content_hash: string | null;
+          contract_version: string;
+          created_at: string;
+          created_by: string | null;
+          id: string;
+          model_config_id: string | null;
+          profile_intelligence_version_id: string | null;
+          prompt_version: string | null;
+          scoring_version_id: string | null;
+          status: string;
+          strategy: Json;
+          version: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "campaign_strategy_versions";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_campaign_strategy_v2_draft: {
+        Args: {
+          target_campaign_external_id: string;
+          target_compiled_context: Json;
+          target_compiled_context_hash: string;
+          target_input: Json;
+          target_input_hash: string;
+          target_profile_version_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          base_strategy_version_id: string | null;
+          campaign_id: string;
+          campaign_input_id: string;
+          compiled_context_hash: string | null;
+          compiled_context_json: Json;
+          compiled_draft_json: Json;
+          compiler_version: string;
+          content_hash: string | null;
+          context_compiler_version: string;
+          contract_version: string;
+          created_at: string;
+          created_by_run_id: string | null;
+          created_by_user_id: string | null;
+          id: string;
+          profile_intelligence_version_id: string;
+          state: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "campaign_strategy_drafts";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       create_clean_campaign: {
         Args: {
@@ -4879,6 +5705,7 @@ export type Database = {
           company_characteristics: string[];
           created_at: string;
           created_by: string | null;
+          current_strategy_draft_id: string | null;
           current_strategy_version_id: string | null;
           exclusions: string[];
           external_id: string;
@@ -5134,11 +5961,19 @@ export type Database = {
         };
         Returns: {
           campaign_id: string;
+          compiled_context_hash: string | null;
+          confirmation_status: string;
+          confirmed_at: string | null;
+          confirmed_by: string | null;
+          content_hash: string | null;
+          contract_version: string;
           created_at: string;
           created_by: string | null;
           id: string;
           model_config_id: string | null;
+          profile_intelligence_version_id: string | null;
           prompt_version: string | null;
+          scoring_version_id: string | null;
           status: string;
           strategy: Json;
           version: number;

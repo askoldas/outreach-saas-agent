@@ -25,6 +25,9 @@ import {
   parseCampaignBriefProposal,
 } from "@/lib/campaign-workflow/contracts";
 import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
+import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
+import { getCurrentCampaignStrategy } from "@/server/campaign-strategy/repository";
+import { createInitialCampaignStrategyV2 } from "@/server/campaign-strategy-v2/service";
 
 type UpdateCampaignStatusInput = {
   campaignId: string;
@@ -280,6 +283,29 @@ export async function createCampaignAction(formData: FormData) {
     label: "Campaign created",
   });
   await completeGuidedDraft(currentWorkspace.id, "campaign", "new");
+
+  const settings = await getWorkspaceIntelligenceSettings(currentWorkspace.id);
+  if (settings.campaignWorkflow === "v2") {
+    const legacyStrategy = await getCurrentCampaignStrategy(
+      currentWorkspace.id,
+      campaign.id,
+    );
+    if (!legacyStrategy) throw new Error("Initial Campaign Strategy is missing.");
+    const { strategyDraftId } = await createInitialCampaignStrategyV2({
+      workspaceId: currentWorkspace.id,
+      campaign,
+      confirmedBrief,
+      legacyStrategy,
+      objectiveCode: getString(formData, "campaignObjective") || "direct_buyer",
+    });
+    revalidatePath("/campaigns");
+    revalidatePath(`/campaigns/${campaign.id}/strategy`);
+    redirect(
+      `/campaigns/${campaign.id}/strategy?message=${encodeURIComponent(
+        `Strategy draft ${strategyDraftId.slice(0, 8)} is ready for review.`,
+      )}`,
+    );
+  }
 
   const { runId } = await enqueueCampaignDiscoveryRun({
     campaignId: campaign.id,

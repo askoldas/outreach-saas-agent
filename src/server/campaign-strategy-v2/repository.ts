@@ -7,18 +7,6 @@ import {
   type CompiledCampaignCommercialContext,
 } from "@/lib/intelligence/campaign-strategy-v2";
 
-type StrategyRpcName =
-  | "create_campaign_strategy_v2_draft"
-  | "compile_campaign_strategy_v2_draft"
-  | "confirm_campaign_strategy_v2";
-
-type StrategyDatabaseClient = {
-  rpc(
-    name: StrategyRpcName,
-    args: Record<string, Json | string | null>,
-  ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
-};
-
 export async function createCampaignStrategyV2Draft(input: {
   workspaceId: string;
   campaignExternalId: string;
@@ -27,7 +15,7 @@ export async function createCampaignStrategyV2Draft(input: {
   inputHash: string;
   compiledContext: CompiledCampaignCommercialContext;
 }) {
-  const database = await strategyDatabase();
+  const { supabase: database } = await createAuthenticatedDatabaseClient();
   const { data, error } = await database.rpc("create_campaign_strategy_v2_draft", {
     target_workspace_id: input.workspaceId,
     target_campaign_external_id: input.campaignExternalId,
@@ -47,7 +35,7 @@ export async function persistCampaignStrategyV2Compilation(input: {
   strategyDraftId: string;
   compilation: CampaignStrategyCompilation;
 }) {
-  const database = await strategyDatabase();
+  const { supabase: database } = await createAuthenticatedDatabaseClient();
   const { data, error } = await database.rpc("compile_campaign_strategy_v2_draft", {
     target_workspace_id: input.workspaceId,
     target_strategy_draft_id: input.strategyDraftId,
@@ -62,7 +50,7 @@ export async function confirmCampaignStrategyV2(input: {
   workspaceId: string;
   strategyDraftId: string;
 }) {
-  const database = await strategyDatabase();
+  const { supabase: database } = await createAuthenticatedDatabaseClient();
   const { data, error } = await database.rpc("confirm_campaign_strategy_v2", {
     target_workspace_id: input.workspaceId,
     target_strategy_draft_id: input.strategyDraftId,
@@ -81,9 +69,133 @@ export function parsePersistedCampaignStrategyV2(value: unknown): CampaignStrate
   return campaignStrategyV2Schema.parse(value);
 }
 
-async function strategyDatabase() {
+export async function getCurrentCampaignStrategyV2Draft(
+  workspaceId: string,
+  campaignExternalId: string,
+) {
   const { supabase } = await createAuthenticatedDatabaseClient();
-  return supabase as unknown as StrategyDatabaseClient;
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("current_strategy_draft_id")
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignExternalId)
+    .single();
+  if (campaignError)
+    throw new Error(
+      `Could not load V2 Campaign Strategy reference: ${campaignError.message}`,
+    );
+  if (!campaign.current_strategy_draft_id) return null;
+  const { data, error } = await supabase
+    .from("campaign_strategy_drafts")
+    .select(
+      "id,state,contract_version,compiled_draft_json,compiled_context_hash,content_hash,updated_at",
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("id", campaign.current_strategy_draft_id)
+    .single();
+  if (error) throw new Error(`Could not load V2 Campaign Strategy: ${error.message}`);
+  return {
+    id: data.id,
+    state: data.state,
+    contractVersion: data.contract_version,
+    contextHash: data.compiled_context_hash,
+    contentHash: data.content_hash,
+    updatedAt: data.updated_at,
+    strategy: campaignStrategyV2Schema.parse(data.compiled_draft_json),
+  };
+}
+
+export async function getCurrentConfirmedCampaignStrategyV2(
+  workspaceId: string,
+  campaignExternalId: string,
+) {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select(
+      "strategy:campaign_strategy_versions!campaigns_current_strategy_fk(id,version,confirmation_status,strategy,confirmed_at)",
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", campaignExternalId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load confirmed V2 Strategy: ${error.message}`);
+  const strategyRow = Array.isArray(data?.strategy) ? data.strategy[0] : data?.strategy;
+  if (!strategyRow || strategyRow.confirmation_status !== "confirmed") return null;
+  return {
+    id: strategyRow.id,
+    version: strategyRow.version,
+    confirmedAt: strategyRow.confirmed_at,
+    strategy: campaignStrategyV2Schema.parse(strategyRow.strategy),
+  };
+}
+
+export async function getPublishedCampaignProfileContext(
+  workspaceId: string,
+  selectedOfferingStableKey: string,
+) {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data: profile, error: profileError } = await supabase
+    .from("company_profiles")
+    .select("id,current_version_id")
+    .eq("workspace_id", workspaceId)
+    .single();
+  if (profileError || !profile.current_version_id)
+    throw new Error("A published Company Intelligence V3 profile is required.");
+  const [
+    { data: profileVersion, error: versionError },
+    { data: offeringEntity, error: entityError },
+    { data: roles, error: rolesError },
+  ] = await Promise.all([
+    supabase
+      .from("company_profile_versions")
+      .select("id,intelligence_version,structured_profile")
+      .eq("workspace_id", workspaceId)
+      .eq("id", profile.current_version_id)
+      .single(),
+    supabase
+      .from("company_offerings")
+      .select("id,stable_key")
+      .eq("workspace_id", workspaceId)
+      .eq("company_profile_id", profile.id)
+      .eq("stable_key", selectedOfferingStableKey)
+      .maybeSingle(),
+    supabase
+      .from("company_business_roles")
+      .select(
+        "role_type,business_model:company_business_models!inner(profile_version_id)",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("business_model.profile_version_id", profile.current_version_id),
+  ]);
+  if (versionError || profileVersion.intelligence_version !== "v2") {
+    throw new Error("The current Company Profile is not a published V3 version.");
+  }
+  if (entityError || !offeringEntity)
+    throw new Error(
+      "The selected offering is not available in the published V3 profile.",
+    );
+  if (rolesError) throw new Error(`Could not load Company roles: ${rolesError.message}`);
+  const { data: offering, error: offeringError } = await supabase
+    .from("company_offering_versions")
+    .select(
+      "id,name,short_description,commercial_mechanics_json,buyer_logic_json,relationship_options_json",
+    )
+    .eq("workspace_id", workspaceId)
+    .eq("profile_version_id", profileVersion.id)
+    .eq("company_offering_id", offeringEntity.id)
+    .eq("status", "active")
+    .single();
+  if (offeringError)
+    throw new Error(
+      `Could not load published offering version: ${offeringError.message}`,
+    );
+  return {
+    profileVersionId: profileVersion.id,
+    offeringId: offeringEntity.id,
+    offeringStableKey: offeringEntity.stable_key,
+    offeringVersion: offering,
+    companyRoles: (roles ?? []).map((role) => role.role_type),
+  };
 }
 
 function draftIdentity(value: unknown) {

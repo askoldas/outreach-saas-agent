@@ -9,6 +9,7 @@ import type {
   CampaignBriefProposal,
   ConfirmedCampaignBrief,
 } from "@/lib/campaign-workflow/contracts";
+import { campaignStrategyV2Schema } from "@/lib/intelligence/campaign-strategy-v2";
 
 type CampaignRow = {
   external_id: string;
@@ -23,7 +24,7 @@ type CampaignRow = {
   updated_at: string;
   current_strategy_version_id: string | null;
 };
-type StrategyRow = { id: string; version: number; strategy: CampaignStrategyVersion };
+type StrategyRow = { id: string; version: number; strategy: unknown };
 export type CreateCampaignInput = {
   desiredLeadCount: number;
   exclusions: string[];
@@ -186,7 +187,45 @@ async function hydrate(
   );
 }
 function mapCampaign(row: CampaignRow, strategyRow: StrategyRow): Campaign {
-  const strategy = strategyRow.strategy;
+  const parsedV2 = campaignStrategyV2Schema.safeParse(strategyRow.strategy);
+  if (parsedV2.success) {
+    const strategy = parsedV2.data;
+    return {
+      id: row.external_id,
+      name: row.name,
+      objective: strategy.objective.description,
+      geography: strategy.geography.displayName,
+      industryTerms: Array.from(
+        new Set(strategy.archetypes.flatMap((archetype) => archetype.industries)),
+      ),
+      targetSegments: strategy.archetypes.map((archetype) => archetype.label),
+      progress: 0,
+      leadCount: 0,
+      desiredLeadCount:
+        strategy.coverageTarget.minimumQualifiedCandidates ?? row.target_volume,
+      awaitingReview: 0,
+      status: row.status === "active" ? "running" : (row.status as CampaignStatus),
+      lastActivity: row.updated_at,
+      preferredOutreachLanguage: row.preferred_outreach_language,
+      discoveryLanguages: strategy.geography.workingLanguages,
+      warnings: [],
+      latestDiscoveryReport: null,
+      strategyVersion: strategyRow.version,
+      strategy: {
+        terms: [],
+        localizedTerms: [],
+        sources: strategy.sourcePlan.primaryProviderTypes,
+        criteria: strategy.qualificationPolicy.factorDefinitions.map(
+          (factor) => factor.label,
+        ),
+        exclusions: strategy.campaignRules
+          .filter((rule) => rule.ruleType.includes("exclusion"))
+          .map((rule) => rule.description),
+        limitations: strategy.sourcePlan.missingProviderCapabilities,
+      },
+    };
+  }
+  const strategy = strategyRow.strategy as CampaignStrategyVersion;
   return {
     id: row.external_id,
     name: row.name,

@@ -4,6 +4,7 @@ import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { getCurrentCompanyProfile } from "@/server/company-profile/repository";
 import { getGuidedDraft } from "@/server/guided/repository";
+import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
 
 type SearchParams = {
   error?: string;
@@ -23,6 +24,7 @@ export default async function NewCampaignPage({
   if (!profile?.structuredProfile)
     redirect("/company-profile?error=structured-profile-required");
   const draft = await getGuidedDraft(currentWorkspace.id, "campaign", "new");
+  const settings = await getWorkspaceIntelligenceSettings(currentWorkspace.id);
 
   return (
     <>
@@ -30,7 +32,12 @@ export default async function NewCampaignPage({
         title="Create campaign"
         description={`Define a target market for ${currentWorkspace.name} and review a visible strategy before discovery begins.`}
       />
-      <CampaignBriefForm error={params.error} profile={profile} initialDraft={draft} />
+      <CampaignBriefForm
+        error={params.error}
+        profile={profile}
+        initialDraft={draft}
+        strategyV2={settings.campaignWorkflow === "v2"}
+      />
     </>
   );
 }

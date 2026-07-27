@@ -4,16 +4,45 @@ import { StrategyWorkspace } from "@/features/campaigns/StrategyWorkspace";
 import { getCurrentCampaignStrategy } from "@/server/campaign-strategy/repository";
 import { CampaignDocuments } from "@/features/campaigns/CampaignDocuments";
 import { listCampaignDocuments } from "@/server/documents/repository";
+import { CampaignStrategyV2Workspace } from "@/features/campaigns/CampaignStrategyV2Workspace";
+import {
+  getCurrentCampaignStrategyV2Draft,
+  getCurrentConfirmedCampaignStrategyV2,
+} from "@/server/campaign-strategy-v2/repository";
+import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
+import { getWorkspaceContext } from "@/server/workspaces/repository";
 export default async function StrategyPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string }>;
+  searchParams: Promise<{ mode?: string; message?: string }>;
 }) {
   const { id } = await params;
-  const { mode } = await searchParams;
+  const { mode, message } = await searchParams;
   const campaign = await loadCampaignPage(id);
+  const { currentWorkspace } = await getWorkspaceContext();
+  const settings = currentWorkspace
+    ? await getWorkspaceIntelligenceSettings(currentWorkspace.id)
+    : null;
+  if (currentWorkspace && settings?.campaignWorkflow === "v2") {
+    const [draft, confirmed] = await Promise.all([
+      getCurrentCampaignStrategyV2Draft(currentWorkspace.id, campaign.id),
+      getCurrentConfirmedCampaignStrategyV2(currentWorkspace.id, campaign.id),
+    ]);
+    const current = draft ?? confirmed;
+    if (!current) throw new Error("Campaign Strategy V2 is missing for this campaign.");
+    return (
+      <CampaignShell campaign={campaign} active="discovery">
+        <CampaignStrategyV2Workspace
+          campaignId={campaign.id}
+          draftId={draft?.id ?? null}
+          strategy={current.strategy}
+          message={message}
+        />
+      </CampaignShell>
+    );
+  }
   const strategy = await getCurrentCampaignStrategyFromPage(campaign.id);
   const documents = await getCampaignDocumentsFromPage(campaign.id);
   if (!strategy) {

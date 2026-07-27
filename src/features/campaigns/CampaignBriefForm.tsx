@@ -71,10 +71,12 @@ type ProposalResult = Awaited<ReturnType<typeof proposeCampaignBriefAction>>;
 export function CampaignBriefForm({
   error,
   profile,
+  strategyV2 = false,
 }: {
   error?: string;
   profile: CompanyProfile;
   initialDraft: GuidedDraft | null;
+  strategyV2?: boolean;
 }) {
   const [step, setStep] = useState(1);
   const [countryInput, setCountryInput] = useState("");
@@ -83,6 +85,7 @@ export function CampaignBriefForm({
   const [result, setResult] = useState<ProposalResult | null>(null);
   const [proposal, setProposal] = useState<CampaignBriefProposal | null>(null);
   const [selectedOfferingId, setSelectedOfferingId] = useState("");
+  const [campaignObjective, setCampaignObjective] = useState("direct_buyer");
   const [selectedTargetSegmentIds, setSelectedTargetSegmentIds] = useState<string[]>([]);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [name, setName] = useState("");
@@ -383,6 +386,23 @@ export function CampaignBriefForm({
             <h2>Review the recommended offering</h2>
             <p>{proposal.offering.rationale}</p>
           </div>
+          <label className={form.field}>
+            <span>Campaign objective</span>
+            <select
+              className={form.select}
+              value={campaignObjective}
+              onChange={(event) => setCampaignObjective(event.target.value)}
+            >
+              <option value="direct_buyer">Find direct buyers</option>
+              <option value="distributor">Find distributors</option>
+              <option value="reseller">Find resellers</option>
+              <option value="channel_partner">Find channel partners</option>
+              <option value="implementation_partner">Find implementation partners</option>
+              <option value="referral_partner">Find referral partners</option>
+              <option value="supplier">Find suppliers</option>
+              <option value="strategic_partner">Find strategic partners</option>
+            </select>
+          </label>
           <div className={shared.stack}>
             <strong>Select one primary offering</strong>
             <p>
@@ -630,6 +650,7 @@ export function CampaignBriefForm({
             <input type="hidden" name="name" value={name} />
             <input type="hidden" name="geography" value={geographyLabel} />
             <input type="hidden" name="selectedOfferingId" value={selectedOfferingId} />
+            <input type="hidden" name="campaignObjective" value={campaignObjective} />
             <input type="hidden" name="targetSegments" value={companyTypes} />
             <input type="hidden" name="industryTerms" value={industries} />
             <input type="hidden" name="qualificationCriteria" value={requiredCriteria} />
@@ -703,9 +724,15 @@ export function CampaignBriefForm({
                 Back
               </Button>
               <Button type="submit" variant="primary" disabled={!name.trim()}>
-                Start campaign
+                {strategyV2 ? "Build campaign strategy" : "Start campaign"}
               </Button>
             </div>
+            {strategyV2 ? (
+              <p className={styles.secondaryText}>
+                This creates a reviewable Campaign Strategy V2 draft. Discovery starts
+                only after explicit strategy confirmation and V2 provider enablement.
+              </p>
+            ) : null}
           </form>
         </section>
       ) : null}

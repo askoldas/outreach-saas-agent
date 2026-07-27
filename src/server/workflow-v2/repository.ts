@@ -18,6 +18,14 @@ export type WorkflowTaskRecord = {
   workspace_id: string;
 };
 
+export type CampaignWorkflowRecord = {
+  campaign_run_id: string;
+  id: string;
+  status: string;
+  trigger_run_id: string | null;
+  workspace_id: string;
+};
+
 export async function ensureCampaignWorkflow(input: {
   campaignRunId: string;
   inputReference: Json;
@@ -111,6 +119,78 @@ export async function loadCompletedCheckpointKeys(input: {
   if (error)
     throw new Error(`Could not load V2 workflow checkpoints: ${error.message}`);
   return [...new Set((data ?? []).map(({ checkpoint_key }) => checkpoint_key))];
+}
+
+export async function loadCampaignV2Run(input: {
+  campaignRunId: string;
+  workspaceId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("campaign_runs")
+    .select(
+      "id,campaign_id,profile_snapshot_id,strategy_version_id,workflow_version,status",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.campaignRunId)
+    .single();
+  if (error) throw new Error(`Could not load V2 Campaign Run: ${error.message}`);
+  if (data.workflow_version !== "v2")
+    throw new Error("V2 workflow cannot execute a non-V2 Campaign Run.");
+  return data;
+}
+
+export async function updateCampaignWorkflow(input: {
+  errorSummary?: Json | null;
+  outputReference?: Json;
+  progressSummary?: Json;
+  status:
+    | "queued"
+    | "initializing"
+    | "discovering"
+    | "resolving_entities"
+    | "evaluating_candidates"
+    | "ranking"
+    | "ready_for_review"
+    | "paused"
+    | "cancelled"
+    | "completed"
+    | "completed_partial"
+    | "failed";
+  triggerRunId?: string;
+  workflowRunId: string;
+  workspaceId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const now = new Date().toISOString();
+  const terminal = ["cancelled", "completed", "completed_partial", "failed"].includes(
+    input.status,
+  );
+  const { data, error } = await supabase
+    .from("intelligence_workflow_runs")
+    .update({
+      status: input.status,
+      ...(input.triggerRunId ? { trigger_run_id: input.triggerRunId } : {}),
+      ...(input.progressSummary
+        ? { progress_summary_json: input.progressSummary }
+        : {}),
+      ...(input.outputReference
+        ? { output_reference_json: input.outputReference }
+        : {}),
+      ...(input.errorSummary !== undefined
+        ? { error_summary_json: input.errorSummary }
+        : {}),
+      ...(input.status === "initializing" ? { started_at: now } : {}),
+      ...(terminal ? { completed_at: now } : {}),
+      ...(input.status === "cancelled" ? { cancelled_at: now } : {}),
+      ...(input.status === "paused" ? { paused_at: now } : {}),
+    })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.workflowRunId)
+    .select("id,workspace_id,campaign_run_id,status,trigger_run_id")
+    .single();
+  if (error) throw new Error(`Could not update V2 workflow: ${error.message}`);
+  return data as CampaignWorkflowRecord;
 }
 
 async function rpcTaskRecord(name: string, args: Record<string, unknown>) {

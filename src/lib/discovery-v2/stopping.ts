@@ -1,6 +1,12 @@
 import { z } from "zod";
 import type { DiscoveryCoverageCell } from "./coverage.ts";
-import type { DiscoveryGap } from "./gaps.ts";
+import { discoveryGapActionSchema, type DiscoveryGap } from "./gaps.ts";
+
+export const selectedDiscoveryGapActionSchema = discoveryGapActionSchema.extend({
+  gapId: z.string().min(1),
+});
+
+export type SelectedDiscoveryGapAction = z.infer<typeof selectedDiscoveryGapActionSchema>;
 
 export const discoveryContinuationDecisionSchema = z
   .object({
@@ -22,6 +28,7 @@ export const discoveryContinuationDecisionSchema = z
     rationale: z.string().min(1),
     selectedGapIds: z.array(z.string()),
     selectedActions: z.array(z.string()),
+    selectedActionPlans: z.array(selectedDiscoveryGapActionSchema).default([]),
   })
   .strict();
 
@@ -53,6 +60,7 @@ export function decideDiscoveryContinuation(input: {
       rationale,
       selectedGapIds: [],
       selectedActions: [],
+      selectedActionPlans: [],
     });
   if (input.userState === "paused") {
     return discoveryContinuationDecisionSchema.parse({
@@ -61,6 +69,7 @@ export function decideDiscoveryContinuation(input: {
       rationale: "The user paused discovery.",
       selectedGapIds: [],
       selectedActions: [],
+      selectedActionPlans: [],
     });
   }
   if (input.userState === "cancelled")
@@ -101,6 +110,10 @@ export function decideDiscoveryContinuation(input: {
       rationale: ambiguity.description,
       selectedGapIds: [ambiguity.id],
       selectedActions: ambiguity.recommendedActions.map(({ type }) => type),
+      selectedActionPlans: ambiguity.recommendedActions.map((action) => ({
+        gapId: ambiguity.id,
+        ...action,
+      })),
     });
   }
   if (!actionable.length)
@@ -117,6 +130,7 @@ export function decideDiscoveryContinuation(input: {
     rationale: "A material coverage gap has a bounded non-duplicate action.",
     selectedGapIds: selected.gapIds,
     selectedActions: selected.actionTypes,
+    selectedActionPlans: selected.actionPlans,
   });
 }
 
@@ -134,6 +148,7 @@ function selectActionsWithinCallBudget(gaps: DiscoveryGap[], remainingCalls: num
   );
   const gapIds: string[] = [];
   const actionTypes: string[] = [];
+  const actionPlans: SelectedDiscoveryGapAction[] = [];
   let callsAvailable = Math.max(0, Math.floor(remainingCalls));
   for (const gap of ordered) {
     let selectedForGap = false;
@@ -142,12 +157,19 @@ function selectActionsWithinCallBudget(gaps: DiscoveryGap[], remainingCalls: num
       if (calls > callsAvailable) continue;
       callsAvailable -= calls;
       actionTypes.push(action.type);
+      actionPlans.push(
+        selectedDiscoveryGapActionSchema.parse({
+          gapId: gap.id,
+          ...action,
+          maxCalls: calls,
+        }),
+      );
       selectedForGap = true;
     }
     if (selectedForGap) gapIds.push(gap.id);
     if (callsAvailable === 0) break;
   }
-  return { actionTypes, gapIds };
+  return { actionPlans, actionTypes, gapIds };
 }
 
 function compareText(left: string, right: string) {

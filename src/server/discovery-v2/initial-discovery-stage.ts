@@ -18,6 +18,7 @@ import {
   freezeDiscoveryQueryPlan,
   listDiscoveryPlanSegments,
   loadCampaignDiscoveryPlan,
+  loadLatestDiscoveryPassDecision,
   persistDiscoverySegmentCoverageOnce,
   recordDiscoveryQueryAudit,
   startCampaignDiscoveryRun,
@@ -124,6 +125,40 @@ export async function executeInitialDiscoveryStage(input: {
     plan.segments.map(({ id }) => id),
     persistedSegments.map(({ segment_key }) => segment_key),
   );
+  const finalizedPass = await loadLatestDiscoveryPassDecision({
+    workspaceId: input.workspaceId,
+    runId: discoveryRun.id,
+  });
+  if (finalizedPass) {
+    return {
+      stage: "discover",
+      status: "partial",
+      outputReferences: {
+        memorySnapshotId: context.memorySnapshot.id,
+        discoveryPlanId: planRecord.id,
+        discoveryRunId: discoveryRun.id,
+        passNumber: finalizedPass.pass_number,
+        continuationDecision: finalizedPass.decision_json,
+        stageScope: "persisted_semantic_discovery",
+      },
+      progressDelta: {
+        discoveryPasses: finalizedPass.pass_number,
+        normalizedCandidates: jsonSummaryCount(
+          finalizedPass.usage_summary_json,
+          "normalizedProviderCandidates",
+        ),
+        providerCalls: jsonSummaryCount(
+          finalizedPass.usage_summary_json,
+          "providerCalls",
+        ),
+        providerRecords: jsonSummaryCount(
+          finalizedPass.usage_summary_json,
+          "providerRecordsRetrieved",
+        ),
+      },
+      usageEventIds: [],
+    };
+  }
 
   const segmentRuns = await mapWithConcurrency(persistedSegments, 4, async (segment) => ({
     segmentKey: segment.segment_key,
@@ -427,7 +462,7 @@ function buildRequests(input: {
   }));
 }
 
-function buildCoverageMetrics(input: {
+export function buildCoverageMetrics(input: {
   campaignId: string;
   segment: ProviderDiscoveryRequest["segment"];
   outcome:
@@ -510,7 +545,7 @@ function discoveryDeadline(context: {
   ).toISOString();
 }
 
-function deadlineReached(deadlineAt: string | undefined, completedAt: string[]) {
+export function deadlineReached(deadlineAt: string | undefined, completedAt: string[]) {
   if (!deadlineAt || !completedAt.length) return false;
   return Math.max(...completedAt.map(Date.parse)) >= Date.parse(deadlineAt);
 }
@@ -552,7 +587,13 @@ function compareText(left: string, right: string) {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-async function mapWithConcurrency<T, R>(
+function jsonSummaryCount(value: unknown, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
+  const count = Number((value as Record<string, unknown>)[key]);
+  return Number.isFinite(count) && count >= 0 ? count : 0;
+}
+
+export async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
   mapper: (value: T) => Promise<R>,

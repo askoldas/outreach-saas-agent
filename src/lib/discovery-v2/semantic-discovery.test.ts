@@ -134,6 +134,20 @@ test("continuation stops on product goals and otherwise requires an actionable g
   assert.equal(bounded.decision, "continue");
   assert.equal(bounded.selectedGapIds.length, 1);
   assert.deepEqual(bounded.selectedActions, ["expand_directory"]);
+  assert.deepEqual(
+    bounded.selectedActionPlans.map(({ gapId, type, maxCalls }) => ({
+      gapId,
+      type,
+      maxCalls,
+    })),
+    [
+      {
+        gapId: "segment-1:source_diversity_low",
+        type: "expand_directory",
+        maxCalls: 2,
+      },
+    ],
+  );
   assert.equal(
     decideDiscoveryContinuation({
       ...base,

@@ -57,6 +57,48 @@ test("completed equivalent queries are skipped by fingerprint", () => {
   );
 });
 
+test("targeted gap actions produce bounded non-duplicate frozen queries", () => {
+  const input = request();
+  const initial = generateWebDiscoveryQueries(input);
+  input.executionContext = {
+    passNumber: 2,
+    gapId: "segment-1:source_diversity_low",
+    previousExecutionIds: ["execution-1"],
+    excludedCanonicalKeys: ["domain:acme.example"],
+    previousQueryFingerprints: initial.map(({ fingerprint }) => fingerprint),
+    targetedActions: [
+      {
+        gapId: "segment-1:source_diversity_low",
+        type: "expand_directory",
+        reason: "A second source family is needed.",
+        expectedImprovement: "Increase source diversity.",
+        maxCalls: 2,
+      },
+    ],
+  };
+  input.budget.maxCalls = 2;
+
+  const targeted = generateWebDiscoveryQueries(input);
+  assert.equal(targeted.length, 2);
+  assert.ok(
+    targeted.every(
+      ({ expectedGapId }) => expectedGapId === "segment-1:source_diversity_low",
+    ),
+  );
+  assert.ok(targeted.every(({ family }) => family === "directory"));
+  assert.ok(
+    targeted.every(
+      ({ fingerprint }) => !initial.some((query) => query.fingerprint === fingerprint),
+    ),
+  );
+});
+
+test("targeted requests require a frozen gap action", () => {
+  const input = request();
+  input.executionContext.passNumber = 2;
+  assert.throws(() => generateWebDiscoveryQueries(input));
+});
+
 test("WebSearchProvider executes a frozen query plan without regenerating it", async () => {
   const calls: string[] = [];
   const provider = new WebSearchProvider(async (query) => {

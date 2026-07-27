@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { discoverySegmentRequestV2Schema } from "../intelligence/campaign-strategy-v2/schemas.ts";
+import { selectedDiscoveryGapActionSchema } from "./stopping.ts";
 
 export const providerSourceTypeSchema = z.enum([
   "web_search",
@@ -78,6 +79,7 @@ export const providerDiscoveryRequestSchema = z
         previousExecutionIds: z.array(z.string()),
         excludedCanonicalKeys: z.array(z.string()),
         previousQueryFingerprints: z.array(z.string()),
+        targetedActions: z.array(selectedDiscoveryGapActionSchema).optional(),
       })
       .strict(),
     budget: z
@@ -89,7 +91,24 @@ export const providerDiscoveryRequestSchema = z
       })
       .strict(),
   })
-  .strict();
+  .strict()
+  .superRefine((request, context) => {
+    const targetedActions = request.executionContext.targetedActions ?? [];
+    if (request.executionContext.passNumber === 1 && targetedActions.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["executionContext", "targetedActions"],
+        message: "The initial discovery pass cannot contain targeted gap actions.",
+      });
+    }
+    if (request.executionContext.passNumber > 1 && !targetedActions.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["executionContext", "targetedActions"],
+        message: "A targeted discovery pass requires at least one frozen gap action.",
+      });
+    }
+  });
 
 export const providerDiscoveryEstimateSchema = z
   .object({

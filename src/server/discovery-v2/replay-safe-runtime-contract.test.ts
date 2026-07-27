@@ -30,6 +30,18 @@ test("frozen Memory and plan state load before mutable retrieval or provider set
   );
 });
 
+test("a finalized discovery pass resumes before rebuilding initial paid work", () => {
+  const finalizedPassLookup = initialStage.indexOf(
+    "const finalizedPass = await loadLatestDiscoveryPassDecision",
+  );
+  const segmentPassStart = initialStage.indexOf(
+    "const segmentRuns = await mapWithConcurrency",
+  );
+  assert.ok(finalizedPassLookup >= 0);
+  assert.ok(segmentPassStart > finalizedPassLookup);
+  assert.match(initialStage, /stageScope: "persisted_semantic_discovery"/);
+});
+
 test("query plans freeze provider identity, request, and generated queries", () => {
   assert.match(coverageRepository, /export async function freezeDiscoveryQueryPlan/);
   assert.match(coverageRepository, /freeze_discovery_query_plan_v2/);

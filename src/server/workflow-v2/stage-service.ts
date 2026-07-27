@@ -1,7 +1,7 @@
 import type { CampaignV2Stage, StageResult } from "@/lib/workflow-v2/contracts";
 import { stageCheckpointKey } from "@/lib/workflow-v2/controller";
 import { classifyWorkflowError, errorForTrigger } from "@/server/execution/errors";
-import { executeInitialDiscoveryStage } from "@/server/discovery-v2/initial-discovery-stage";
+import { executeSemanticDiscoveryStage } from "@/server/discovery-v2/targeted-discovery-stage";
 import type { Json } from "@/types/database.types";
 import {
   claimWorkflowTask,
@@ -36,10 +36,7 @@ export async function executeCampaignV2Stage(
     workspaceId: input.workspaceId,
   });
   if (["completed", "partial", "skipped"].includes(taskRun.status)) {
-    const stored = parseStoredStageResult(
-      input.stage,
-      taskRun.output_reference_json,
-    );
+    const stored = parseStoredStageResult(input.stage, taskRun.output_reference_json);
     await checkpointStage(input, taskRun.id, stored);
     return {
       ...stored,
@@ -56,8 +53,7 @@ export async function executeCampaignV2Stage(
       taskRunId: taskRun.id,
       workspaceId: input.workspaceId,
     });
-    if (result.status !== "blocked")
-      await checkpointStage(input, taskRun.id, result);
+    if (result.status !== "blocked") await checkpointStage(input, taskRun.id, result);
     return { ...result, cached: false, taskRunId: taskRun.id };
   } catch (error) {
     const classified = classifyWorkflowError(error);
@@ -92,9 +88,7 @@ async function checkpointStage(
   });
 }
 
-async function runStageAdapter(
-  input: ExecuteCampaignV2StageInput,
-): Promise<StageResult> {
+async function runStageAdapter(input: ExecuteCampaignV2StageInput): Promise<StageResult> {
   if (input.stage === "initialize") {
     const campaignRun = await loadCampaignV2Run(input);
     return {
@@ -110,16 +104,13 @@ async function runStageAdapter(
       usageEventIds: [],
     };
   }
-  if (input.stage === "discover") return executeInitialDiscoveryStage(input);
+  if (input.stage === "discover") return executeSemanticDiscoveryStage(input);
   throw new Error(
     `V2 stage adapter "${input.stage}" is not implemented and cannot execute.`,
   );
 }
 
-function parseStoredStageResult(
-  stage: CampaignV2Stage,
-  value: Json | null,
-): StageResult {
+function parseStoredStageResult(stage: CampaignV2Stage, value: Json | null): StageResult {
   if (!value || typeof value !== "object" || Array.isArray(value))
     throw new Error(`Stored V2 stage result for "${stage}" is invalid.`);
   const record = value as Record<string, Json | undefined>;

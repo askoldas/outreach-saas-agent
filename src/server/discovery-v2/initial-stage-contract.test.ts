@@ -9,6 +9,7 @@ const context = source("src/server/discovery-v2/stage-context.ts");
 const providerService = source("src/server/discovery-v2/provider-service.ts");
 const providerRepository = source("src/server/discovery-v2/provider-repository.ts");
 const workflowStage = source("src/server/workflow-v2/stage-service.ts");
+const targetedStage = source("src/server/discovery-v2/targeted-discovery-stage.ts");
 
 test("initial V2 discovery is bounded globally and preserves priority breadth", () => {
   assert.match(stage, /maximumInitialProviderCalls = 12/);
@@ -43,7 +44,8 @@ test("discovery settles provider failure evidence and checks worker configuratio
   assert.match(stage, /decideDiscoveryContinuation/);
   assert.doesNotMatch(stage, /throwForTotalRetryableFailure/);
   assert.match(workflowStage, /input\.stage === "discover"/);
-  assert.match(workflowStage, /executeInitialDiscoveryStage/);
+  assert.match(workflowStage, /executeSemanticDiscoveryStage/);
+  assert.match(targetedStage, /executeInitialDiscoveryStage/);
 });
 
 test("initial breadth durably attaches semantic audit and remains partial", () => {

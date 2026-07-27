@@ -1356,6 +1356,7 @@ export type Database = {
       campaign_memory_snapshots: {
         Row: {
           campaign_id: string;
+          campaign_run_id: string | null;
           campaign_strategy_version_id: string | null;
           content_hash: string;
           created_at: string;
@@ -1365,6 +1366,7 @@ export type Database = {
         };
         Insert: {
           campaign_id: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id?: string | null;
           content_hash: string;
           created_at?: string;
@@ -1374,6 +1376,7 @@ export type Database = {
         };
         Update: {
           campaign_id?: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id?: string | null;
           content_hash?: string;
           created_at?: string;
@@ -1387,6 +1390,13 @@ export type Database = {
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "campaign_memory_snapshots_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
             referencedColumns: ["id"];
           },
           {
@@ -5069,6 +5079,7 @@ export type Database = {
           id: string;
           metrics_json: Json;
           reasons_json: Json;
+          settlement_hash: string | null;
           status: string;
           workspace_id: string;
         };
@@ -5082,6 +5093,7 @@ export type Database = {
           id?: string;
           metrics_json: Json;
           reasons_json?: Json;
+          settlement_hash?: string | null;
           status: string;
           workspace_id: string;
         };
@@ -5095,6 +5107,7 @@ export type Database = {
           id?: string;
           metrics_json?: Json;
           reasons_json?: Json;
+          settlement_hash?: string | null;
           status?: string;
           workspace_id?: string;
         };
@@ -5124,6 +5137,7 @@ export type Database = {
       };
       discovery_gap_actions_v2: {
         Row: {
+          action_fingerprint: string | null;
           action_type: string;
           created_at: string;
           discovery_gap_id: string;
@@ -5136,6 +5150,7 @@ export type Database = {
           workspace_id: string;
         };
         Insert: {
+          action_fingerprint?: string | null;
           action_type: string;
           created_at?: string;
           discovery_gap_id: string;
@@ -5148,6 +5163,7 @@ export type Database = {
           workspace_id: string;
         };
         Update: {
+          action_fingerprint?: string | null;
           action_type?: string;
           created_at?: string;
           discovery_gap_id?: string;
@@ -5317,6 +5333,60 @@ export type Database = {
           },
         ];
       };
+      discovery_pass_decisions_v2: {
+        Row: {
+          content_hash: string;
+          coverage_summary_json: Json;
+          created_at: string;
+          decision_json: Json;
+          discovery_run_id: string;
+          expected_segment_run_ids: string[];
+          id: string;
+          pass_number: number;
+          usage_summary_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          content_hash: string;
+          coverage_summary_json: Json;
+          created_at?: string;
+          decision_json: Json;
+          discovery_run_id: string;
+          expected_segment_run_ids: string[];
+          id?: string;
+          pass_number: number;
+          usage_summary_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          content_hash?: string;
+          coverage_summary_json?: Json;
+          created_at?: string;
+          decision_json?: Json;
+          discovery_run_id?: string;
+          expected_segment_run_ids?: string[];
+          id?: string;
+          pass_number?: number;
+          usage_summary_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_pass_decisions_v2_discovery_run_id_fkey";
+            columns: ["discovery_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_pass_decisions_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       discovery_paths: {
         Row: {
           discovery_plan_id: string;
@@ -5458,6 +5528,7 @@ export type Database = {
         Row: {
           budget_policy_json: Json;
           campaign_id: string;
+          campaign_run_id: string | null;
           campaign_strategy_version_id: string;
           compiled_snapshot_json: Json;
           content_hash: string;
@@ -5473,6 +5544,7 @@ export type Database = {
         Insert: {
           budget_policy_json: Json;
           campaign_id: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id: string;
           compiled_snapshot_json: Json;
           content_hash: string;
@@ -5488,6 +5560,7 @@ export type Database = {
         Update: {
           budget_policy_json?: Json;
           campaign_id?: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id?: string;
           compiled_snapshot_json?: Json;
           content_hash?: string;
@@ -5506,6 +5579,13 @@ export type Database = {
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_plans_v2_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
             referencedColumns: ["id"];
           },
           {
@@ -5803,10 +5883,62 @@ export type Database = {
           },
         ];
       };
+      discovery_query_plans_v2: {
+        Row: {
+          adapter_version: string;
+          content_hash: string;
+          created_at: string;
+          discovery_segment_run_id: string;
+          id: string;
+          provider_key: string;
+          queries_json: Json;
+          request_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          adapter_version: string;
+          content_hash: string;
+          created_at?: string;
+          discovery_segment_run_id: string;
+          id?: string;
+          provider_key: string;
+          queries_json: Json;
+          request_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          adapter_version?: string;
+          content_hash?: string;
+          created_at?: string;
+          discovery_segment_run_id?: string;
+          id?: string;
+          provider_key?: string;
+          queries_json?: Json;
+          request_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_query_plans_v2_discovery_segment_run_id_fkey";
+            columns: ["discovery_segment_run_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_segment_runs_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_query_plans_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       discovery_runs_v2: {
         Row: {
           budget_limit_json: Json;
           campaign_id: string;
+          campaign_run_id: string | null;
           completed_at: string | null;
           continuation_decision_json: Json | null;
           coverage_summary_json: Json;
@@ -5823,6 +5955,7 @@ export type Database = {
         Insert: {
           budget_limit_json: Json;
           campaign_id: string;
+          campaign_run_id?: string | null;
           completed_at?: string | null;
           continuation_decision_json?: Json | null;
           coverage_summary_json?: Json;
@@ -5839,6 +5972,7 @@ export type Database = {
         Update: {
           budget_limit_json?: Json;
           campaign_id?: string;
+          campaign_run_id?: string | null;
           completed_at?: string | null;
           continuation_decision_json?: Json | null;
           coverage_summary_json?: Json;
@@ -5858,6 +5992,13 @@ export type Database = {
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_runs_v2_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
             referencedColumns: ["id"];
           },
           {
@@ -9837,6 +9978,43 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      claim_intelligence_task_v2: {
+        Args: {
+          target_idempotency_key: string;
+          target_input_fingerprint: string;
+          target_input_reference: Json;
+          target_parent_task_run_id?: string;
+          target_task_type: string;
+          target_trigger_run_id?: string;
+          target_workflow_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          attempt_count: number;
+          completed_at: string | null;
+          created_at: string;
+          error_code: string | null;
+          error_details_json: Json | null;
+          id: string;
+          idempotency_key: string;
+          input_fingerprint: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          parent_task_run_id: string | null;
+          started_at: string | null;
+          status: string;
+          task_type: string;
+          trigger_run_id: string | null;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "intelligence_task_runs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       clear_workspace_data: {
         Args: { target_workspace_id: string };
         Returns: undefined;
@@ -9886,6 +10064,40 @@ export type Database = {
         };
         Returns: undefined;
       };
+      complete_intelligence_task_v2: {
+        Args: {
+          target_metrics?: Json;
+          target_output_reference: Json;
+          target_status: string;
+          target_task_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          attempt_count: number;
+          completed_at: string | null;
+          created_at: string;
+          error_code: string | null;
+          error_details_json: Json | null;
+          id: string;
+          idempotency_key: string;
+          input_fingerprint: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          parent_task_run_id: string | null;
+          started_at: string | null;
+          status: string;
+          task_type: string;
+          trigger_run_id: string | null;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "intelligence_task_runs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       confirm_campaign_strategy_v2: {
         Args: { target_strategy_draft_id: string; target_workspace_id: string };
         Returns: {
@@ -9915,6 +10127,36 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      create_campaign_discovery_plan_v2: {
+        Args: {
+          target_campaign_run_id: string;
+          target_content_hash: string;
+          target_plan: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          budget_policy_json: Json;
+          campaign_id: string;
+          campaign_run_id: string | null;
+          campaign_strategy_version_id: string;
+          compiled_snapshot_json: Json;
+          content_hash: string;
+          coverage_policy_json: Json;
+          created_at: string;
+          id: string;
+          memory_snapshot_id: string;
+          status: string;
+          stopping_policy_json: Json;
+          version_number: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_plans_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       create_campaign_memory_snapshot: {
         Args: {
           target_campaign_id: string;
@@ -9925,6 +10167,7 @@ export type Database = {
         };
         Returns: {
           campaign_id: string;
+          campaign_run_id: string | null;
           campaign_strategy_version_id: string | null;
           content_hash: string;
           created_at: string;
@@ -10113,6 +10356,7 @@ export type Database = {
         Returns: {
           budget_policy_json: Json;
           campaign_id: string;
+          campaign_run_id: string | null;
           campaign_strategy_version_id: string;
           compiled_snapshot_json: Json;
           content_hash: string;
@@ -10177,6 +10421,161 @@ export type Database = {
         Returns: string;
       };
       empty_discovery_progress_counters_v2: { Args: never; Returns: Json };
+      ensure_campaign_workflow_v2: {
+        Args: {
+          target_campaign_run_id: string;
+          target_input_reference: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          campaign_run_id: string;
+          cancelled_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          error_summary_json: Json | null;
+          id: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          paused_at: string | null;
+          progress_summary_json: Json;
+          requested_by_user_id: string | null;
+          started_at: string | null;
+          status: string;
+          subject_id: string;
+          subject_type: string;
+          trigger_run_id: string | null;
+          workflow_family: string;
+          workflow_version_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "intelligence_workflow_runs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      fail_intelligence_task_attempt_v2: {
+        Args: {
+          target_error_code: string;
+          target_error_details: Json;
+          target_retryable: boolean;
+          target_task_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          attempt_count: number;
+          completed_at: string | null;
+          created_at: string;
+          error_code: string | null;
+          error_details_json: Json | null;
+          id: string;
+          idempotency_key: string;
+          input_fingerprint: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          parent_task_run_id: string | null;
+          started_at: string | null;
+          status: string;
+          task_type: string;
+          trigger_run_id: string | null;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "intelligence_task_runs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      finalize_discovery_pass_v2: {
+        Args: {
+          target_coverage_summary: Json;
+          target_decision: Json;
+          target_expected_segment_run_ids: string[];
+          target_pass_number: number;
+          target_run_id: string;
+          target_usage_summary: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          budget_limit_json: Json;
+          campaign_id: string;
+          campaign_run_id: string | null;
+          completed_at: string | null;
+          continuation_decision_json: Json | null;
+          coverage_summary_json: Json;
+          created_at: string;
+          discovery_plan_id: string;
+          id: string;
+          paused_at: string | null;
+          started_at: string;
+          status: string;
+          stopping_reason: string | null;
+          usage_summary_json: Json;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_runs_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      freeze_campaign_run_memory_snapshot_v2: {
+        Args: {
+          target_campaign_run_id: string;
+          target_content_hash: string;
+          target_snapshot: Json;
+          target_strategy_version_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          campaign_id: string;
+          campaign_run_id: string | null;
+          campaign_strategy_version_id: string | null;
+          content_hash: string;
+          created_at: string;
+          id: string;
+          snapshot_json: Json;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "campaign_memory_snapshots";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      freeze_discovery_query_plan_v2: {
+        Args: {
+          target_adapter_version: string;
+          target_content_hash: string;
+          target_provider_key: string;
+          target_queries: Json;
+          target_request: Json;
+          target_segment_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          adapter_version: string;
+          content_hash: string;
+          created_at: string;
+          discovery_segment_run_id: string;
+          id: string;
+          provider_key: string;
+          queries_json: Json;
+          request_json: Json;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_query_plans_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       is_workspace_admin: {
         Args: { target_workspace_id: string };
         Returns: boolean;
@@ -10188,6 +10587,14 @@ export type Database = {
       is_workspace_owner: {
         Args: { target_workspace_id: string };
         Returns: boolean;
+      };
+      load_campaign_discovery_plan_v2: {
+        Args: { target_campaign_run_id: string; target_workspace_id: string };
+        Returns: Json;
+      };
+      load_campaign_run_memory_snapshot_v2: {
+        Args: { target_campaign_run_id: string; target_workspace_id: string };
+        Returns: Json;
       };
       merge_organizations_v2: {
         Args: {
@@ -10239,6 +10646,7 @@ export type Database = {
           id: string;
           metrics_json: Json;
           reasons_json: Json;
+          settlement_hash: string | null;
           status: string;
           workspace_id: string;
         };
@@ -10291,6 +10699,35 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "discovery_provider_executions";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      persist_discovery_segment_coverage_once_v2: {
+        Args: {
+          target_coverage: Json;
+          target_gaps: Json;
+          target_run_id: string;
+          target_segment_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          archetype_key: string;
+          confidence: number;
+          created_at: string;
+          discovery_run_id: string;
+          discovery_segment_run_id: string;
+          geography_key: string;
+          id: string;
+          metrics_json: Json;
+          reasons_json: Json;
+          settlement_hash: string | null;
+          status: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_coverage_snapshots_v2";
           isOneToOne: true;
           isSetofReturn: false;
         };
@@ -10566,6 +11003,29 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      save_workflow_checkpoint_v2: {
+        Args: {
+          target_checkpoint_key: string;
+          target_payload: Json;
+          target_workflow_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          checkpoint_key: string;
+          checkpoint_version: number;
+          created_at: string;
+          id: string;
+          payload_json: Json;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "workflow_checkpoints";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       slugify_workspace_name: { Args: { input: string }; Returns: string };
       split_organization_merge_v2: {
         Args: {
@@ -10591,11 +11051,16 @@ export type Database = {
           isSetofReturn: false;
         };
       };
-      start_discovery_run_v2: {
-        Args: { target_plan_id: string; target_workspace_id: string };
+      start_campaign_discovery_run_v2: {
+        Args: {
+          target_campaign_run_id: string;
+          target_plan_id: string;
+          target_workspace_id: string;
+        };
         Returns: {
           budget_limit_json: Json;
           campaign_id: string;
+          campaign_run_id: string | null;
           completed_at: string | null;
           continuation_decision_json: Json | null;
           coverage_summary_json: Json;
@@ -10612,6 +11077,64 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "discovery_runs_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      start_discovery_run_v2: {
+        Args: { target_plan_id: string; target_workspace_id: string };
+        Returns: {
+          budget_limit_json: Json;
+          campaign_id: string;
+          campaign_run_id: string | null;
+          completed_at: string | null;
+          continuation_decision_json: Json | null;
+          coverage_summary_json: Json;
+          created_at: string;
+          discovery_plan_id: string;
+          id: string;
+          paused_at: string | null;
+          started_at: string;
+          status: string;
+          stopping_reason: string | null;
+          usage_summary_json: Json;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_runs_v2";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      start_discovery_segment_pass_once_v2: {
+        Args: {
+          target_gap_keys?: string[];
+          target_pass_number: number;
+          target_run_id: string;
+          target_segment_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          completed_at: string | null;
+          discovery_run_id: string;
+          discovery_segment_id: string;
+          gap_ids: string[];
+          id: string;
+          metrics_json: Json;
+          normalized_candidate_count: number;
+          pass_number: number;
+          plausible_candidate_count: number | null;
+          provider_record_count: number;
+          qualified_yield_count: number | null;
+          started_at: string;
+          status: string;
+          unique_candidate_count: number;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "discovery_segment_runs_v2";
           isOneToOne: true;
           isSetofReturn: false;
         };

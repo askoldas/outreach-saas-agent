@@ -5188,6 +5188,20 @@ export type Database = {
         };
       };
       slugify_workspace_name: { Args: { input: string }; Returns: string };
+      update_company_profile_v3_core: {
+        Args: {
+          target_canonical_domain: string;
+          target_commercial_summary: string;
+          target_customer_usage_mode: string;
+          target_primary_role: string;
+          target_profile_draft_id: string;
+          target_public_name: string;
+          target_revenue_model: string;
+          target_transaction_model: string;
+          target_workspace_id: string;
+        };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

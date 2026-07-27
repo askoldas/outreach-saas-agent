@@ -141,11 +141,7 @@ export async function publishCompanyProfileV3Action(formData: FormData) {
 export async function updateCompanyProfileV3CoreAction(formData: FormData) {
   const context = await reviewContext(formData);
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const updateRpc = supabase.rpc as unknown as (
-    name: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ error: { message: string } | null }>;
-  const { error } = await updateRpc("update_company_profile_v3_core", {
+  const { error } = await supabase.rpc("update_company_profile_v3_core", {
     target_workspace_id: context.workspaceId,
     target_profile_draft_id: context.draftId,
     target_public_name: text(formData, "publicName"),

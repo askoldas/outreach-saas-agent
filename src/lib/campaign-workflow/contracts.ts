@@ -118,10 +118,12 @@ function parseBrief(
     "offering.profileOfferingIds",
   );
   if (
-    !profileOfferingIds.length ||
+    profileOfferingIds.length !== 1 ||
     profileOfferingIds.some((id) => !validOfferingIds.has(id))
   ) {
-    throw new Error("Campaign proposal referenced an unknown Company Profile offering.");
+    throw new Error(
+      "Campaign proposal must reference exactly one known Company Profile offering.",
+    );
   }
   const employeeRow =
     targetRow.employeeRange === undefined

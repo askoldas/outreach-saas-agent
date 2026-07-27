@@ -35,7 +35,7 @@ test("campaign brief proposal is structured and references a frozen profile offe
 test("campaign brief rejects an offering absent from the Company Profile", () => {
   assert.throws(
     () => parseCampaignBriefProposal(valid, new Set(["other-offering"])),
-    /unknown Company Profile offering/,
+    /exactly one known Company Profile offering/,
   );
 });
 
@@ -61,21 +61,23 @@ test("campaign brief cannot require an invisible clarification", () => {
   assert.equal(result.ambiguity?.requiresClarification, false);
 });
 
-test("confirmed campaign brief accepts a combination of profile offerings", () => {
-  const result = parseConfirmedCampaignBrief(
-    {
-      geography: valid.geography,
-      offering: {
-        ...valid.offering,
-        profileOfferingIds: ["offering-1", "offering-2"],
-      },
-      targetClient: valid.targetClient,
-      desiredQualifiedCompanies: 50,
-    },
-    new Set(["offering-1", "offering-2"]),
+test("confirmed campaign brief requires one primary profile offering", () => {
+  assert.throws(
+    () =>
+      parseConfirmedCampaignBrief(
+        {
+          geography: valid.geography,
+          offering: {
+            ...valid.offering,
+            profileOfferingIds: ["offering-1", "offering-2"],
+          },
+          targetClient: valid.targetClient,
+          desiredQualifiedCompanies: 50,
+        },
+        new Set(["offering-1", "offering-2"]),
+      ),
+    /exactly one known Company Profile offering/,
   );
-  assert.deepEqual(result.offering.profileOfferingIds, ["offering-1", "offering-2"]);
-  assert.equal(result.desiredQualifiedCompanies, 50);
 });
 
 test("confirmed campaign brief rejects unknown offerings and invalid volume", () => {
@@ -91,7 +93,7 @@ test("confirmed campaign brief rejects unknown offerings and invalid volume", ()
         { ...brief, offering: { ...valid.offering, profileOfferingIds: ["unknown"] } },
         new Set(["offering-1"]),
       ),
-    /unknown Company Profile offering/,
+    /exactly one known Company Profile offering/,
   );
   assert.throws(
     () =>

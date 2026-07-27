@@ -77,7 +77,7 @@ export function CampaignBriefForm({
   const [countryCodes, setCountryCodes] = useState<string[]>([]);
   const [result, setResult] = useState<ProposalResult | null>(null);
   const [proposal, setProposal] = useState<CampaignBriefProposal | null>(null);
-  const [selectedOfferingIds, setSelectedOfferingIds] = useState<string[]>([]);
+  const [selectedOfferingId, setSelectedOfferingId] = useState("");
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [name, setName] = useState("");
   const [offeringTitle, setOfferingTitle] = useState("");
@@ -115,7 +115,7 @@ export function CampaignBriefForm({
       },
       offering: {
         ...proposal.offering,
-        profileOfferingIds: selectedOfferingIds,
+        profileOfferingIds: [selectedOfferingId],
         title: offeringTitle,
         summary: offeringSummary,
         valueProposition,
@@ -135,7 +135,7 @@ export function CampaignBriefForm({
     };
   }, [
     proposal,
-    selectedOfferingIds,
+    selectedOfferingId,
     countryCodes,
     regionLabel,
     offeringTitle,
@@ -200,9 +200,11 @@ export function CampaignBriefForm({
       setProposalError("The Company Profile has no campaign-ready offering.");
       return;
     }
-    const next = buildProfileDefaultProposal(profile, { countryCodes, regionLabel }, [
+    const next = buildProfileDefaultProposal(
+      profile,
+      { countryCodes, regionLabel },
       preferred.id,
-    ]);
+    );
     setResult(null);
     applyProposal(next);
     setName(`${next.offering.title} — ${geographyLabel}`);
@@ -211,7 +213,7 @@ export function CampaignBriefForm({
 
   function applyProposal(next: CampaignBriefProposal) {
     setProposal(next);
-    setSelectedOfferingIds(next.offering.profileOfferingIds);
+    setSelectedOfferingId(next.offering.profileOfferingIds[0] ?? "");
     setClarificationAnswer("");
     setOfferingTitle(next.offering.title);
     setOfferingSummary(next.offering.summary);
@@ -226,17 +228,11 @@ export function CampaignBriefForm({
     setRoles(next.targetClient.recommendedDecisionMakerRoles.join(", "));
   }
 
-  function selectOffering(offeringId: string, selected: boolean) {
-    const ids = selected
-      ? Array.from(new Set([...selectedOfferingIds, offeringId]))
-      : selectedOfferingIds.filter((id) => id !== offeringId);
-    if (!ids.length) {
-      setSelectedOfferingIds([]);
-      return;
-    }
+  function selectOffering(offeringId: string) {
+    setSelectedOfferingId(offeringId);
     setResult(null);
     applyProposal(
-      buildProfileDefaultProposal(profile, { countryCodes, regionLabel }, ids),
+      buildProfileDefaultProposal(profile, { countryCodes, regionLabel }, offeringId),
     );
   }
 
@@ -350,10 +346,11 @@ export function CampaignBriefForm({
             <p>{proposal.offering.rationale}</p>
           </div>
           <div className={shared.stack}>
-            <strong>Select one offering or combine related offerings</strong>
+            <strong>Select one primary offering</strong>
             <p>
-              This selection applies only to this campaign. It does not change the Company
-              Profile.
+              Supporting capabilities can be reflected in the campaign copy, but the
+              selected primary offering is the single Company Profile offering stored for
+              this campaign. This does not change the Company Profile.
             </p>
             <div className={styles.options}>
               {profile.structuredProfile?.offerings
@@ -361,11 +358,10 @@ export function CampaignBriefForm({
                 .map((offering) => (
                   <label className={styles.option} key={offering.id}>
                     <input
-                      type="checkbox"
-                      checked={selectedOfferingIds.includes(offering.id)}
-                      onChange={(event) =>
-                        selectOffering(offering.id, event.target.checked)
-                      }
+                      type="radio"
+                      name="primaryOffering"
+                      checked={selectedOfferingId === offering.id}
+                      onChange={() => selectOffering(offering.id)}
                     />
                     <span>
                       <strong>{offering.name}</strong>
@@ -397,7 +393,7 @@ export function CampaignBriefForm({
             back={() => setStep(1)}
             next={() => setStep(3)}
             disabled={
-              !selectedOfferingIds.length ||
+              !selectedOfferingId ||
               !offeringTitle.trim() ||
               !offeringSummary.trim() ||
               !valueProposition.trim()
@@ -539,11 +535,7 @@ export function CampaignBriefForm({
           <form action={createCampaignAction}>
             <input type="hidden" name="name" value={name} />
             <input type="hidden" name="geography" value={geographyLabel} />
-            <input
-              type="hidden"
-              name="selectedOfferingId"
-              value={selectedOfferingIds[0]}
-            />
+            <input type="hidden" name="selectedOfferingId" value={selectedOfferingId} />
             <input type="hidden" name="targetSegments" value={companyTypes} />
             <input type="hidden" name="industryTerms" value={industries} />
             <input type="hidden" name="qualificationCriteria" value={requiredCriteria} />
@@ -630,14 +622,13 @@ export function CampaignBriefForm({
 function buildProfileDefaultProposal(
   profile: CompanyProfile,
   geography: { countryCodes: string[]; regionLabel: string },
-  offeringIds: string[],
+  offeringId: string,
 ): CampaignBriefProposal {
   const structured = profile.structuredProfile;
   if (!structured) throw new Error("The Company Profile is not available.");
-  const offerings = structured.offerings.filter((offering) =>
-    offeringIds.includes(offering.id),
-  );
-  if (!offerings.length) throw new Error("Select at least one Company Profile offering.");
+  const offering = structured.offerings.find((item) => item.id === offeringId);
+  if (!offering) throw new Error("Select one Company Profile offering.");
+  const offerings = [offering];
   const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
   const companyTypes = unique(
     offerings.flatMap((offering) => offering.targetCustomerTypes),

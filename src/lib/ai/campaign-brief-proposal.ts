@@ -24,7 +24,7 @@ export async function generateCampaignBriefProposal(input: {
       {
         role: "system",
         content:
-          "Propose one concise B2B campaign brief for the selected geography. Select only supplied offering IDs. Return JSON matching the requested shape. Ground the proposal in the frozen Company Profile. Do not modify it. Ask at most one focused clarification and only for a material ambiguity.",
+          "Propose one concise B2B campaign brief for the selected geography. Select exactly one primary offering from the supplied offering IDs. Supporting capabilities may inform the value proposition but must not be returned as additional offering IDs. Return JSON matching the requested shape. Ground the proposal in the frozen Company Profile. Do not modify it. Ask at most one focused clarification and only for a material ambiguity.",
       },
       {
         role: "user",
@@ -43,7 +43,7 @@ export async function generateCampaignBriefProposal(input: {
           requiredShape: {
             geography: { countryCodes: [], regionLabel: "", primaryLanguage: "" },
             offering: {
-              profileOfferingIds: [],
+              profileOfferingIds: ["exactly-one-supplied-offering-id"],
               title: "",
               summary: "",
               valueProposition: "",

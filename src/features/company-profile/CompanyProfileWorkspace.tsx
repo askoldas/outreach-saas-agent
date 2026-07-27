@@ -41,6 +41,55 @@ export function CompanyProfileWorkspace({
         <Summary value={`${data.readiness.overall}%`} label="Profile readiness" />
       </section>
 
+      <Card>
+        <CardHeader
+          title="Here is what Opptium understood about your company"
+          eyebrow="Company understanding"
+        />
+        <div className={`${shared.cardBody} ${styles.understandingGrid}`}>
+          <div>
+            <strong>Business model</strong>
+            <p>
+              {data.businessContext?.businessModel.replaceAll("_", " ") ??
+                data.businessModels.map((model) => model.replaceAll("_", " ")).join(", ")}
+            </p>
+          </div>
+          <div>
+            <strong>Current customer groups</strong>
+            <ul className={styles.list}>
+              {(data.businessContext?.currentCustomerGroups ?? []).map((group) => (
+                <li key={group.id}>
+                  {group.name} · {group.kind.replaceAll("_", " ")}
+                </li>
+              ))}
+            </ul>
+            {!data.businessContext?.currentCustomerGroups.length ? (
+              <p className={styles.meta}>No current audience was confirmed.</p>
+            ) : null}
+          </div>
+          <div>
+            <strong>Capabilities</strong>
+            <p>{data.capabilities.map((item) => item.name).join(", ") || "None found"}</p>
+          </div>
+          <div>
+            <strong>Possible B2B applications</strong>
+            <ul className={styles.list}>
+              {(data.businessContext?.potentialB2BApplications ?? []).map(
+                (application) => (
+                  <li key={application.id}>
+                    {application.name}
+                    {application.requiresConfirmation ? " · needs confirmation" : ""}
+                  </li>
+                ),
+              )}
+            </ul>
+            {!data.businessContext?.potentialB2BApplications.length ? (
+              <p className={styles.meta}>No additional B2B packaging was inferred.</p>
+            ) : null}
+          </div>
+        </div>
+      </Card>
+
       {data.status !== "published" ? (
         <Card>
           <CardHeader
@@ -284,9 +333,25 @@ export function CompanyProfileWorkspace({
                   </form>
                   <form action={updateOfferingStatusAction} className={styles.actions}>
                     <input type="hidden" name="offeringId" value={offering.id} />
-                    <Button type="submit" name="intent" value="confirm" variant="primary">
-                      Confirm offering
-                    </Button>
+                    {offering.status === "excluded" ? (
+                      <Button
+                        type="submit"
+                        name="intent"
+                        value="restore"
+                        variant="primary"
+                      >
+                        Restore offering
+                      </Button>
+                    ) : (
+                      <Button
+                        type="submit"
+                        name="intent"
+                        value="confirm"
+                        variant="primary"
+                      >
+                        Confirm offering
+                      </Button>
+                    )}
                     <Button
                       type="submit"
                       name="intent"
@@ -295,9 +360,16 @@ export function CompanyProfileWorkspace({
                     >
                       Convert to capability
                     </Button>
-                    <Button type="submit" name="intent" value="exclude" variant="danger">
-                      Mark as not offered
-                    </Button>
+                    {offering.status !== "excluded" ? (
+                      <Button
+                        type="submit"
+                        name="intent"
+                        value="exclude"
+                        variant="danger"
+                      >
+                        Mark as not relevant
+                      </Button>
+                    ) : null}
                   </form>
                 </div>
               </details>

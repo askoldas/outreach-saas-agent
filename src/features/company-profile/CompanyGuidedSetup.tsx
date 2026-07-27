@@ -126,7 +126,7 @@ export function CompanyGuidedSetup({ profile }: { profile: CompanyProfile }) {
             {!activeQuestion.required ? (
               <>
                 <Button type="submit" name="intent" value="skip" variant="ghost">
-                  Skip for now
+                  Show suggestions first
                 </Button>
                 <Button type="submit" name="intent" value="dismiss" variant="ghost">
                   Dismiss suggestion

@@ -25,6 +25,7 @@ export function ContextualAiDrawer({
   const [open, setOpen] = useState(false);
   const [request, setRequest] = useState("");
   const [response, setResponse] = useState<AiGuidedResponse | null>(null);
+  const [selectedChangeIds, setSelectedChangeIds] = useState<string[]>([]);
   const [error, setError] = useState("");
   const [applied, setApplied] = useState("");
   const [pending, startTransition] = useTransition();
@@ -32,14 +33,26 @@ export function ContextualAiDrawer({
     startTransition(async () => {
       setError("");
       try {
-        setResponse(await interpretGuidedRequestAction({ scope, entityId, request }));
+        const interpreted = await interpretGuidedRequestAction({
+          scope,
+          entityId,
+          request,
+        });
+        setResponse(interpreted);
+        setSelectedChangeIds(
+          interpreted.proposedChanges?.map((change) => change.id) ?? [],
+        );
       } catch (cause) {
         setError(cause instanceof Error ? cause.message : "Could not interpret request.");
       }
     });
   }
   function apply() {
-    if (!response?.proposedChanges?.length) return;
+    const selected =
+      response?.proposedChanges?.filter((change) =>
+        selectedChangeIds.includes(change.id),
+      ) ?? [];
+    if (!selected.length) return;
     startTransition(async () => {
       setError("");
       try {
@@ -47,7 +60,7 @@ export function ContextualAiDrawer({
           scope,
           entityId,
           baseVersion,
-          changes: response.proposedChanges ?? [],
+          changes: selected,
         });
         setApplied(result.message);
         setResponse(null);
@@ -75,7 +88,7 @@ export function ContextualAiDrawer({
             ))}
           </div>
           <label>
-            <span>Describe an adjustment</span>
+            <span>Tell Opptium what to add or changeâ€¦</span>
             <textarea
               value={request}
               onChange={(event) => setRequest(event.target.value)}
@@ -101,19 +114,59 @@ export function ContextualAiDrawer({
               ))}
               {response.question ? <p>{response.question.title}</p> : null}
               {response.proposedChanges?.length ? (
-                <div className={styles.proposalActions}>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={apply}
-                    disabled={pending}
-                  >
-                    Apply changes
-                  </Button>
-                  <Button type="button" variant="ghost" onClick={() => setResponse(null)}>
-                    Adjust
-                  </Button>
-                </div>
+                <>
+                  <div className={styles.changeList}>
+                    {response.proposedChanges.map((change) => (
+                      <label key={change.id}>
+                        <input
+                          type="checkbox"
+                          checked={selectedChangeIds.includes(change.id)}
+                          onChange={() =>
+                            setSelectedChangeIds((current) =>
+                              current.includes(change.id)
+                                ? current.filter((id) => id !== change.id)
+                                : [...current, change.id],
+                            )
+                          }
+                        />
+                        <span>
+                          <strong>
+                            {change.operation} {change.fieldPath ?? change.entityType}
+                          </strong>
+                          <small>{change.reason ?? "Structured proposed change"}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  <div className={styles.proposalActions}>
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={apply}
+                      disabled={pending || !selectedChangeIds.length}
+                    >
+                      Apply selected
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() =>
+                        setSelectedChangeIds(
+                          response.proposedChanges?.map((change) => change.id) ?? [],
+                        )
+                      }
+                    >
+                      Apply all
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setResponse(null)}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                </>
               ) : null}
             </div>
           ) : null}

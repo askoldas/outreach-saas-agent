@@ -82,6 +82,7 @@ export async function updateOfferingStatusAction(formData: FormData) {
   const intent = text(formData, "intent");
   if (intent === "confirm") offering.status = "confirmed";
   else if (intent === "exclude") offering.status = "excluded";
+  else if (intent === "restore") offering.status = "detected";
   else if (intent === "capability") {
     draft.capabilities.push({
       id: `cap_${offering.id}`.slice(0, 64),

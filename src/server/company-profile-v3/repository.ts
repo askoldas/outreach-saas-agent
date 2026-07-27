@@ -27,6 +27,9 @@ export type CompanyProfileV3Review = {
   rules: RuleRow[];
   questions: QuestionRow[];
   compiledSnapshot: Json;
+  publicName: string;
+  canonicalDomain: string;
+  commercialSummary: string;
 };
 
 export async function getCurrentCompanyProfileV3Review(
@@ -124,7 +127,25 @@ export async function getCurrentCompanyProfileV3Review(
     rules: rules ?? [],
     questions: questions ?? [],
     compiledSnapshot: draft.compiled_snapshot_json,
+    publicName: nestedString(draft.compiled_snapshot_json, "identity", "publicName"),
+    canonicalDomain: nestedString(
+      draft.compiled_snapshot_json,
+      "identity",
+      "canonicalDomain",
+    ),
+    commercialSummary: nestedString(
+      draft.compiled_snapshot_json,
+      "commercialSynthesis",
+      "conciseCommercialSummary",
+    ),
   };
+}
+
+function nestedString(value: Json, parent: string, child: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const nested = value[parent];
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return "";
+  return typeof nested[child] === "string" ? nested[child] : "";
 }
 
 async function loadBusinessRoles(workspaceId: string, businessModelId: string) {

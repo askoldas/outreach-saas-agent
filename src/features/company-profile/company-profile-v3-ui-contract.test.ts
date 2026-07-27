@@ -28,6 +28,8 @@ test("V3 review exposes commercial mechanics, buyer logic, rules, and questions"
   assert.match(workspace, /reviewCompanyProfileV3OfferingAction/);
   assert.match(workspace, /reviewCompanyProfileV3ArchetypeAction/);
   assert.match(workspace, /reviewCompanyProfileV3RuleAction/);
+  assert.match(workspace, /updateCompanyProfileV3CoreAction/);
+  assert.match(workspace, /Save reviewed core/);
 });
 
 test("V3 review reads and mutates only workspace-scoped draft records", () => {
@@ -38,4 +40,5 @@ test("V3 review reads and mutates only workspace-scoped draft records", () => {
   assert.match(actions, /\.eq\("status", "pending"\)/);
   assert.match(actions, /publish_company_profile_v3_draft/);
   assert.match(actions, /profile_change_events/);
+  assert.match(actions, /update_company_profile_v3_core/);
 });

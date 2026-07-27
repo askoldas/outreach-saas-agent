@@ -5046,6 +5046,36 @@ export type Database = {
         Args: { target_workspace_id: string };
         Returns: boolean;
       };
+      publish_company_profile_v3_draft: {
+        Args: { target_profile_draft_id: string; target_workspace_id: string };
+        Returns: {
+          analysis_execution_id: string | null;
+          analysis_model_config_id: string | null;
+          analysis_prompt_version: string | null;
+          company_name: string;
+          company_profile_id: string;
+          created_at: string;
+          created_by: string | null;
+          extracted_facts: Json;
+          id: string;
+          intelligence_version: string;
+          profile_status: string;
+          provenance: string;
+          readiness_score: number;
+          review_questions: Json;
+          structured_profile: Json;
+          summary: string;
+          version: number;
+          website_url: string | null;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_profile_versions";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       resolve_discovered_company: {
         Args: {
           company_name_value: string;

@@ -88,6 +88,9 @@ export default async function CompanyProfilePage({
           Company Intelligence V3 was published as an immutable profile version.
         </Badge>
       ) : null}
+      {query.message === "v3-core-updated" ? (
+        <Badge tone="success">Reviewed Company Intelligence fields were saved.</Badge>
+      ) : null}
       {query.error ? <Badge tone="danger">{errorMessage(query.error)}</Badge> : null}
       <RunProgressPanel
         key={analysisProgress?.runId ?? "no-analysis"}
@@ -158,6 +161,8 @@ function errorMessage(error: string) {
     "v3-publish-failed":
       "The reviewed Company Intelligence profile could not be published.",
     "v3-draft-not-reviewable": "This Company Intelligence draft is no longer editable.",
+    "v3-core-update-failed":
+      "The reviewed Company Intelligence fields could not be saved.",
   };
   return messages[error] ?? "The profile could not be updated.";
 }

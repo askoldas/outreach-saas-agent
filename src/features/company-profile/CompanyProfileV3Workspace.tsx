@@ -11,6 +11,7 @@ import {
   reviewCompanyProfileV3OfferingAction,
   reviewCompanyProfileV3RuleAction,
   skipCompanyProfileV3QuestionAction,
+  updateCompanyProfileV3CoreAction,
 } from "@/server/company-profile-v3/actions";
 import styles from "./CompanyProfileWorkspace.module.css";
 
@@ -84,23 +85,79 @@ export function CompanyProfileV3Workspace({
 
       <Card>
         <CardHeader title="Business model" eyebrow="How the company creates value" />
-        <div className={`${shared.cardBody} ${styles.understandingGrid}`}>
-          <Info
-            label="Primary role"
-            value={review.businessModel?.primary_role ?? "Not established"}
-          />
-          <Info
-            label="Revenue model"
-            value={review.businessModel?.revenue_model ?? "Unknown"}
-          />
-          <Info
-            label="Transaction model"
-            value={review.businessModel?.transaction_model ?? "Unknown"}
-          />
-          <Info
-            label="Customer use"
-            value={review.businessModel?.customer_usage_mode ?? "Unknown"}
-          />
+        <div className={shared.cardBody}>
+          {reviewable ? (
+            <form
+              action={updateCompanyProfileV3CoreAction}
+              className={styles.sectionBody}
+            >
+              <input type="hidden" name="draftId" value={review.id} />
+              <CoreField
+                name="publicName"
+                label="Public company name"
+                value={review.publicName}
+              />
+              <CoreField
+                name="canonicalDomain"
+                label="Canonical domain"
+                value={review.canonicalDomain}
+              />
+              <label>
+                Commercial summary
+                <textarea
+                  className={form.control}
+                  name="commercialSummary"
+                  rows={4}
+                  defaultValue={review.commercialSummary}
+                  required
+                />
+              </label>
+              <div className={styles.understandingGrid}>
+                <CoreField
+                  name="primaryRole"
+                  label="Primary role"
+                  value={review.businessModel?.primary_role ?? ""}
+                />
+                <CoreField
+                  name="revenueModel"
+                  label="Revenue model"
+                  value={review.businessModel?.revenue_model ?? ""}
+                />
+                <CoreField
+                  name="transactionModel"
+                  label="Transaction model"
+                  value={review.businessModel?.transaction_model ?? ""}
+                />
+                <CoreField
+                  name="customerUsageMode"
+                  label="Customer use mode"
+                  value={review.businessModel?.customer_usage_mode ?? ""}
+                />
+              </div>
+              <Button type="submit">Save reviewed core</Button>
+            </form>
+          ) : (
+            <div className={styles.understandingGrid}>
+              <Info label="Company" value={review.publicName} />
+              <Info label="Domain" value={review.canonicalDomain} />
+              <Info
+                label="Primary role"
+                value={review.businessModel?.primary_role ?? "Not established"}
+              />
+              <Info
+                label="Revenue model"
+                value={review.businessModel?.revenue_model ?? "Unknown"}
+              />
+              <Info
+                label="Transaction model"
+                value={review.businessModel?.transaction_model ?? "Unknown"}
+              />
+              <Info
+                label="Customer use"
+                value={review.businessModel?.customer_usage_mode ?? "Unknown"}
+              />
+            </div>
+          )}
           <div>
             <strong>Commercial roles</strong>
             <ul className={styles.list}>
@@ -321,6 +378,28 @@ function Info({ label: itemLabel, value }: { label: string; value: string }) {
       <strong>{itemLabel}</strong>
       <p>{label(value)}</p>
     </div>
+  );
+}
+
+function CoreField({
+  name,
+  label: itemLabel,
+  value,
+}: {
+  name: string;
+  label: string;
+  value: string;
+}) {
+  return (
+    <label>
+      {itemLabel}
+      <input
+        className={form.control}
+        name={name}
+        defaultValue={value}
+        required={name === "publicName" || name === "canonicalDomain"}
+      />
+    </label>
   );
 }
 

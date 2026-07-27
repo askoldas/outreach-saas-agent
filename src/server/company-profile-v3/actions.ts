@@ -123,11 +123,7 @@ export async function reviewCompanyProfileV3RuleAction(formData: FormData) {
 export async function publishCompanyProfileV3Action(formData: FormData) {
   const context = await reviewContext(formData);
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const publishRpc = supabase.rpc as unknown as (
-    name: string,
-    args: Record<string, unknown>,
-  ) => Promise<{ error: { message: string } | null }>;
-  const { error } = await publishRpc("publish_company_profile_v3_draft", {
+  const { error } = await supabase.rpc("publish_company_profile_v3_draft", {
     target_workspace_id: context.workspaceId,
     target_profile_draft_id: context.draftId,
   });
@@ -140,6 +136,29 @@ export async function publishCompanyProfileV3Action(formData: FormData) {
   revalidatePath("/company-profile");
   revalidatePath("/campaigns/new");
   redirect("/company-profile?message=v3-profile-published");
+}
+
+export async function updateCompanyProfileV3CoreAction(formData: FormData) {
+  const context = await reviewContext(formData);
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const updateRpc = supabase.rpc as unknown as (
+    name: string,
+    args: Record<string, unknown>,
+  ) => Promise<{ error: { message: string } | null }>;
+  const { error } = await updateRpc("update_company_profile_v3_core", {
+    target_workspace_id: context.workspaceId,
+    target_profile_draft_id: context.draftId,
+    target_public_name: text(formData, "publicName"),
+    target_canonical_domain: text(formData, "canonicalDomain"),
+    target_commercial_summary: text(formData, "commercialSummary"),
+    target_primary_role: text(formData, "primaryRole"),
+    target_revenue_model: text(formData, "revenueModel"),
+    target_transaction_model: text(formData, "transactionModel"),
+    target_customer_usage_mode: text(formData, "customerUsageMode"),
+  });
+  if (error) redirect("/company-profile?error=v3-core-update-failed");
+  revalidatePath("/company-profile");
+  redirect("/company-profile?message=v3-core-updated");
 }
 
 async function reviewContext(formData: FormData) {

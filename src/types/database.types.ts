@@ -6310,6 +6310,303 @@ export type Database = {
           },
         ];
       };
+      intelligence_task_attempts: {
+        Row: {
+          attempt_number: number;
+          completed_at: string | null;
+          error_code: string | null;
+          id: string;
+          metrics_json: Json;
+          started_at: string;
+          status: string;
+          task_run_id: string;
+          trigger_execution_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          attempt_number: number;
+          completed_at?: string | null;
+          error_code?: string | null;
+          id?: string;
+          metrics_json?: Json;
+          started_at?: string;
+          status: string;
+          task_run_id: string;
+          trigger_execution_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          attempt_number?: number;
+          completed_at?: string | null;
+          error_code?: string | null;
+          id?: string;
+          metrics_json?: Json;
+          started_at?: string;
+          status?: string;
+          task_run_id?: string;
+          trigger_execution_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_task_attempts_task_run_id_fkey";
+            columns: ["task_run_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_task_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_task_attempts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      intelligence_task_runs: {
+        Row: {
+          attempt_count: number;
+          completed_at: string | null;
+          created_at: string;
+          error_code: string | null;
+          error_details_json: Json | null;
+          id: string;
+          idempotency_key: string;
+          input_fingerprint: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          parent_task_run_id: string | null;
+          started_at: string | null;
+          status: string;
+          task_type: string;
+          trigger_run_id: string | null;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          error_code?: string | null;
+          error_details_json?: Json | null;
+          id?: string;
+          idempotency_key: string;
+          input_fingerprint: string;
+          input_reference_json: Json;
+          output_reference_json?: Json | null;
+          parent_task_run_id?: string | null;
+          started_at?: string | null;
+          status?: string;
+          task_type: string;
+          trigger_run_id?: string | null;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          completed_at?: string | null;
+          created_at?: string;
+          error_code?: string | null;
+          error_details_json?: Json | null;
+          id?: string;
+          idempotency_key?: string;
+          input_fingerprint?: string;
+          input_reference_json?: Json;
+          output_reference_json?: Json | null;
+          parent_task_run_id?: string | null;
+          started_at?: string | null;
+          status?: string;
+          task_type?: string;
+          trigger_run_id?: string | null;
+          workflow_run_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_task_runs_parent_task_run_id_fkey";
+            columns: ["parent_task_run_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_task_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_task_runs_workflow_run_id_fkey";
+            columns: ["workflow_run_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_workflow_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_task_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      intelligence_usage_events: {
+        Row: {
+          created_at: string;
+          id: string;
+          idempotency_key: string;
+          occurred_at: string;
+          provider_cost_amount: number | null;
+          provider_cost_currency: string | null;
+          provider_key: string;
+          quantity: number;
+          task_run_id: string | null;
+          unit: string;
+          usage_json: Json;
+          usage_type: string;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          idempotency_key: string;
+          occurred_at: string;
+          provider_cost_amount?: number | null;
+          provider_cost_currency?: string | null;
+          provider_key: string;
+          quantity: number;
+          task_run_id?: string | null;
+          unit: string;
+          usage_json?: Json;
+          usage_type: string;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          idempotency_key?: string;
+          occurred_at?: string;
+          provider_cost_amount?: number | null;
+          provider_cost_currency?: string | null;
+          provider_key?: string;
+          quantity?: number;
+          task_run_id?: string | null;
+          unit?: string;
+          usage_json?: Json;
+          usage_type?: string;
+          workflow_run_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_usage_events_task_run_id_fkey";
+            columns: ["task_run_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_task_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_usage_events_workflow_run_id_fkey";
+            columns: ["workflow_run_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_workflow_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_usage_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      intelligence_workflow_runs: {
+        Row: {
+          campaign_run_id: string;
+          cancelled_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          error_summary_json: Json | null;
+          id: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          paused_at: string | null;
+          progress_summary_json: Json;
+          requested_by_user_id: string | null;
+          started_at: string | null;
+          status: string;
+          subject_id: string;
+          subject_type: string;
+          trigger_run_id: string | null;
+          workflow_family: string;
+          workflow_version_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_run_id: string;
+          cancelled_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          error_summary_json?: Json | null;
+          id?: string;
+          input_reference_json: Json;
+          output_reference_json?: Json | null;
+          paused_at?: string | null;
+          progress_summary_json?: Json;
+          requested_by_user_id?: string | null;
+          started_at?: string | null;
+          status?: string;
+          subject_id: string;
+          subject_type?: string;
+          trigger_run_id?: string | null;
+          workflow_family?: string;
+          workflow_version_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_run_id?: string;
+          cancelled_at?: string | null;
+          completed_at?: string | null;
+          created_at?: string;
+          error_summary_json?: Json | null;
+          id?: string;
+          input_reference_json?: Json;
+          output_reference_json?: Json | null;
+          paused_at?: string | null;
+          progress_summary_json?: Json;
+          requested_by_user_id?: string | null;
+          started_at?: string | null;
+          status?: string;
+          subject_id?: string;
+          subject_type?: string;
+          trigger_run_id?: string | null;
+          workflow_family?: string;
+          workflow_version_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_workflow_runs_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: true;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_workflow_runs_workflow_version_id_fkey";
+            columns: ["workflow_version_id"];
+            isOneToOne: false;
+            referencedRelation: "workflow_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_workflow_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       market_analyses: {
         Row: {
           actual_model: string;
@@ -8496,6 +8793,152 @@ export type Database = {
           },
           {
             foreignKeyName: "user_corrections_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workflow_checkpoints: {
+        Row: {
+          checkpoint_key: string;
+          checkpoint_version: number;
+          created_at: string;
+          id: string;
+          payload_json: Json;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          checkpoint_key: string;
+          checkpoint_version: number;
+          created_at?: string;
+          id?: string;
+          payload_json: Json;
+          workflow_run_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          checkpoint_key?: string;
+          checkpoint_version?: number;
+          created_at?: string;
+          id?: string;
+          payload_json?: Json;
+          workflow_run_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workflow_checkpoints_workflow_run_id_fkey";
+            columns: ["workflow_run_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_workflow_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workflow_checkpoints_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workflow_commands: {
+        Row: {
+          command_type: string;
+          created_at: string;
+          id: string;
+          payload_json: Json;
+          processed_at: string | null;
+          requested_by_user_id: string | null;
+          status: string;
+          subject_id: string;
+          subject_type: string;
+          workspace_id: string;
+        };
+        Insert: {
+          command_type: string;
+          created_at?: string;
+          id?: string;
+          payload_json?: Json;
+          processed_at?: string | null;
+          requested_by_user_id?: string | null;
+          status?: string;
+          subject_id: string;
+          subject_type?: string;
+          workspace_id: string;
+        };
+        Update: {
+          command_type?: string;
+          created_at?: string;
+          id?: string;
+          payload_json?: Json;
+          processed_at?: string | null;
+          requested_by_user_id?: string | null;
+          status?: string;
+          subject_id?: string;
+          subject_type?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workflow_commands_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workflow_outbox: {
+        Row: {
+          attempt_count: number;
+          available_at: string;
+          command_id: string | null;
+          created_at: string;
+          event_type: string;
+          id: string;
+          payload_json: Json;
+          published_at: string | null;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          attempt_count?: number;
+          available_at?: string;
+          command_id?: string | null;
+          created_at?: string;
+          event_type: string;
+          id?: string;
+          payload_json: Json;
+          published_at?: string | null;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          attempt_count?: number;
+          available_at?: string;
+          command_id?: string | null;
+          created_at?: string;
+          event_type?: string;
+          id?: string;
+          payload_json?: Json;
+          published_at?: string | null;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workflow_outbox_command_id_fkey";
+            columns: ["command_id"];
+            isOneToOne: false;
+            referencedRelation: "workflow_commands";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "workflow_outbox_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";

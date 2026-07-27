@@ -376,3 +376,8 @@ behavior and deterministic tests are implemented.
 
 Begin WP-18 with the versioned V2 Trigger.dev campaign workflow. V1 remains the default
 path until its successor packages are complete and the V2 rollout is explicitly enabled.
+
+WP-18 runtime integration discovered that the live schema retained the legacy
+`discovery_plans` relation and did not contain WP-13 semantic discovery children.
+Migration 17 repairs that drift using collision-safe `discovery_plans_v2` persistence.
+The V2 Trigger parent remains deliberately undispatchable until the repair is applied.

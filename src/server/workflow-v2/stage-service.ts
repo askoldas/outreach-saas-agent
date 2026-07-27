@@ -1,6 +1,7 @@
 import type { CampaignV2Stage, StageResult } from "@/lib/workflow-v2/contracts";
 import { stageCheckpointKey } from "@/lib/workflow-v2/controller";
 import { classifyWorkflowError, errorForTrigger } from "@/server/execution/errors";
+import { executeInitialDiscoveryStage } from "@/server/discovery-v2/initial-discovery-stage";
 import type { Json } from "@/types/database.types";
 import {
   claimWorkflowTask,
@@ -109,6 +110,7 @@ async function runStageAdapter(
       usageEventIds: [],
     };
   }
+  if (input.stage === "discover") return executeInitialDiscoveryStage(input);
   throw new Error(
     `V2 stage adapter "${input.stage}" is not implemented and cannot execute.`,
   );

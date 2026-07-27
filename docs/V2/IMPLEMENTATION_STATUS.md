@@ -34,7 +34,7 @@ behavior and deterministic tests are implemented.
 | WP-15 — Candidate research and reusable intelligence     | complete    | Question-driven research plans, bounded first-party fetch contracts, evidence reuse/freshness, claim projections, immutable snapshots, campaign scoping, and tests added.                     |
 | WP-16 — Qualification V2 factor engine                   | complete    | Relationship-first evaluation, evidence-gated exclusions, ordered eligibility, versioned factor library, deterministic fit/potential, confidence caps, traces, lanes, and tests added.        |
 | WP-17 — Comparative ranking and consistency checks       | complete    | Lane-first stable ranking, deterministic anomaly checks, constrained comparative assessments, failure isolation, immutable snapshots, audit persistence, and tests added.                     |
-| WP-18 — V2 Campaign Trigger workflow                     | in_progress | Durable persistence, atomic task transitions, resumable `execute-campaign-v2` parent, durable generic child stage, initialization adapter, fail-closed missing adapters, progress state, and tests added; domain stage adapters and controls remain. |
+| WP-18 — V2 Campaign Trigger workflow                     | in_progress | Durable/resumable parent and child stages plus a real bounded initial-discovery adapter now persist Tavily provider records with exact-strategy loading, internal Campaign identity, service-role worker authorization, stable request caching, transient-failure escalation, and factual counters; semantic coverage and downstream adapters remain. |
 | WP-19 — V2 campaign results UI                           | not_started | Coverage, lanes, factors, corrections, entity review, and accessibility remain.                                                                                                               |
 | WP-20 — Shadow mode and benchmark runner                 | not_started | Synthetic portfolio, comparison runner, report, and no-write shadow mode remain.                                                                                                              |
 | WP-21 — Controlled beta                                  | not_started | Selected-workspace rollout, telemetry, and rollback drill remain.                                                                                                                             |
@@ -385,3 +385,18 @@ idempotent stage execution. The V2 Trigger parent and generic child task now exi
 resume from named checkpoints. Only initialization is connected; discovery, entity
 resolution, research, qualification, and ranking deliberately fail closed. V2 routing
 therefore remains disabled until those adapters and workflow controls are complete.
+
+The first Discovery adapter intentionally covers only the initial breadth pass. It:
+
+- loads the exact confirmed Strategy version frozen on the Campaign Run;
+- maps the workspace `web` setting to the implemented `web_search` adapter;
+- caps work at twelve provider calls over at most six priority segments;
+- persists raw and normalized provider output through the existing idempotent RPC;
+- checks the persisted request hash before repeating a paid provider request;
+- retries only when every provider call failed transiently;
+- returns `partial` with explicit `initial_breadth` scope.
+
+It does not yet create a semantic `discovery_plans_v2` run or claim coverage completion.
+Confirmed strategies still carry legacy external/draft/placeholder identities for the
+Campaign, segment Strategy version, and Memory snapshot. Those identities and the
+non-idempotent semantic-run lifecycle must be repaired before coverage is attached.

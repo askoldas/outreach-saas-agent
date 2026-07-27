@@ -5,7 +5,10 @@ import {
   type CompanyDiscoveryProvider,
 } from "@/lib/discovery-v2";
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
-import { persistProviderResponse } from "./provider-repository";
+import {
+  findPersistedProviderExecution,
+  persistProviderResponse,
+} from "./provider-repository";
 
 export async function executeAndPersistDiscoveryProvider(input: {
   provider: CompanyDiscoveryProvider;
@@ -22,6 +25,17 @@ export async function executeAndPersistDiscoveryProvider(input: {
   ) {
     throw new Error("Discovery provider capability identity mismatch.");
   }
+  const requestHash = hashCanonical(request);
+  const cached = await findPersistedProviderExecution({
+    workspaceId: request.workspaceId,
+    campaignId: request.campaignId,
+    segmentKey: request.segment.id,
+    providerKey: input.provider.id,
+    adapterVersion: input.provider.version,
+    requestHash,
+  });
+  if (cached) return { capabilities, cached: true as const, summary: cached };
+
   const response = providerDiscoveryResponseSchema.parse(
     await input.provider.search(request),
   );
@@ -38,10 +52,26 @@ export async function executeAndPersistDiscoveryProvider(input: {
     capabilities,
     capabilitiesHash: hashCanonical(capabilities),
     executionKey: response.executionId,
-    requestHash: hashCanonical(request),
+    requestHash,
     request,
     response,
     normalizationVersion: input.normalizationVersion,
   });
-  return { execution, response, capabilities };
+  const persisted = await findPersistedProviderExecution({
+    workspaceId: request.workspaceId,
+    campaignId: request.campaignId,
+    segmentKey: request.segment.id,
+    providerKey: input.provider.id,
+    adapterVersion: input.provider.version,
+    requestHash,
+  });
+  if (!persisted)
+    throw new Error("Discovery provider response was not durably persisted.");
+  return {
+    execution,
+    response,
+    capabilities,
+    cached: false as const,
+    summary: { ...persisted, cached: false as const },
+  };
 }

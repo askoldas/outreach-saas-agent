@@ -1,4 +1,4 @@
-import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 
 type RpcResult = {
@@ -89,7 +89,7 @@ async function rpcRecord(name: string, args: Record<string, unknown>) {
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const supabase = createServiceRoleClient();
   const database = supabase as unknown as {
     rpc(name: string, args: Record<string, unknown>): PromiseLike<RpcResult>;
   };

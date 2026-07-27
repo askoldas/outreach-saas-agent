@@ -1,11 +1,15 @@
 import { runs, tasks } from "@trigger.dev/sdk";
-import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { analyzeCompanyProfileTask } from "@/trigger/analyze-company-profile";
 import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
 import type { executeCampaignTask } from "@/trigger/execute-campaign";
 import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
 
 const staleDispatchMs = 2 * 60 * 1_000;
+
+async function createOperationalDatabaseClient() {
+  return { supabase: createServiceRoleClient() };
+}
 
 export async function cancelTriggerRuns(triggerRunIds: string[]) {
   const uniqueRunIds = [...new Set(triggerRunIds.filter(Boolean))];
@@ -26,7 +30,7 @@ export async function dispatchCampaignRun(input: {
   tags?: string[];
   workspaceId: string;
 }) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const dispatchKey = input.idempotencyKey ?? `execute-campaign:${input.campaignRunId}`;
   await markDispatching(
     "campaign_runs",
@@ -74,7 +78,7 @@ export async function dispatchProviderExecution(input: {
   providerExecutionId: string;
   workspaceId: string;
 }) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const { data: execution, error: loadError } = await supabase
     .from("provider_executions")
     .select("id,operation,idempotency_key,metadata")
@@ -118,7 +122,7 @@ export async function dispatchProviderExecution(input: {
 }
 
 export async function reconcileTriggerDispatches(input: { workspaceId: string }) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const [{ data: campaignRuns, error: campaignError }, { data: executions, error }] =
     await Promise.all([
       supabase
@@ -231,7 +235,7 @@ async function markDispatching(
   workspaceId: string,
   dispatchKey: string,
 ) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const { data, error: loadError } = await supabase
     .from(table)
     .select("dispatch_attempts")
@@ -260,7 +264,7 @@ async function markDispatchFailed(
   workspaceId: string,
   error: unknown,
 ) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   await supabase
     .from(table)
     .update({

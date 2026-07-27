@@ -1,4 +1,5 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { ActivityItem } from "@/types/domain";
 
 type ActivityEntityType = "campaign" | "draft" | "lead" | "workspace";
@@ -52,16 +53,20 @@ export async function createActivityEvent(
     input.entityType,
     input.entityExternalId,
   );
-  const { error } = await supabase.from("activity_events").insert({
-    actor_user_id: user.id,
-    description: input.description,
-    entity_id: entityId,
-    entity_type: input.entityType,
-    event_type: toEventType(input.label),
-    label: input.label,
-    metadata: input.entityExternalId ? { externalEntityId: input.entityExternalId } : {},
-    workspace_id: workspaceId,
-  });
+  const { error } = await createServiceRoleClient()
+    .from("activity_events")
+    .insert({
+      actor_user_id: user.id,
+      description: input.description,
+      entity_id: entityId,
+      entity_type: input.entityType,
+      event_type: toEventType(input.label),
+      label: input.label,
+      metadata: input.entityExternalId
+        ? { externalEntityId: input.entityExternalId }
+        : {},
+      workspace_id: workspaceId,
+    });
 
   if (error) {
     throw new Error(`Could not create activity event: ${error.message}`);

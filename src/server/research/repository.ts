@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { ResearchProgress } from "@/types/domain";
 import {
   cancelTriggerRuns,
@@ -23,6 +24,10 @@ type CampaignRunRow = {
   progress_percentage: number;
   status: string;
 };
+
+async function createOperationalDatabaseClient() {
+  return { supabase: createServiceRoleClient() };
+}
 
 export async function enqueueCampaignDiscoveryRun(input: {
   campaignId: string;
@@ -61,7 +66,7 @@ export async function resumePausedCampaignRun(input: {
   campaignId: string;
   workspaceId: string;
 }): Promise<{ runId: string } | null> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .select("id")
@@ -107,7 +112,7 @@ export async function stopActiveCampaignRun(input: {
   campaignId: string;
   workspaceId: string;
 }) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .select("id")
@@ -197,7 +202,7 @@ export async function enqueueLeadContactEnrichmentRun(input: {
   leadId: string;
   workspaceId: string;
 }): Promise<{ runId: string }> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const { data: association, error: associationError } = await supabase
     .from("campaign_companies")
     .select("id,company_id,campaign_id")
@@ -318,7 +323,7 @@ export async function enqueueCampaignDraftGenerationRun(input: {
   campaignId: string;
   workspaceId: string;
 }): Promise<{ runId: string; taskCount: number }> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .select("id,current_strategy_version_id")
@@ -452,7 +457,7 @@ export async function enqueueCompanyProfileAnalysisRun(input: {
   profileVersionId: string;
   website: string;
 }) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   const idempotencyKey = `company-profile-analysis:${input.profileVersionId}`;
   const requestHash = createHash("sha256")
     .update(JSON.stringify({ profileVersionId: input.profileVersionId }))
@@ -519,7 +524,7 @@ export async function getCampaignResearchProgress(input: {
   campaignId: string;
   workspaceId: string;
 }): Promise<ResearchProgress | null> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { supabase } = await createOperationalDatabaseClient();
   if (input.campaignId === "company-profile") {
     const { data, error } = await supabase
       .from("provider_executions")

@@ -6,6 +6,7 @@ import { saveCampaignStrategyVersion } from "./repository";
 import { getCurrentCampaignStrategy } from "./repository";
 import { getCampaign } from "@/server/campaigns/repository";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import {
   generateCampaignStrategy,
   strategyGenerationPromptVersion,
@@ -91,7 +92,8 @@ export async function generateCampaignStrategyAction(input: {
     refinementSummary: [...generated.strategy.refinementSummary, instruction],
   });
   const requestHash = `strategy:${input.campaignId}:${saved.version}`;
-  const { error: logError } = await supabase.from("ai_requests").insert({
+  const operational = createServiceRoleClient();
+  const { error: logError } = await operational.from("ai_requests").insert({
     workspace_id: currentWorkspace.id,
     provider: "openrouter",
     role: "campaign_planning",
@@ -120,7 +122,7 @@ export async function generateCampaignStrategyAction(input: {
     completed_at: new Date().toISOString(),
   });
   if (logError) throw new Error(`Could not log Strategy generation: ${logError.message}`);
-  const { error: usageError } = await supabase.from("usage_ledger").insert({
+  const { error: usageError } = await operational.from("usage_ledger").insert({
     workspace_id: currentWorkspace.id,
     operation: "strategy_generation",
     entry_type: "settlement",

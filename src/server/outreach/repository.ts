@@ -1,4 +1,5 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { ExportRecord, UsageEvent } from "@/types/domain";
 import { createHash } from "node:crypto";
 
@@ -59,7 +60,7 @@ export async function createExportRecord(
     rows: unknown[];
   },
 ) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const supabase = createServiceRoleClient();
   const campaign = await resolveCampaign(supabase, workspaceId, input.campaignId);
   const { data, error } = await supabase
     .from("export_records")
@@ -142,7 +143,7 @@ export async function recordUsageEvent(
     referenceId?: string;
   },
 ) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const supabase = createServiceRoleClient();
   const campaignRunId = input.campaignId
     ? await resolveLatestCampaignRunId(supabase, workspaceId, input.campaignId)
     : null;

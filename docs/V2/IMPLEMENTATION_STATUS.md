@@ -21,7 +21,7 @@ behavior and deterministic tests are implemented.
 | WP-02 — Intelligence contract primitives                 | complete    | Strict evidence, claim, rule, memory, envelope, schema/task registry contracts and append-only registry migration added.             |
 | WP-03 — Evidence and claim persistence                   | complete    | Append-only evidence/claim persistence, atomic links, conflicts, source guards, tenant repositories, RLS, and tests added.           |
 | WP-04 — Company Intelligence V3 contracts and V1 adapter | complete    | V3 identity, business model, offerings, mechanics, buyer logic, rules, readiness, and reviewed V2 draft adapter added.               |
-| WP-05 — Company Intelligence V3 workflow                 | not_started | Staged profile tasks and audit workflow remain.                                                                                      |
+| WP-05 — Company Intelligence V3 workflow                 | in_progress | V3 draft/task persistence and six versioned narrow task contracts added; Trigger orchestration and execution services remain.        |
 | WP-06 — Company Profile V3 UI                            | not_started | V3 review and publish UI remain.                                                                                                     |
 | WP-07 — Campaign Strategy V2 contracts                   | not_started | Objective, archetype, rubric, source-plan, and segment contracts remain.                                                             |
 | WP-08 — Campaign Strategy V2 persistence and compiler    | not_started | Compiler, persistence, confirmation, and audit remain.                                                                               |
@@ -103,7 +103,24 @@ behavior and deterministic tests are implemented.
   published without user review.
 - Supabase types were regenerated successfully after WP-03 was applied.
 
+## WP-05 delivery record
+
+- Persistence migration drafted:
+  `supabase/migrations/20260728000400_company_intelligence_v3.sql`
+- The migration adds mutable review drafts, normalized business models and roles,
+  stable offerings and offering versions, buyer archetype hypotheses, scoped rules,
+  clarification questions, task runs, and change events.
+- Published normalized records are immutable. Draft/task links have tenant consistency
+  guards, and task idempotency keys are unique.
+- Six independent prompt/schema contracts now exist for fact extraction, commercial
+  synthesis, offering decomposition, buyer logic, clarification, and consistency
+  audit.
+- Remaining before WP-05 completion: apply and regenerate types, implement the guarded
+  parent/child Trigger workflow, task execution and AI audit writes, persisted stage
+  outputs, resumability, and end-to-end fixtures.
+
 ## Next package entry point
 
-Begin WP-05 with staged Company Intelligence tasks, prompt contracts, Trigger.dev
-parent/child orchestration, draft persistence, idempotency, AI audit, and fixtures.
+Apply Migration 4 and regenerate types, then continue WP-05 with the guarded staged
+Trigger.dev profile workflow and execution services. V1 profile analysis remains the
+canonical path until that workflow is complete and explicitly enabled.

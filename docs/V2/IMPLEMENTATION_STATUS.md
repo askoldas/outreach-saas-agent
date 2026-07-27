@@ -14,32 +14,32 @@ behavior and deterministic tests are implemented.
 
 ## Work packages
 
-| Package                                                  | Status      | Changes, tests, deviations, and removal work                                                                                         |
-| -------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| WP-00 — Freeze baseline and add documentation            | complete    | Documents 00–10 are tracked under `docs/V2/`; this living record and links from current project documentation were added.            |
-| WP-01 — Workflow version and feature-flag foundation     | complete    | Append-only versioning/rollout migration, typed flags, workspace settings, immutable run versions, and version-aware dispatch added. |
-| WP-02 — Intelligence contract primitives                 | complete    | Strict evidence, claim, rule, memory, envelope, schema/task registry contracts and append-only registry migration added.             |
-| WP-03 — Evidence and claim persistence                   | complete    | Append-only evidence/claim persistence, atomic links, conflicts, source guards, tenant repositories, RLS, and tests added.           |
-| WP-04 — Company Intelligence V3 contracts and V1 adapter | complete    | V3 identity, business model, offerings, mechanics, buyer logic, rules, readiness, and reviewed V2 draft adapter added.               |
-| WP-05 — Company Intelligence V3 workflow                 | in_progress | V3 draft/task persistence and six versioned narrow task contracts added; Trigger orchestration and execution services remain.        |
-| WP-06 — Company Profile V3 UI                            | not_started | V3 review and publish UI remain.                                                                                                     |
-| WP-07 — Campaign Strategy V2 contracts                   | not_started | Objective, archetype, rubric, source-plan, and segment contracts remain.                                                             |
-| WP-08 — Campaign Strategy V2 persistence and compiler    | not_started | Compiler, persistence, confirmation, and audit remain.                                                                               |
-| WP-09 — Campaign creation and Strategy V2 UI             | not_started | V2 routing, wizard, review, and E2E coverage remain.                                                                                 |
-| WP-10 — Scoped memory V2                                 | not_started | Scope precedence, promotion, conflicts, and application events remain.                                                               |
-| WP-11 — Discovery provider contracts                     | not_started | Provider capabilities, registry, router, normalized records, and tests remain.                                                       |
-| WP-12 — WebSearchProvider                                | not_started | V2 query compilation inside the provider remains.                                                                                    |
-| WP-13 — Semantic discovery plan and coverage             | not_started | Segment runs, coverage, gap analysis, and stopping policy remain.                                                                    |
-| WP-14 — Organization graph and entity resolution         | not_started | Graph, conservative matching, reversible merge/split, and fixtures remain.                                                           |
-| WP-15 — Candidate research and reusable intelligence     | not_started | Research plan, claims, freshness, and reusable versions remain.                                                                      |
-| WP-16 — Qualification V2 factor engine                   | not_started | Relationship-first evaluation, exclusions, deterministic scoring, confidence, traces, and lanes remain.                              |
-| WP-17 — Comparative ranking and consistency checks       | not_started | Ranking persistence, inversion checks, and failure isolation remain.                                                                 |
-| WP-18 — V2 Campaign Trigger workflow                     | not_started | Versioned V2 parent/children and workflow tests remain.                                                                              |
-| WP-19 — V2 campaign results UI                           | not_started | Coverage, lanes, factors, corrections, entity review, and accessibility remain.                                                      |
-| WP-20 — Shadow mode and benchmark runner                 | not_started | Synthetic portfolio, comparison runner, report, and no-write shadow mode remain.                                                     |
-| WP-21 — Controlled beta                                  | not_started | Selected-workspace rollout, telemetry, and rollback drill remain.                                                                    |
-| WP-22 — Default V2 and legacy freeze                     | not_started | Requires explicit product decision and all prior gates.                                                                              |
-| WP-23 — Legacy removal                                   | blocked     | Requires explicit approval after V2 default and historical-read guarantees.                                                          |
+| Package                                                  | Status      | Changes, tests, deviations, and removal work                                                                                                                                                            |
+| -------------------------------------------------------- | ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| WP-00 — Freeze baseline and add documentation            | complete    | Documents 00–10 are tracked under `docs/V2/`; this living record and links from current project documentation were added.                                                                               |
+| WP-01 — Workflow version and feature-flag foundation     | complete    | Append-only versioning/rollout migration, typed flags, workspace settings, immutable run versions, and version-aware dispatch added.                                                                    |
+| WP-02 — Intelligence contract primitives                 | complete    | Strict evidence, claim, rule, memory, envelope, schema/task registry contracts and append-only registry migration added.                                                                                |
+| WP-03 — Evidence and claim persistence                   | complete    | Append-only evidence/claim persistence, atomic links, conflicts, source guards, tenant repositories, RLS, and tests added.                                                                              |
+| WP-04 — Company Intelligence V3 contracts and V1 adapter | complete    | V3 identity, business model, offerings, mechanics, buyer logic, rules, readiness, and reviewed V2 draft adapter added.                                                                                  |
+| WP-05 — Company Intelligence V3 workflow                 | in_progress | V3 persistence, six narrow task contracts, guarded sequential Trigger orchestration, audited execution, and resumable stage outputs added; normalized draft compilation and end-to-end fixtures remain. |
+| WP-06 — Company Profile V3 UI                            | not_started | V3 review and publish UI remain.                                                                                                                                                                        |
+| WP-07 — Campaign Strategy V2 contracts                   | not_started | Objective, archetype, rubric, source-plan, and segment contracts remain.                                                                                                                                |
+| WP-08 — Campaign Strategy V2 persistence and compiler    | not_started | Compiler, persistence, confirmation, and audit remain.                                                                                                                                                  |
+| WP-09 — Campaign creation and Strategy V2 UI             | not_started | V2 routing, wizard, review, and E2E coverage remain.                                                                                                                                                    |
+| WP-10 — Scoped memory V2                                 | not_started | Scope precedence, promotion, conflicts, and application events remain.                                                                                                                                  |
+| WP-11 — Discovery provider contracts                     | not_started | Provider capabilities, registry, router, normalized records, and tests remain.                                                                                                                          |
+| WP-12 — WebSearchProvider                                | not_started | V2 query compilation inside the provider remains.                                                                                                                                                       |
+| WP-13 — Semantic discovery plan and coverage             | not_started | Segment runs, coverage, gap analysis, and stopping policy remain.                                                                                                                                       |
+| WP-14 — Organization graph and entity resolution         | not_started | Graph, conservative matching, reversible merge/split, and fixtures remain.                                                                                                                              |
+| WP-15 — Candidate research and reusable intelligence     | not_started | Research plan, claims, freshness, and reusable versions remain.                                                                                                                                         |
+| WP-16 — Qualification V2 factor engine                   | not_started | Relationship-first evaluation, exclusions, deterministic scoring, confidence, traces, and lanes remain.                                                                                                 |
+| WP-17 — Comparative ranking and consistency checks       | not_started | Ranking persistence, inversion checks, and failure isolation remain.                                                                                                                                    |
+| WP-18 — V2 Campaign Trigger workflow                     | not_started | Versioned V2 parent/children and workflow tests remain.                                                                                                                                                 |
+| WP-19 — V2 campaign results UI                           | not_started | Coverage, lanes, factors, corrections, entity review, and accessibility remain.                                                                                                                         |
+| WP-20 — Shadow mode and benchmark runner                 | not_started | Synthetic portfolio, comparison runner, report, and no-write shadow mode remain.                                                                                                                        |
+| WP-21 — Controlled beta                                  | not_started | Selected-workspace rollout, telemetry, and rollback drill remain.                                                                                                                                       |
+| WP-22 — Default V2 and legacy freeze                     | not_started | Requires explicit product decision and all prior gates.                                                                                                                                                 |
+| WP-23 — Legacy removal                                   | blocked     | Requires explicit approval after V2 default and historical-read guarantees.                                                                                                                             |
 
 ## Known compatibility boundaries
 
@@ -115,12 +115,20 @@ behavior and deterministic tests are implemented.
 - Six independent prompt/schema contracts now exist for fact extraction, commercial
   synthesis, offering decomposition, buyer logic, clarification, and consistency
   audit.
-- Remaining before WP-05 completion: apply and regenerate types, implement the guarded
-  parent/child Trigger workflow, task execution and AI audit writes, persisted stage
-  outputs, resumability, and end-to-end fixtures.
+- Migration 4 was applied through the Supabase SQL Editor and database types were
+  regenerated from project `aqhuzmqzeipubxrxadyj`.
+- A guarded parent Trigger workflow now runs the six stages as durable sequential child
+  tasks. Each stage freezes its contract, prompt, schema, context compiler, input hash,
+  and evidence context; completed matching outputs are reused on retry.
+- Provider calls and validated outputs are persisted to `ai_requests` and
+  `profile_task_runs`, including provider metadata, token/cost telemetry, output hashes,
+  and bounded failure diagnostics.
+- Remaining before WP-05 completion: compile validated stage outputs into normalized
+  draft business models, offerings, archetypes, rules, and clarification questions;
+  then add end-to-end fixtures for success, resume, clarification, and failure paths.
 
 ## Next package entry point
 
-Apply Migration 4 and regenerate types, then continue WP-05 with the guarded staged
-Trigger.dev profile workflow and execution services. V1 profile analysis remains the
-canonical path until that workflow is complete and explicitly enabled.
+Continue WP-05 with deterministic normalized draft compilation and end-to-end workflow
+fixtures. V1 profile analysis remains the canonical path until WP-05 and WP-06 are
+complete and the V2 rollout is explicitly enabled.

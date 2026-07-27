@@ -486,6 +486,89 @@ export type Database = {
           },
         ];
       };
+      buyer_archetype_hypotheses: {
+        Row: {
+          archetype_key: string;
+          claim_ids: string[];
+          confidence: number;
+          created_at: string;
+          evidence_ids: string[];
+          id: string;
+          name: string;
+          offering_version_id: string;
+          priority: string;
+          profile_draft_id: string | null;
+          profile_version_id: string | null;
+          relationship_type: string;
+          status: string;
+          structured_details_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          archetype_key: string;
+          claim_ids?: string[];
+          confidence: number;
+          created_at?: string;
+          evidence_ids?: string[];
+          id?: string;
+          name: string;
+          offering_version_id: string;
+          priority: string;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          relationship_type: string;
+          status: string;
+          structured_details_json?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          archetype_key?: string;
+          claim_ids?: string[];
+          confidence?: number;
+          created_at?: string;
+          evidence_ids?: string[];
+          id?: string;
+          name?: string;
+          offering_version_id?: string;
+          priority?: string;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          relationship_type?: string;
+          status?: string;
+          structured_details_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "buyer_archetype_hypotheses_offering_version_id_fkey";
+            columns: ["offering_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_offering_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "buyer_archetype_hypotheses_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "buyer_archetype_hypotheses_profile_version_id_fkey";
+            columns: ["profile_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "buyer_archetype_hypotheses_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       campaign_agent_checkpoints: {
         Row: {
           campaign_run_id: string;
@@ -1566,6 +1649,85 @@ export type Database = {
           },
         ];
       };
+      commercial_rules: {
+        Row: {
+          applicability_json: Json;
+          confidence: number;
+          created_at: string;
+          description: string;
+          evidence_ids: string[];
+          id: string;
+          profile_draft_id: string | null;
+          profile_version_id: string | null;
+          rule_key: string;
+          rule_type: string;
+          scope: string;
+          scope_id: string;
+          source: string;
+          status: string;
+          strength: string;
+          workspace_id: string;
+        };
+        Insert: {
+          applicability_json?: Json;
+          confidence: number;
+          created_at?: string;
+          description: string;
+          evidence_ids?: string[];
+          id?: string;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          rule_key: string;
+          rule_type: string;
+          scope: string;
+          scope_id: string;
+          source: string;
+          status: string;
+          strength: string;
+          workspace_id: string;
+        };
+        Update: {
+          applicability_json?: Json;
+          confidence?: number;
+          created_at?: string;
+          description?: string;
+          evidence_ids?: string[];
+          id?: string;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          rule_key?: string;
+          rule_type?: string;
+          scope?: string;
+          scope_id?: string;
+          source?: string;
+          status?: string;
+          strength?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "commercial_rules_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "commercial_rules_profile_version_id_fkey";
+            columns: ["profile_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "commercial_rules_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       companies: {
         Row: {
           city: string | null;
@@ -1625,6 +1787,134 @@ export type Database = {
           },
         ];
       };
+      company_business_models: {
+        Row: {
+          confidence: number;
+          created_at: string;
+          customer_usage_mode: string | null;
+          id: string;
+          primary_role: string | null;
+          profile_draft_id: string | null;
+          profile_version_id: string | null;
+          revenue_model: string | null;
+          sales_motion: string | null;
+          structured_details_json: Json;
+          transaction_model: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          confidence?: number;
+          created_at?: string;
+          customer_usage_mode?: string | null;
+          id?: string;
+          primary_role?: string | null;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          revenue_model?: string | null;
+          sales_motion?: string | null;
+          structured_details_json?: Json;
+          transaction_model?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          confidence?: number;
+          created_at?: string;
+          customer_usage_mode?: string | null;
+          id?: string;
+          primary_role?: string | null;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          revenue_model?: string | null;
+          sales_motion?: string | null;
+          structured_details_json?: Json;
+          transaction_model?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_business_models_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_business_models_profile_version_id_fkey";
+            columns: ["profile_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_business_models_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      company_business_roles: {
+        Row: {
+          business_model_id: string;
+          claim_id: string | null;
+          confidence: number;
+          created_at: string;
+          evidence_ids: string[];
+          explanation: string;
+          id: string;
+          priority: string;
+          role_type: string;
+          workspace_id: string;
+        };
+        Insert: {
+          business_model_id: string;
+          claim_id?: string | null;
+          confidence: number;
+          created_at?: string;
+          evidence_ids?: string[];
+          explanation?: string;
+          id?: string;
+          priority: string;
+          role_type: string;
+          workspace_id: string;
+        };
+        Update: {
+          business_model_id?: string;
+          claim_id?: string | null;
+          confidence?: number;
+          created_at?: string;
+          evidence_ids?: string[];
+          explanation?: string;
+          id?: string;
+          priority?: string;
+          role_type?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_business_roles_business_model_id_fkey";
+            columns: ["business_model_id"];
+            isOneToOne: false;
+            referencedRelation: "company_business_models";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_business_roles_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_business_roles_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       company_domains: {
         Row: {
           collision_status: string;
@@ -1672,6 +1962,216 @@ export type Database = {
           },
           {
             foreignKeyName: "company_domains_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      company_offering_versions: {
+        Row: {
+          availability_json: Json;
+          buyer_logic_json: Json;
+          claim_ids: string[];
+          commercial_mechanics_json: Json;
+          company_offering_id: string;
+          confidence: number;
+          constraints_json: Json;
+          created_at: string;
+          evidence_ids: string[];
+          id: string;
+          name: string;
+          offering_type: string;
+          profile_draft_id: string | null;
+          profile_version_id: string | null;
+          relationship_options_json: Json;
+          short_description: string;
+          slug: string;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          availability_json?: Json;
+          buyer_logic_json?: Json;
+          claim_ids?: string[];
+          commercial_mechanics_json?: Json;
+          company_offering_id: string;
+          confidence: number;
+          constraints_json?: Json;
+          created_at?: string;
+          evidence_ids?: string[];
+          id?: string;
+          name: string;
+          offering_type: string;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          relationship_options_json?: Json;
+          short_description: string;
+          slug: string;
+          status: string;
+          workspace_id: string;
+        };
+        Update: {
+          availability_json?: Json;
+          buyer_logic_json?: Json;
+          claim_ids?: string[];
+          commercial_mechanics_json?: Json;
+          company_offering_id?: string;
+          confidence?: number;
+          constraints_json?: Json;
+          created_at?: string;
+          evidence_ids?: string[];
+          id?: string;
+          name?: string;
+          offering_type?: string;
+          profile_draft_id?: string | null;
+          profile_version_id?: string | null;
+          relationship_options_json?: Json;
+          short_description?: string;
+          slug?: string;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_offering_versions_company_offering_id_fkey";
+            columns: ["company_offering_id"];
+            isOneToOne: false;
+            referencedRelation: "company_offerings";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_offering_versions_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_offering_versions_profile_version_id_fkey";
+            columns: ["profile_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_offering_versions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      company_offerings: {
+        Row: {
+          archived_at: string | null;
+          company_profile_id: string;
+          created_at: string;
+          id: string;
+          stable_key: string;
+          workspace_id: string;
+        };
+        Insert: {
+          archived_at?: string | null;
+          company_profile_id: string;
+          created_at?: string;
+          id?: string;
+          stable_key: string;
+          workspace_id: string;
+        };
+        Update: {
+          archived_at?: string | null;
+          company_profile_id?: string;
+          created_at?: string;
+          id?: string;
+          stable_key?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_offerings_company_profile_id_fkey";
+            columns: ["company_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_offerings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      company_profile_drafts: {
+        Row: {
+          base_version_id: string | null;
+          company_profile_id: string;
+          compiled_snapshot_hash: string | null;
+          compiled_snapshot_json: Json;
+          contract_version: string;
+          created_at: string;
+          created_by_run_id: string | null;
+          created_by_user_id: string | null;
+          id: string;
+          input_hash: string;
+          source_set_hash: string | null;
+          state: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          base_version_id?: string | null;
+          company_profile_id: string;
+          compiled_snapshot_hash?: string | null;
+          compiled_snapshot_json?: Json;
+          contract_version?: string;
+          created_at?: string;
+          created_by_run_id?: string | null;
+          created_by_user_id?: string | null;
+          id?: string;
+          input_hash: string;
+          source_set_hash?: string | null;
+          state?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          base_version_id?: string | null;
+          company_profile_id?: string;
+          compiled_snapshot_hash?: string | null;
+          compiled_snapshot_json?: Json;
+          contract_version?: string;
+          created_at?: string;
+          created_by_run_id?: string | null;
+          created_by_user_id?: string | null;
+          id?: string;
+          input_hash?: string;
+          source_set_hash?: string | null;
+          state?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "company_profile_drafts_base_version_id_fkey";
+            columns: ["base_version_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_profile_drafts_company_profile_id_fkey";
+            columns: ["company_profile_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profiles";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "company_profile_drafts_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -1777,6 +2277,7 @@ export type Database = {
       company_profiles: {
         Row: {
           created_at: string;
+          current_v3_draft_id: string | null;
           current_version_id: string | null;
           id: string;
           updated_at: string;
@@ -1784,6 +2285,7 @@ export type Database = {
         };
         Insert: {
           created_at?: string;
+          current_v3_draft_id?: string | null;
           current_version_id?: string | null;
           id?: string;
           updated_at?: string;
@@ -1791,12 +2293,20 @@ export type Database = {
         };
         Update: {
           created_at?: string;
+          current_v3_draft_id?: string | null;
           current_version_id?: string | null;
           id?: string;
           updated_at?: string;
           workspace_id?: string;
         };
         Relationships: [
+          {
+            foreignKeyName: "company_profiles_current_v3_draft_id_fkey";
+            columns: ["current_v3_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
           {
             foreignKeyName: "company_profiles_current_version_fk";
             columns: ["current_version_id"];
@@ -3309,6 +3819,222 @@ export type Database = {
           },
         ];
       };
+      profile_change_events: {
+        Row: {
+          actor_type: string;
+          actor_user_id: string | null;
+          affected_paths: string[];
+          created_at: string;
+          details_json: Json;
+          event_type: string;
+          id: string;
+          profile_draft_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor_type: string;
+          actor_user_id?: string | null;
+          affected_paths?: string[];
+          created_at?: string;
+          details_json?: Json;
+          event_type: string;
+          id?: string;
+          profile_draft_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor_type?: string;
+          actor_user_id?: string | null;
+          affected_paths?: string[];
+          created_at?: string;
+          details_json?: Json;
+          event_type?: string;
+          id?: string;
+          profile_draft_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profile_change_events_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profile_change_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      profile_clarification_questions: {
+        Row: {
+          affected_paths: string[];
+          answer_json: Json | null;
+          answer_type: string;
+          category: string;
+          created_at: string;
+          explanation: string;
+          id: string;
+          impact: string;
+          options_json: Json;
+          profile_draft_id: string;
+          question: string;
+          question_key: string;
+          skip_allowed: boolean;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          affected_paths?: string[];
+          answer_json?: Json | null;
+          answer_type: string;
+          category: string;
+          created_at?: string;
+          explanation: string;
+          id?: string;
+          impact: string;
+          options_json?: Json;
+          profile_draft_id: string;
+          question: string;
+          question_key: string;
+          skip_allowed?: boolean;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          affected_paths?: string[];
+          answer_json?: Json | null;
+          answer_type?: string;
+          category?: string;
+          created_at?: string;
+          explanation?: string;
+          id?: string;
+          impact?: string;
+          options_json?: Json;
+          profile_draft_id?: string;
+          question?: string;
+          question_key?: string;
+          skip_allowed?: boolean;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profile_clarification_questions_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profile_clarification_questions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      profile_task_runs: {
+        Row: {
+          ai_request_ids: string[];
+          attempt_count: number;
+          completed_at: string | null;
+          context_compiler_version: string;
+          contract_version: string;
+          created_at: string;
+          error_code: string | null;
+          error_message: string | null;
+          id: string;
+          idempotency_key: string;
+          input_hash: string;
+          output_hash: string | null;
+          output_json: Json | null;
+          profile_draft_id: string;
+          prompt_version: string;
+          schema_version: string;
+          started_at: string | null;
+          status: string;
+          task_id: string;
+          trigger_run_id: string | null;
+          updated_at: string;
+          warnings_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          ai_request_ids?: string[];
+          attempt_count?: number;
+          completed_at?: string | null;
+          context_compiler_version: string;
+          contract_version: string;
+          created_at?: string;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          idempotency_key: string;
+          input_hash: string;
+          output_hash?: string | null;
+          output_json?: Json | null;
+          profile_draft_id: string;
+          prompt_version: string;
+          schema_version: string;
+          started_at?: string | null;
+          status?: string;
+          task_id: string;
+          trigger_run_id?: string | null;
+          updated_at?: string;
+          warnings_json?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          ai_request_ids?: string[];
+          attempt_count?: number;
+          completed_at?: string | null;
+          context_compiler_version?: string;
+          contract_version?: string;
+          created_at?: string;
+          error_code?: string | null;
+          error_message?: string | null;
+          id?: string;
+          idempotency_key?: string;
+          input_hash?: string;
+          output_hash?: string | null;
+          output_json?: Json | null;
+          profile_draft_id?: string;
+          prompt_version?: string;
+          schema_version?: string;
+          started_at?: string | null;
+          status?: string;
+          task_id?: string;
+          trigger_run_id?: string | null;
+          updated_at?: string;
+          warnings_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "profile_task_runs_profile_draft_id_fkey";
+            columns: ["profile_draft_id"];
+            isOneToOne: false;
+            referencedRelation: "company_profile_drafts";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "profile_task_runs_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       profiles: {
         Row: {
           created_at: string;
@@ -4221,6 +4947,37 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "campaign_runs";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      create_company_profile_v3_draft: {
+        Args: {
+          target_base_version_id: string;
+          target_created_by?: string;
+          target_input_hash: string;
+          target_snapshot: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          base_version_id: string | null;
+          company_profile_id: string;
+          compiled_snapshot_hash: string | null;
+          compiled_snapshot_json: Json;
+          contract_version: string;
+          created_at: string;
+          created_by_run_id: string | null;
+          created_by_user_id: string | null;
+          id: string;
+          input_hash: string;
+          source_set_hash: string | null;
+          state: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "company_profile_drafts";
           isOneToOne: true;
           isSetofReturn: false;
         };

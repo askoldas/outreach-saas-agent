@@ -20,7 +20,7 @@ behavior and deterministic tests are implemented.
 | WP-01 — Workflow version and feature-flag foundation     | complete    | Append-only versioning/rollout migration, typed flags, workspace settings, immutable run versions, and version-aware dispatch added. |
 | WP-02 — Intelligence contract primitives                 | complete    | Strict evidence, claim, rule, memory, envelope, schema/task registry contracts and append-only registry migration added.             |
 | WP-03 — Evidence and claim persistence                   | complete    | Append-only evidence/claim persistence, atomic links, conflicts, source guards, tenant repositories, RLS, and tests added.           |
-| WP-04 — Company Intelligence V3 contracts and V1 adapter | not_started | Profile V3 and compatibility draft adapter remain.                                                                                   |
+| WP-04 — Company Intelligence V3 contracts and V1 adapter | complete    | V3 identity, business model, offerings, mechanics, buyer logic, rules, readiness, and reviewed V2 draft adapter added.               |
 | WP-05 — Company Intelligence V3 workflow                 | not_started | Staged profile tasks and audit workflow remain.                                                                                      |
 | WP-06 — Company Profile V3 UI                            | not_started | V3 review and publish UI remain.                                                                                                     |
 | WP-07 — Campaign Strategy V2 contracts                   | not_started | Objective, archetype, rubric, source-plan, and segment contracts remain.                                                             |
@@ -65,7 +65,7 @@ behavior and deterministic tests are implemented.
 
 ## Checks actually run
 
-- `corepack pnpm test` — 261 passed, 0 failed after WP-03.
+- `corepack pnpm test` — 268 passed, 0 failed after WP-04.
 - `corepack pnpm typecheck` — passed.
 - `corepack pnpm lint` — passed.
 - `corepack pnpm format:check` — passed.
@@ -88,8 +88,22 @@ behavior and deterministic tests are implemented.
 - Database pgTAP coverage was expanded but requires the migration in a local Supabase
   test database to execute.
 
+## WP-04 delivery record
+
+- Runtime contracts:
+  `src/lib/intelligence/company-profile-v3/`
+- Active offerings require coherent commercial mechanics and at least one relationship
+  hypothesis. Priority buyer archetypes require an explicit compatibility rationale.
+- Company Profile rules are restricted to workspace or offering scope, and all offering
+  records are bound to the frozen profile version.
+- Readiness uses the documented publish gate. Missing optional details produce warnings
+  rather than artificial blockers.
+- The V2 adapter produces only a review-required V3 draft. Legacy values remain
+  provisional, have low confidence, carry no invented evidence, and cannot be
+  published without user review.
+- Supabase types were regenerated successfully after WP-03 was applied.
+
 ## Next package entry point
 
-Begin WP-04 with the Company Intelligence V3 schema, readiness logic, commercial
-mechanics, buyer logic, and a V1-to-V3 draft adapter. Provider calls remain outside
-that package.
+Begin WP-05 with staged Company Intelligence tasks, prompt contracts, Trigger.dev
+parent/child orchestration, draft persistence, idempotency, AI audit, and fixtures.

@@ -1050,8 +1050,8 @@ export type Database = {
           companies_evaluated: number;
           companies_qualified: number;
           completed_at: string | null;
-          contract_versions: Json;
           contacts_found: number;
+          contract_versions: Json;
           created_at: string;
           currency: string;
           current_iteration: number;
@@ -1089,8 +1089,8 @@ export type Database = {
           companies_evaluated?: number;
           companies_qualified?: number;
           completed_at?: string | null;
-          contract_versions?: Json;
           contacts_found?: number;
+          contract_versions?: Json;
           created_at?: string;
           currency?: string;
           current_iteration?: number;
@@ -1128,8 +1128,8 @@ export type Database = {
           companies_evaluated?: number;
           companies_qualified?: number;
           completed_at?: string | null;
-          contract_versions?: Json;
           contacts_found?: number;
+          contract_versions?: Json;
           created_at?: string;
           currency?: string;
           current_iteration?: number;
@@ -1433,6 +1433,132 @@ export type Database = {
           },
           {
             foreignKeyName: "candidate_classifications_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      claim_conflicts: {
+        Row: {
+          claim_key: string;
+          created_at: string;
+          first_claim_id: string;
+          id: string;
+          resolution: string | null;
+          resolved_at: string | null;
+          resolved_by_user_id: string | null;
+          second_claim_id: string;
+          status: string;
+          subject_id: string;
+          subject_type: string;
+          winning_claim_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          claim_key: string;
+          created_at?: string;
+          first_claim_id: string;
+          id?: string;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolved_by_user_id?: string | null;
+          second_claim_id: string;
+          status?: string;
+          subject_id: string;
+          subject_type: string;
+          winning_claim_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          claim_key?: string;
+          created_at?: string;
+          first_claim_id?: string;
+          id?: string;
+          resolution?: string | null;
+          resolved_at?: string | null;
+          resolved_by_user_id?: string | null;
+          second_claim_id?: string;
+          status?: string;
+          subject_id?: string;
+          subject_type?: string;
+          winning_claim_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claim_conflicts_first_claim_id_fkey";
+            columns: ["first_claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "claim_conflicts_second_claim_id_fkey";
+            columns: ["second_claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "claim_conflicts_winning_claim_id_fkey";
+            columns: ["winning_claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "claim_conflicts_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      claim_evidence_links: {
+        Row: {
+          claim_id: string;
+          created_at: string;
+          evidence_id: string;
+          stance: string;
+          weight: number | null;
+          workspace_id: string;
+        };
+        Insert: {
+          claim_id: string;
+          created_at?: string;
+          evidence_id: string;
+          stance: string;
+          weight?: number | null;
+          workspace_id: string;
+        };
+        Update: {
+          claim_id?: string;
+          created_at?: string;
+          evidence_id?: string;
+          stance?: string;
+          weight?: number | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "claim_evidence_links_claim_id_fkey";
+            columns: ["claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "claim_evidence_links_evidence_id_fkey";
+            columns: ["evidence_id"];
+            isOneToOne: false;
+            referencedRelation: "evidence_items";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "claim_evidence_links_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -2641,6 +2767,104 @@ export type Database = {
           },
         ];
       };
+      evidence_items: {
+        Row: {
+          company_source_id: string | null;
+          content_hash: string;
+          created_at: string;
+          directness: string;
+          document_chunk_id: string | null;
+          evidence_type: string;
+          excerpt: string | null;
+          freshness_state: string;
+          id: string;
+          location_json: Json;
+          manual_source_label: string | null;
+          observed_at: string | null;
+          provider_execution_id: string | null;
+          retrieved_at: string;
+          source_reliability: string;
+          structured_value_json: Json | null;
+          subject_id: string;
+          subject_type: string;
+          visibility: string;
+          workspace_id: string;
+        };
+        Insert: {
+          company_source_id?: string | null;
+          content_hash: string;
+          created_at?: string;
+          directness: string;
+          document_chunk_id?: string | null;
+          evidence_type: string;
+          excerpt?: string | null;
+          freshness_state: string;
+          id?: string;
+          location_json?: Json;
+          manual_source_label?: string | null;
+          observed_at?: string | null;
+          provider_execution_id?: string | null;
+          retrieved_at: string;
+          source_reliability: string;
+          structured_value_json?: Json | null;
+          subject_id: string;
+          subject_type: string;
+          visibility?: string;
+          workspace_id: string;
+        };
+        Update: {
+          company_source_id?: string | null;
+          content_hash?: string;
+          created_at?: string;
+          directness?: string;
+          document_chunk_id?: string | null;
+          evidence_type?: string;
+          excerpt?: string | null;
+          freshness_state?: string;
+          id?: string;
+          location_json?: Json;
+          manual_source_label?: string | null;
+          observed_at?: string | null;
+          provider_execution_id?: string | null;
+          retrieved_at?: string;
+          source_reliability?: string;
+          structured_value_json?: Json | null;
+          subject_id?: string;
+          subject_type?: string;
+          visibility?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "evidence_items_company_source_id_fkey";
+            columns: ["company_source_id"];
+            isOneToOne: false;
+            referencedRelation: "company_sources";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "evidence_items_document_chunk_id_fkey";
+            columns: ["document_chunk_id"];
+            isOneToOne: false;
+            referencedRelation: "document_chunks";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "evidence_items_provider_execution_id_fkey";
+            columns: ["provider_execution_id"];
+            isOneToOne: false;
+            referencedRelation: "provider_executions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "evidence_items_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       export_records: {
         Row: {
           campaign_id: string;
@@ -2701,6 +2925,114 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      intelligence_claims: {
+        Row: {
+          claim_key: string;
+          concise_rationale: string | null;
+          confidence: number;
+          created_at: string;
+          epistemic_status: string;
+          field_path: string;
+          id: string;
+          lifecycle_status: string;
+          origin_id: string | null;
+          origin_type: string;
+          statement: string;
+          subject_id: string;
+          subject_type: string;
+          supersedes_claim_id: string | null;
+          valid_from: string | null;
+          valid_to: string | null;
+          value_json: Json | null;
+          workspace_id: string;
+        };
+        Insert: {
+          claim_key: string;
+          concise_rationale?: string | null;
+          confidence: number;
+          created_at?: string;
+          epistemic_status: string;
+          field_path: string;
+          id?: string;
+          lifecycle_status?: string;
+          origin_id?: string | null;
+          origin_type: string;
+          statement: string;
+          subject_id: string;
+          subject_type: string;
+          supersedes_claim_id?: string | null;
+          valid_from?: string | null;
+          valid_to?: string | null;
+          value_json?: Json | null;
+          workspace_id: string;
+        };
+        Update: {
+          claim_key?: string;
+          concise_rationale?: string | null;
+          confidence?: number;
+          created_at?: string;
+          epistemic_status?: string;
+          field_path?: string;
+          id?: string;
+          lifecycle_status?: string;
+          origin_id?: string | null;
+          origin_type?: string;
+          statement?: string;
+          subject_id?: string;
+          subject_type?: string;
+          supersedes_claim_id?: string | null;
+          valid_from?: string | null;
+          valid_to?: string | null;
+          value_json?: Json | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_claims_supersedes_claim_id_fkey";
+            columns: ["supersedes_claim_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_claims";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "intelligence_claims_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      intelligence_contracts: {
+        Row: {
+          content_hash: string;
+          contract_key: string;
+          created_at: string;
+          id: string;
+          json_schema: Json;
+          status: string;
+          version: string;
+        };
+        Insert: {
+          content_hash: string;
+          contract_key: string;
+          created_at?: string;
+          id?: string;
+          json_schema?: Json;
+          status?: string;
+          version: string;
+        };
+        Update: {
+          content_hash?: string;
+          contract_key?: string;
+          created_at?: string;
+          id?: string;
+          json_schema?: Json;
+          status?: string;
+          version?: string;
+        };
+        Relationships: [];
       };
       market_analyses: {
         Row: {
@@ -2998,6 +3330,83 @@ export type Database = {
           id?: string;
           locale?: string;
           updated_at?: string;
+        };
+        Relationships: [];
+      };
+      prompt_versions: {
+        Row: {
+          change_notes: string | null;
+          content_hash: string;
+          contract_id: string;
+          created_at: string;
+          id: string;
+          prompt_key: string;
+          role: string;
+          status: string;
+          system_template: string;
+          user_template: string;
+          version: string;
+        };
+        Insert: {
+          change_notes?: string | null;
+          content_hash: string;
+          contract_id: string;
+          created_at?: string;
+          id?: string;
+          prompt_key: string;
+          role: string;
+          status?: string;
+          system_template: string;
+          user_template: string;
+          version: string;
+        };
+        Update: {
+          change_notes?: string | null;
+          content_hash?: string;
+          contract_id?: string;
+          created_at?: string;
+          id?: string;
+          prompt_key?: string;
+          role?: string;
+          status?: string;
+          system_template?: string;
+          user_template?: string;
+          version?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "prompt_versions_contract_id_fkey";
+            columns: ["contract_id"];
+            isOneToOne: false;
+            referencedRelation: "intelligence_contracts";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      provider_adapters: {
+        Row: {
+          adapter_version: string;
+          configuration_schema: Json;
+          created_at: string;
+          id: string;
+          provider_key: string;
+          status: string;
+        };
+        Insert: {
+          adapter_version: string;
+          configuration_schema?: Json;
+          created_at?: string;
+          id?: string;
+          provider_key: string;
+          status?: string;
+        };
+        Update: {
+          adapter_version?: string;
+          configuration_schema?: Json;
+          created_at?: string;
+          id?: string;
+          provider_key?: string;
+          status?: string;
         };
         Relationships: [];
       };
@@ -3329,6 +3738,39 @@ export type Database = {
           },
         ];
       };
+      scoring_versions: {
+        Row: {
+          confidence_policy_json: Json;
+          content_hash: string;
+          created_at: string;
+          formula_json: Json;
+          id: string;
+          lane_policy_json: Json;
+          status: string;
+          version: string;
+        };
+        Insert: {
+          confidence_policy_json: Json;
+          content_hash: string;
+          created_at?: string;
+          formula_json: Json;
+          id?: string;
+          lane_policy_json: Json;
+          status?: string;
+          version: string;
+        };
+        Update: {
+          confidence_policy_json?: Json;
+          content_hash?: string;
+          created_at?: string;
+          formula_json?: Json;
+          id?: string;
+          lane_policy_json?: Json;
+          status?: string;
+          version?: string;
+        };
+        Relationships: [];
+      };
       sequence_steps: {
         Row: {
           delay_hours: number;
@@ -3479,6 +3921,77 @@ export type Database = {
           },
         ];
       };
+      workflow_versions: {
+        Row: {
+          change_notes: string | null;
+          created_at: string;
+          id: string;
+          status: string;
+          version: string;
+          workflow_family: string;
+        };
+        Insert: {
+          change_notes?: string | null;
+          created_at?: string;
+          id?: string;
+          status?: string;
+          version: string;
+          workflow_family: string;
+        };
+        Update: {
+          change_notes?: string | null;
+          created_at?: string;
+          id?: string;
+          status?: string;
+          version?: string;
+          workflow_family?: string;
+        };
+        Relationships: [];
+      };
+      workspace_intelligence_settings: {
+        Row: {
+          campaign_workflow: string;
+          created_at: string;
+          enabled_providers: string[];
+          profile_version: string;
+          result_write_mode: string;
+          shadow_mode: boolean;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_workflow?: string;
+          created_at?: string;
+          enabled_providers?: string[];
+          profile_version?: string;
+          result_write_mode?: string;
+          shadow_mode?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_workflow?: string;
+          created_at?: string;
+          enabled_providers?: string[];
+          profile_version?: string;
+          result_write_mode?: string;
+          shadow_mode?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_intelligence_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       workspace_members: {
         Row: {
           created_at: string;
@@ -3570,50 +4083,6 @@ export type Database = {
           },
         ];
       };
-      workspace_intelligence_settings: {
-        Row: {
-          campaign_workflow: string;
-          created_at: string;
-          enabled_providers: string[];
-          profile_version: string;
-          result_write_mode: string;
-          shadow_mode: boolean;
-          updated_at: string;
-          updated_by: string | null;
-          workspace_id: string;
-        };
-        Insert: {
-          campaign_workflow?: string;
-          created_at?: string;
-          enabled_providers?: string[];
-          profile_version?: string;
-          result_write_mode?: string;
-          shadow_mode?: boolean;
-          updated_at?: string;
-          updated_by?: string | null;
-          workspace_id: string;
-        };
-        Update: {
-          campaign_workflow?: string;
-          created_at?: string;
-          enabled_providers?: string[];
-          profile_version?: string;
-          result_write_mode?: string;
-          shadow_mode?: boolean;
-          updated_at?: string;
-          updated_by?: string | null;
-          workspace_id?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "workspace_intelligence_settings_workspace_id_fkey";
-            columns: ["workspace_id"];
-            isOneToOne: true;
-            referencedRelation: "workspaces";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
       workspaces: {
         Row: {
           created_at: string;
@@ -3682,6 +4151,7 @@ export type Database = {
           id: string;
           industries: string[];
           initial_target_description: string;
+          intelligence_version: string;
           name: string;
           objective: string;
           outreach_enabled: boolean;
@@ -3693,6 +4163,7 @@ export type Database = {
           target_geography: string;
           target_volume: number;
           updated_at: string;
+          workflow_version: string;
           workspace_id: string;
         };
         SetofOptions: {
@@ -3719,6 +4190,7 @@ export type Database = {
           companies_qualified: number;
           completed_at: string | null;
           contacts_found: number;
+          contract_versions: Json;
           created_at: string;
           currency: string;
           current_iteration: number;
@@ -3743,6 +4215,7 @@ export type Database = {
           total_cost: number | null;
           trigger_run_id: string | null;
           updated_at: string;
+          workflow_version: string;
           workspace_id: string;
         };
         SetofOptions: {
@@ -3751,6 +4224,26 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      create_intelligence_claim_with_evidence: {
+        Args: {
+          evidence_links: Json;
+          target_claim_id: string;
+          target_claim_key: string;
+          target_concise_rationale: string;
+          target_confidence: number;
+          target_epistemic_status: string;
+          target_field_path: string;
+          target_origin_id: string;
+          target_origin_type: string;
+          target_statement: string;
+          target_subject_id: string;
+          target_subject_type: string;
+          target_supersedes_claim_id: string;
+          target_value_json: Json;
+          target_workspace_id: string;
+        };
+        Returns: string;
       };
       create_workspace: {
         Args: { workspace_name: string; workspace_website_url?: string };
@@ -3820,6 +4313,7 @@ export type Database = {
           created_by: string | null;
           extracted_facts: Json;
           id: string;
+          intelligence_version: string;
           profile_status: string;
           provenance: string;
           readiness_score: number;
@@ -3880,6 +4374,7 @@ export type Database = {
           created_by: string | null;
           extracted_facts: Json;
           id: string;
+          intelligence_version: string;
           profile_status: string;
           provenance: string;
           readiness_score: number;

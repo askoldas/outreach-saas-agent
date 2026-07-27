@@ -29,7 +29,7 @@ behavior and deterministic tests are implemented.
 | WP-10 — Scoped memory V2                                 | complete    | Unified scoped memory, deterministic applicability and precedence, frozen Campaign snapshots, application audit, corrections, conflicts, and controlled promotion added.                      |
 | WP-11 — Discovery provider contracts                     | complete    | Strict provider interface and capabilities, central registry, deterministic capability router, immutable raw ingestion, normalized candidates, deduplication, and tests added.                |
 | WP-12 — WebSearchProvider                                | complete    | Registered WebSearchProvider, deterministic semantic/localized query generation, Tavily transport use, bounded parallel execution, raw normalization, source classification, and tests added. |
-| WP-13 — Semantic discovery plan and coverage             | not_started | Segment runs, coverage, gap analysis, and stopping policy remain.                                                                                                                             |
+| WP-13 — Semantic discovery plan and coverage             | complete    | Confirmed-strategy planning, frozen provider routes/capabilities, durable runs/query audit, explicit progress counters, metric coverage, gap actions, and stopping decisions added.           |
 | WP-14 — Organization graph and entity resolution         | not_started | Graph, conservative matching, reversible merge/split, and fixtures remain.                                                                                                                    |
 | WP-15 — Candidate research and reusable intelligence     | not_started | Research plan, claims, freshness, and reusable versions remain.                                                                                                                               |
 | WP-16 — Qualification V2 factor engine                   | not_started | Relationship-first evaluation, exclusions, deterministic scoring, confidence, traces, and lanes remain.                                                                                       |
@@ -273,7 +273,31 @@ behavior and deterministic tests are implemented.
 - WP-12 requires no database migration and does not yet alter the active V1 Trigger
   workflow. Durable query rows and semantic coverage execution begin in WP-13.
 
+## WP-13 delivery record
+
+- Confirmed Campaign Strategy, Campaign Memory, semantic segments, provider routes,
+  exact capability declarations, coverage policy, stopping policy, and budgets compile
+  into one deterministic immutable Discovery Plan.
+- Migration 11 adds Discovery Plans, segments, source plans, runs, Segment Runs, durable
+  query audit, coverage snapshots, gaps, gap actions, and usage events. Tenant guards
+  bind every child to the same workspace, Campaign, plan, and Segment Run.
+- One progress-counter vocabulary now distinguishes provider records, normalized
+  candidates, candidate groups, canonical organizations, research/evaluation states,
+  recommendation lanes, invalid entities, and duplicates. These are not collapsed into
+  an ambiguous “leads” count.
+- Coverage confidence is derived from query-family coverage, local-language attempts,
+  source diversity, identity quality, and unique yield. It cannot be supplied as an
+  unsupported model opinion.
+- Gap analysis selects bounded actions for specific language, source-diversity,
+  archetype, yield, or provider gaps. A new pass requires at least one material,
+  actionable, non-generic gap with remaining budget.
+- Stopping prioritizes user state, requested volume, budget, deadline, provider
+  viability, evidence-based coverage, exhaustion, and marginal yield. Maximum passes
+  remain only a safety ceiling, not the workflow goal.
+- WP-13 persists coverage, gaps, actions, and the continuation decision atomically but
+  does not activate the V2 Trigger workflow; orchestration remains WP-18.
+
 ## Next package entry point
 
-Begin WP-13 with semantic discovery planning and coverage. V1 remains the default path until its successor
+Begin WP-14 with organization graph and entity resolution. V1 remains the default path until its successor
 packages are complete and the V2 rollout is explicitly enabled.

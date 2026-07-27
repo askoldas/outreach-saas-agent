@@ -1,0 +1,117 @@
+import { z } from "zod";
+import type { DiscoveryCoverageCell } from "./coverage.ts";
+import type { DiscoveryGap } from "./gaps.ts";
+
+export const discoveryContinuationDecisionSchema = z
+  .object({
+    decision: z.enum(["continue", "stop", "pause", "request_user_input"]),
+    reasonCode: z.enum([
+      "target_reached",
+      "coverage_sufficient",
+      "budget_exhausted",
+      "deadline_reached",
+      "user_stopped",
+      "fatal_provider_failure",
+      "marginal_yield_low",
+      "market_exhausted",
+      "no_actionable_gaps",
+      "safety_pass_ceiling",
+      "actionable_gap",
+      "strategy_ambiguity",
+    ]),
+    rationale: z.string().min(1),
+    selectedGapIds: z.array(z.string()),
+    selectedActions: z.array(z.string()),
+  })
+  .strict();
+
+export type DiscoveryContinuationDecision = z.infer<
+  typeof discoveryContinuationDecisionSchema
+>;
+
+export function decideDiscoveryContinuation(input: {
+  cells: DiscoveryCoverageCell[];
+  gaps: DiscoveryGap[];
+  requestedCandidateCount: number;
+  currentCandidateCount: number;
+  remainingCalls: number;
+  deadlineReached: boolean;
+  userState: "running" | "paused" | "cancelled";
+  fatalProviderFailure: boolean;
+  passNumber: number;
+  maximumPasses: number;
+  consecutiveLowYieldPasses: number;
+  maximumConsecutiveLowYieldPasses: number;
+}) {
+  const stop = (
+    reasonCode: DiscoveryContinuationDecision["reasonCode"],
+    rationale: string,
+  ) =>
+    discoveryContinuationDecisionSchema.parse({
+      decision: "stop",
+      reasonCode,
+      rationale,
+      selectedGapIds: [],
+      selectedActions: [],
+    });
+  if (input.userState === "paused") {
+    return discoveryContinuationDecisionSchema.parse({
+      decision: "pause",
+      reasonCode: "user_stopped",
+      rationale: "The user paused discovery.",
+      selectedGapIds: [],
+      selectedActions: [],
+    });
+  }
+  if (input.userState === "cancelled")
+    return stop("user_stopped", "The user cancelled discovery.");
+  if (input.currentCandidateCount >= input.requestedCandidateCount)
+    return stop("target_reached", "The requested candidate volume has been reached.");
+  if (input.remainingCalls <= 0)
+    return stop("budget_exhausted", "The provider-call budget is exhausted.");
+  if (input.deadlineReached)
+    return stop("deadline_reached", "The discovery deadline has been reached.");
+  if (input.fatalProviderFailure)
+    return stop("fatal_provider_failure", "No productive provider route remains.");
+  if (input.passNumber >= input.maximumPasses)
+    return stop("safety_pass_ceiling", "The configured safety pass ceiling was reached.");
+  if (input.cells.length && input.cells.every(({ status }) => status === "sufficient"))
+    return stop(
+      "coverage_sufficient",
+      "All discovery segments have sufficient coverage.",
+    );
+  if (
+    input.cells.length &&
+    input.cells.every(({ status }) => ["sufficient", "exhausted"].includes(status))
+  )
+    return stop("market_exhausted", "Every segment is sufficient or exhausted.");
+  if (input.consecutiveLowYieldPasses >= input.maximumConsecutiveLowYieldPasses)
+    return stop(
+      "marginal_yield_low",
+      "Marginal unique yield remained low across the configured window.",
+    );
+  const actionable = input.gaps.filter(
+    (gap) => gap.status === "open" && gap.recommendedActions.length > 0,
+  );
+  const ambiguity = actionable.find(({ type }) => type === "strategy_ambiguity");
+  if (ambiguity) {
+    return discoveryContinuationDecisionSchema.parse({
+      decision: "request_user_input",
+      reasonCode: "strategy_ambiguity",
+      rationale: ambiguity.description,
+      selectedGapIds: [ambiguity.id],
+      selectedActions: ambiguity.recommendedActions.map(({ type }) => type),
+    });
+  }
+  if (!actionable.length)
+    return stop("no_actionable_gaps", "No material gap has a concrete next action.");
+  return discoveryContinuationDecisionSchema.parse({
+    decision: "continue",
+    reasonCode: "actionable_gap",
+    rationale: "A material coverage gap has a bounded non-duplicate action.",
+    selectedGapIds: actionable.map(({ id }) => id),
+    selectedActions: actionable.flatMap(({ recommendedActions }) =>
+      recommendedActions.map(({ type }) => type),
+    ),
+  });
+}

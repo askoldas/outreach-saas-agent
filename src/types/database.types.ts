@@ -2573,6 +2573,306 @@ export type Database = {
           },
         ];
       };
+      candidate_confidence_calculations: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          caps_json: Json;
+          components_json: Json;
+          created_at: string;
+          id: string;
+          overall_confidence: number;
+          policy_version: string;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          caps_json?: Json;
+          components_json: Json;
+          created_at?: string;
+          id?: string;
+          overall_confidence: number;
+          policy_version: string;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          caps_json?: Json;
+          components_json?: Json;
+          created_at?: string;
+          id?: string;
+          overall_confidence?: number;
+          policy_version?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_confidence_calculat_candidate_evaluation_version_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: true;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_confidence_calculations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_eligibility_decisions: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          created_at: string;
+          decided_by: string;
+          eligibility: string;
+          id: string;
+          reason_code: string;
+          reason_text: string;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          created_at?: string;
+          decided_by?: string;
+          eligibility: string;
+          id?: string;
+          reason_code: string;
+          reason_text: string;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          created_at?: string;
+          decided_by?: string;
+          eligibility?: string;
+          id?: string;
+          reason_code?: string;
+          reason_text?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_eligibility_decisio_candidate_evaluation_version_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: true;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_eligibility_decisions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_evaluation_versions: {
+        Row: {
+          campaign_candidate_id: string;
+          campaign_strategy_version_id: string;
+          candidate_intelligence_version_id: string;
+          compiled_snapshot_json: Json;
+          content_hash: string;
+          created_at: string;
+          finalized_at: string | null;
+          id: string;
+          qualification_rubric_id: string;
+          status: string;
+          version_number: number;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_candidate_id: string;
+          campaign_strategy_version_id: string;
+          candidate_intelligence_version_id: string;
+          compiled_snapshot_json: Json;
+          content_hash: string;
+          created_at?: string;
+          finalized_at?: string | null;
+          id?: string;
+          qualification_rubric_id: string;
+          status?: string;
+          version_number: number;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_candidate_id?: string;
+          campaign_strategy_version_id?: string;
+          candidate_intelligence_version_id?: string;
+          compiled_snapshot_json?: Json;
+          content_hash?: string;
+          created_at?: string;
+          finalized_at?: string | null;
+          id?: string;
+          qualification_rubric_id?: string;
+          status?: string;
+          version_number?: number;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_evaluation_versions_campaign_candidate_id_fkey";
+            columns: ["campaign_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_evaluation_versions_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_evaluation_versions_candidate_intelligence_versi_fkey";
+            columns: ["candidate_intelligence_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_intelligence_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_evaluation_versions_qualification_rubric_id_fkey";
+            columns: ["qualification_rubric_id"];
+            isOneToOne: false;
+            referencedRelation: "qualification_rubrics";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_evaluation_versions_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_exclusion_assessments: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          confidence: number;
+          created_at: string;
+          effect: string;
+          evidence_ids_json: Json;
+          id: string;
+          reason: string;
+          rule_key: string;
+          state: string;
+          strength: string;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          confidence: number;
+          created_at?: string;
+          effect: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          reason: string;
+          rule_key: string;
+          state: string;
+          strength: string;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          confidence?: number;
+          created_at?: string;
+          effect?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          reason?: string;
+          rule_key?: string;
+          state?: string;
+          strength?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_exclusion_assessmen_candidate_evaluation_version_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_exclusion_assessments_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_factor_evaluations: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          confidence: number;
+          counter_evidence_ids_json: Json;
+          created_at: string;
+          critical_gate_state: string | null;
+          evidence_ids_json: Json;
+          evidence_quality: number;
+          explanation: string;
+          factor_key: string;
+          id: string;
+          potential_value: number | null;
+          signed_value: number | null;
+          state: string;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          confidence: number;
+          counter_evidence_ids_json?: Json;
+          created_at?: string;
+          critical_gate_state?: string | null;
+          evidence_ids_json?: Json;
+          evidence_quality: number;
+          explanation: string;
+          factor_key: string;
+          id?: string;
+          potential_value?: number | null;
+          signed_value?: number | null;
+          state: string;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          confidence?: number;
+          counter_evidence_ids_json?: Json;
+          created_at?: string;
+          critical_gate_state?: string | null;
+          evidence_ids_json?: Json;
+          evidence_quality?: number;
+          explanation?: string;
+          factor_key?: string;
+          id?: string;
+          potential_value?: number | null;
+          signed_value?: number | null;
+          state?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_factor_evaluations_candidate_evaluation_version__fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_factor_evaluations_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       candidate_intelligence_versions: {
         Row: {
           claim_ids_json: Json;
@@ -2689,6 +2989,60 @@ export type Database = {
           },
           {
             foreignKeyName: "candidate_page_fetches_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_relationship_assessments: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          confidence: number;
+          created_at: string;
+          decision_basis: string;
+          evidence_ids_json: Json;
+          id: string;
+          primary_relationship: string;
+          secondary_relationships_json: Json;
+          unresolved_questions_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          confidence: number;
+          created_at?: string;
+          decision_basis: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          primary_relationship: string;
+          secondary_relationships_json?: Json;
+          unresolved_questions_json?: Json;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          confidence?: number;
+          created_at?: string;
+          decision_basis?: string;
+          evidence_ids_json?: Json;
+          id?: string;
+          primary_relationship?: string;
+          secondary_relationships_json?: Json;
+          unresolved_questions_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_relationship_assess_candidate_evaluation_version_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: true;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_relationship_assessments_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -2848,6 +3202,102 @@ export type Database = {
           },
           {
             foreignKeyName: "candidate_research_tasks_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_review_lane_assignments: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          created_at: string;
+          id: string;
+          lane: string;
+          reason: string;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          created_at?: string;
+          id?: string;
+          lane: string;
+          reason: string;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          created_at?: string;
+          id?: string;
+          lane?: string;
+          reason?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_review_lane_assignm_candidate_evaluation_version_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: true;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_review_lane_assignments_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_score_calculations: {
+        Row: {
+          candidate_evaluation_version_id: string;
+          created_at: string;
+          denominator: number;
+          id: string;
+          policy_version: string;
+          raw_weighted_mean: number | null;
+          score: number | null;
+          score_type: string;
+          trace_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_evaluation_version_id: string;
+          created_at?: string;
+          denominator: number;
+          id?: string;
+          policy_version: string;
+          raw_weighted_mean?: number | null;
+          score?: number | null;
+          score_type: string;
+          trace_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_evaluation_version_id?: string;
+          created_at?: string;
+          denominator?: number;
+          id?: string;
+          policy_version?: string;
+          raw_weighted_mean?: number | null;
+          score?: number | null;
+          score_type?: string;
+          trace_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_score_calculations_candidate_evaluation_version__fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_score_calculations_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -7303,6 +7753,63 @@ export type Database = {
           },
           {
             foreignKeyName: "qualification_results_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      qualification_rubrics: {
+        Row: {
+          campaign_strategy_version_id: string;
+          content_hash: string;
+          created_at: string;
+          exclusion_policy_version: string;
+          factor_library_version: string;
+          factors_json: Json;
+          id: string;
+          relationship_classifier_version: string;
+          scoring_policy_version: string;
+          thresholds_json: Json;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_strategy_version_id: string;
+          content_hash: string;
+          created_at?: string;
+          exclusion_policy_version: string;
+          factor_library_version: string;
+          factors_json: Json;
+          id?: string;
+          relationship_classifier_version: string;
+          scoring_policy_version: string;
+          thresholds_json: Json;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_strategy_version_id?: string;
+          content_hash?: string;
+          created_at?: string;
+          exclusion_policy_version?: string;
+          factor_library_version?: string;
+          factors_json?: Json;
+          id?: string;
+          relationship_classifier_version?: string;
+          scoring_policy_version?: string;
+          thresholds_json?: Json;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "qualification_rubrics_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "qualification_rubrics_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";

@@ -33,7 +33,7 @@ behavior and deterministic tests are implemented.
 | WP-14 — Organization graph and entity resolution         | complete    | Canonical graph persistence, deterministic exact matching, explicit ambiguity, buying-authority hypotheses, reversible merge/split RPCs, tenant guards, and regression fixtures added.        |
 | WP-15 — Candidate research and reusable intelligence     | complete    | Question-driven research plans, bounded first-party fetch contracts, evidence reuse/freshness, claim projections, immutable snapshots, campaign scoping, and tests added.                     |
 | WP-16 — Qualification V2 factor engine                   | complete    | Relationship-first evaluation, evidence-gated exclusions, ordered eligibility, versioned factor library, deterministic fit/potential, confidence caps, traces, lanes, and tests added.        |
-| WP-17 — Comparative ranking and consistency checks       | not_started | Ranking persistence, inversion checks, and failure isolation remain.                                                                                                                          |
+| WP-17 — Comparative ranking and consistency checks       | complete    | Lane-first stable ranking, deterministic anomaly checks, constrained comparative assessments, failure isolation, immutable snapshots, audit persistence, and tests added.                     |
 | WP-18 — V2 Campaign Trigger workflow                     | not_started | Versioned V2 parent/children and workflow tests remain.                                                                                                                                       |
 | WP-19 — V2 campaign results UI                           | not_started | Coverage, lanes, factors, corrections, entity review, and accessibility remain.                                                                                                               |
 | WP-20 — Shadow mode and benchmark runner                 | not_started | Synthetic portfolio, comparison runner, report, and no-write shadow mode remain.                                                                                                              |
@@ -354,7 +354,25 @@ behavior and deterministic tests are implemented.
   exclusion, factor, score, confidence, eligibility, and lane audit records.
 - WP-16 does not perform comparative ranking or activate V2 orchestration.
 
+## WP-17 delivery record
+
+- Ranking is lane-first and then lexicographic by fit, potential, confidence, evidence
+  directness, freshness, and stable Candidate ID. Unchanged inputs reproduce the same
+  order and exact overall/within-lane positions.
+- Deterministic checks block impossible finalization states, including recommended
+  exclusions, unresolved gates, null fit, low confidence, unknown factors entering
+  scores, incompatible buyer relationships, merged active candidates, and duplicate
+  buying organizations.
+- Comparative output must contain every batch candidate exactly once, cannot reference
+  candidates outside its batch, and cannot reorder across lanes. It can only flag
+  anomalies and request targeted re-evaluation.
+- Migration 15 persists comparative batches/members, anomalies and resolutions,
+  immutable rank snapshots/entries, evidence-backed explanations, and evaluation
+  events with workspace isolation.
+- An anomaly never edits a deterministic score directly. Material anomalies block the
+  affected batch while other candidates remain independently processable.
+
 ## Next package entry point
 
-Begin WP-17 with comparative ranking and consistency checks. V1 remains the default
+Begin WP-18 with the versioned V2 Trigger.dev campaign workflow. V1 remains the default
 path until its successor packages are complete and the V2 rollout is explicitly enabled.

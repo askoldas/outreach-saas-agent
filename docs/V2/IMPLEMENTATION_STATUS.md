@@ -27,7 +27,7 @@ behavior and deterministic tests are implemented.
 | WP-08 — Campaign Strategy V2 persistence and compiler    | complete    | Deterministic context and strategy compilers, bounded market/strategy task contracts, normalized draft persistence, immutable confirmation, versioning, diffs, and audit added.           |
 | WP-09 — Campaign creation and Strategy V2 UI             | complete    | Rollout-routed geography-first creation, explicit objectives and offerings, campaign-scoped targeting, deterministic draft compilation, review, confirmation, and discovery gating added. |
 | WP-10 — Scoped memory V2                                 | complete    | Unified scoped memory, deterministic applicability and precedence, frozen Campaign snapshots, application audit, corrections, conflicts, and controlled promotion added.                  |
-| WP-11 — Discovery provider contracts                     | not_started | Provider capabilities, registry, router, normalized records, and tests remain.                                                                                                            |
+| WP-11 — Discovery provider contracts                     | complete    | Strict provider interface and capabilities, central registry, deterministic capability router, immutable raw ingestion, normalized candidates, deduplication, and tests added.            |
 | WP-12 — WebSearchProvider                                | not_started | V2 query compilation inside the provider remains.                                                                                                                                         |
 | WP-13 — Semantic discovery plan and coverage             | not_started | Segment runs, coverage, gap analysis, and stopping policy remain.                                                                                                                         |
 | WP-14 — Organization graph and entity resolution         | not_started | Graph, conservative matching, reversible merge/split, and fixtures remain.                                                                                                                |
@@ -236,7 +236,25 @@ behavior and deterministic tests are implemented.
 - Migration 9 requires SQL Editor application and database type regeneration. It does
   not add or change Trigger.dev tasks.
 
+## WP-11 delivery record
+
+- Discovery providers now implement one strict company-discovery interface for
+  capability declaration, estimation, and bounded search. Campaign logic resolves
+  adapters only through the central registry.
+- The deterministic router evaluates only enabled providers, retains every unsupported
+  semantic constraint, fails closed when no provider supports a segment, and orders
+  routes by capability fit, estimated cost, source diversity, and stable provider ID.
+- Provider responses preserve immutable raw records before normalized candidates.
+  Normalization is limited to identity and source hints; strict contracts reject final
+  fit scores and candidates without a retained source record.
+- Migration 10 adds immutable capability snapshots, provider executions, raw source
+  records, normalized candidates, tenant guards, RLS, request idempotency, and atomic
+  response ingestion. Exact duplicates remain as suppressed provenance records linked
+  to the retained record.
+- The existing Tavily adapter and V1 query builder are unchanged. Query generation and
+  the first WebSearchProvider adapter remain WP-12 work.
+
 ## Next package entry point
 
-Begin WP-11 with discovery provider contracts. V1 remains the default path until its successor
+Begin WP-12 with WebSearchProvider. V1 remains the default path until its successor
 packages are complete and the V2 rollout is explicitly enabled.

@@ -19,7 +19,7 @@ behavior and deterministic tests are implemented.
 | WP-00 — Freeze baseline and add documentation            | complete    | Documents 00–10 are tracked under `docs/V2/`; this living record and links from current project documentation were added.            |
 | WP-01 — Workflow version and feature-flag foundation     | complete    | Append-only versioning/rollout migration, typed flags, workspace settings, immutable run versions, and version-aware dispatch added. |
 | WP-02 — Intelligence contract primitives                 | complete    | Strict evidence, claim, rule, memory, envelope, schema/task registry contracts and append-only registry migration added.             |
-| WP-03 — Evidence and claim persistence                   | not_started | Evidence/claim repositories, conflict handling, RLS, and tests remain.                                                               |
+| WP-03 — Evidence and claim persistence                   | complete    | Append-only evidence/claim persistence, atomic links, conflicts, source guards, tenant repositories, RLS, and tests added.           |
 | WP-04 — Company Intelligence V3 contracts and V1 adapter | not_started | Profile V3 and compatibility draft adapter remain.                                                                                   |
 | WP-05 — Company Intelligence V3 workflow                 | not_started | Staged profile tasks and audit workflow remain.                                                                                      |
 | WP-06 — Company Profile V3 UI                            | not_started | V3 review and publish UI remain.                                                                                                     |
@@ -65,7 +65,7 @@ behavior and deterministic tests are implemented.
 
 ## Checks actually run
 
-- `corepack pnpm test` — 253 passed, 0 failed after WP-02.
+- `corepack pnpm test` — 261 passed, 0 failed after WP-03.
 - `corepack pnpm typecheck` — passed.
 - `corepack pnpm lint` — passed.
 - `corepack pnpm format:check` — passed.
@@ -74,8 +74,22 @@ behavior and deterministic tests are implemented.
   reproducible.
 - `git diff --check` — passed.
 
+## WP-03 delivery record
+
+- Migration:
+  `supabase/migrations/20260728000300_intelligence_claims_and_evidence.sql`
+- Evidence supports exactly one source link: existing company source, document chunk,
+  provider execution, or explicit manual source.
+- Claims and evidence links are persisted atomically. Claims, evidence, and links are
+  append-only; supersession creates a new claim.
+- Conflict records retain both claims, reject cross-workspace or mismatched subjects,
+  support one explicit resolution, and preserve immutable conflict identity.
+- No speculative legacy claim backfill is performed.
+- Database pgTAP coverage was expanded but requires the migration in a local Supabase
+  test database to execute.
+
 ## Next package entry point
 
-Begin WP-03 with evidence and claim persistence, source linkage, conflict retention,
-tenant policies, and database tests. The two new migrations must be applied in order
-before database-generated types can replace the temporary local type alignment.
+Begin WP-04 with the Company Intelligence V3 schema, readiness logic, commercial
+mechanics, buyer logic, and a V1-to-V3 draft adapter. Provider calls remain outside
+that package.

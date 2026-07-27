@@ -1045,6 +1045,20 @@ async function loadOrClassifyCandidateBatch(input: {
   requestedModel: string;
   actualModel: string;
 }> {
+  const maximumBatchSize = 12;
+  if (input.ambiguous.length > maximumBatchSize) {
+    const batches = [];
+    for (let index = 0; index < input.ambiguous.length; index += maximumBatchSize) {
+      batches.push(
+        await loadOrClassifyCandidateBatch({
+          ...input,
+          ambiguous: input.ambiguous.slice(index, index + maximumBatchSize),
+        }),
+      );
+    }
+    return mergeCandidateClassificationBatches(batches);
+  }
+
   const supabase = createServiceRoleClient();
   const campaign = {
     geography: input.context.campaign.geography,
@@ -1088,10 +1102,31 @@ async function loadOrClassifyCandidateBatch(input: {
     };
   }
 
-  const generated = await classifyCandidatesWithAi({
-    campaign,
-    candidates: input.ambiguous,
-  });
+  let generated;
+  try {
+    generated = await classifyCandidatesWithAi({
+      campaign,
+      candidates: input.ambiguous,
+    });
+  } catch (error) {
+    if (input.ambiguous.length > 1 && isTruncatedCandidateClassification(error)) {
+      const midpoint = Math.ceil(input.ambiguous.length / 2);
+      const batches = [];
+      for (const ambiguous of [
+        input.ambiguous.slice(0, midpoint),
+        input.ambiguous.slice(midpoint),
+      ]) {
+        batches.push(
+          await loadOrClassifyCandidateBatch({
+            ...input,
+            ambiguous,
+          }),
+        );
+      }
+      return mergeCandidateClassificationBatches(batches);
+    }
+    throw error;
+  }
   const modelConfigId = await resolveModelConfigId(
     input.context.workspaceId,
     "search_result_classification",
@@ -1132,6 +1167,31 @@ async function loadOrClassifyCandidateBatch(input: {
     requestedModel: generated.modelCall.requestedModel,
     actualModel,
   };
+}
+
+function mergeCandidateClassificationBatches(
+  batches: Array<{
+    classifications: CandidateClassification[];
+    requestedModel: string;
+    actualModel: string;
+  }>,
+) {
+  const first = batches[0];
+  if (!first) throw new Error("Candidate classification returned no batches.");
+  return {
+    classifications: batches.flatMap((batch) => batch.classifications),
+    requestedModel: first.requestedModel,
+    actualModel: first.actualModel,
+  };
+}
+
+function isTruncatedCandidateClassification(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = "code" in error ? String(error.code) : "";
+  return (
+    code === "completion_truncated" ||
+    /truncat|maximum completion tokens|length limit/i.test(error.message)
+  );
 }
 
 async function loadCandidateDomains(

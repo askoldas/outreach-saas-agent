@@ -4,31 +4,64 @@ import test from "node:test";
 
 const boundary = readFileSync(new URL("./run-provider-task.ts", import.meta.url), "utf8");
 
-test("unhandled Trigger failures become durable provider execution failures", () => {
-  assert.match(boundary, /\.from\("provider_executions"\)/);
-  assert.match(boundary, /status: "failed"/);
-  assert.match(boundary, /error_message: message/);
-  assert.match(boundary, /\.neq\("status", "completed"\)/);
+const durableTasks = [
+  {
+    file: "analyze-company-profile.ts",
+    operation: "company_profile_analysis",
+  },
+  {
+    file: "discover-campaign-companies.ts",
+    operation: "campaign_discovery",
+  },
+  {
+    file: "enrich-company-contacts.ts",
+    operation: "contact_enrichment",
+  },
+  {
+    file: "generate-outreach-draft.ts",
+    operation: "draft_generation",
+  },
+];
+
+test("attempt failures are diagnostic and terminal failure is a separate transition", () => {
+  assert.match(boundary, /recordAttemptFailure/);
+  assert.match(boundary, /attemptFailures/);
+  assert.match(boundary, /context\.attempt\.number/);
+  assert.match(boundary, /errorForTrigger\(error\)/);
+  assert.match(boundary, /export async function finalizeProviderTaskFailure/);
+  assert.match(boundary, /\.in\("status", \["pending", "running"\]\)/);
 });
 
-test("discovery startup failures also close the customer-visible Campaign Run", () => {
-  assert.match(boundary, /operation !== "campaign_discovery"/);
+test("terminal discovery failure closes the customer-visible Campaign Run once", () => {
+  assert.match(boundary, /operation === "campaign_discovery"/);
   assert.match(boundary, /\.from\("campaign_runs"\)/);
   assert.match(boundary, /\.from\("campaign_run_events"\)/);
+  assert.match(boundary, /terminal_\$\{operation\}_failure/);
   assert.match(boundary, /current_phase: "failed"/);
 });
 
-test("every paid Trigger task uses the shared failure boundary", () => {
-  for (const task of [
-    "analyze-company-profile.ts",
-    "discover-campaign-companies.ts",
-    "enrich-company-contacts.ts",
-    "generate-outreach-draft.ts",
-  ]) {
+test("every durable provider task delegates terminal failure to Trigger onFailure", () => {
+  for (const { file, operation } of durableTasks) {
     const source = readFileSync(
-      new URL(`../../trigger/${task}`, import.meta.url),
+      new URL(`../../trigger/${file}`, import.meta.url),
       "utf8",
     );
     assert.match(source, /runProviderTask\(/);
+    assert.match(source, /,\s*ctx,\s*/);
+    assert.match(source, /onFailure:/);
+    assert.match(source, /finalizeProviderTaskFailure/);
+    assert.match(source, new RegExp(`"${operation}"`));
+  }
+});
+
+test("service-level task attempts rethrow without terminalizing the execution", () => {
+  for (const file of [
+    "../company-profile/analysis-service.ts",
+    "../campaign-discovery/service.ts",
+    "../contact-enrichment/service.ts",
+    "../draft-generation/service.ts",
+  ]) {
+    const source = readFileSync(new URL(file, import.meta.url), "utf8");
+    assert.match(source, /} catch \(error\) {\s*throw error;\s*}\s*}/);
   }
 });

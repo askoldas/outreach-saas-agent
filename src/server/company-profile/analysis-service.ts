@@ -3,7 +3,6 @@ import {
   analyzeCompanyProfile,
   companyProfileAnalysisPromptVersion,
 } from "@/lib/ai/company-profile-analysis";
-import { getModelRoute } from "@/lib/ai/model-router";
 import { extractWebPages, searchWeb } from "@/lib/providers/tavily";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 
@@ -45,7 +44,6 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
 
   const origin = new URL(profile.website_url).origin;
   const host = new URL(origin).hostname.replace(/^www\./, "");
-  const route = getModelRoute("profile_analysis");
   let sources: Array<{ title: string; url: string; content: string }> = [];
 
   try {
@@ -164,29 +162,6 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
       sourceCount: sources.length,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Profile analysis failed";
-    const completedAt = new Date().toISOString();
-    await supabase.from("ai_requests").insert({
-      workspace_id: execution.workspace_id,
-      provider_execution_id: execution.id,
-      role: "profile_analysis",
-      provider: "openrouter",
-      selected_model: route.primaryModel,
-      prompt_version: companyProfileAnalysisPromptVersion,
-      schema_version: "company-profile-v2",
-      request_hash: hash({ profileVersionId, sourceCount: sources.length }),
-      status: "failed",
-      error_message: message,
-      metadata: { inputProfileVersionId: profileVersionId, sourceCount: sources.length },
-      started_at: startedAt,
-      completed_at: completedAt,
-    });
-    await updateExecution(providerExecutionId, {
-      status: "failed",
-      completed_at: completedAt,
-      error_code: "company_profile_analysis_failed",
-      error_message: message,
-    });
     throw error;
   }
 }

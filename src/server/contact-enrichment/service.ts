@@ -146,20 +146,6 @@ export async function executeContactEnrichment(providerExecutionId: string) {
       throw new Error(`Could not record contact usage: ${usageError.message}`);
     return { campaignCompanyId, routeCount: routes.length };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Contact enrichment failed";
-    const completedAt = new Date().toISOString();
-    await updateEnrichment(enrichmentId, {
-      status: "failed",
-      completed_at: completedAt,
-      error_code: "contact_enrichment_failed",
-      error_message: message,
-    });
-    await updateExecution(providerExecutionId, {
-      status: "failed",
-      completed_at: completedAt,
-      error_code: "contact_enrichment_failed",
-      error_message: message,
-    });
     throw error;
   }
 }

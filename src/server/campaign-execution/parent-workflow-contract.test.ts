@@ -78,14 +78,15 @@ test("Campaign Agent path is explicit, checkpointed, and disabled by default", (
   assert.match(parent, /createCampaignAgentIterationExecution/);
   assert.match(parent, /completeCampaignAgentParentExecution/);
   assert.match(parent, /recordCampaignAgentPlannerRequest/);
-  assert.match(parent, /failCampaignAgentOrchestration\(context, error\)/);
+  assert.match(parent, /onFailure:/);
+  assert.match(parent, /failCampaignOrchestration\(context, error\)/);
   assert.match(parent, /executeDeterministicCampaign\(context\)/);
   assert.match(service, /\.is\("parent_execution_id", null\)/);
   assert.match(service, /\.from\("ai_requests"\)/);
   assert.match(service, /role: "campaign_planning"/);
   assert.match(service, /prompt_version: campaignAgentPlannerPromptVersion/);
-  assert.match(service, /campaign_agent_aborted/);
-  assert.match(service, /campaign_agent_failed/);
+  assert.match(service, /campaign_orchestration_aborted/);
+  assert.match(service, /campaign_orchestration_failed/);
   assert.match(service, /selected_offering_id/);
   assert.match(service, /normalizeCampaignAgentPlanningContext/);
 });

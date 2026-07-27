@@ -367,29 +367,6 @@ export async function executeCampaignDiscovery(
       queriesExecuted: queries,
     };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Campaign discovery failed";
-    const completedAt = new Date().toISOString();
-    await updateRun(context.runId, {
-      status: "failed",
-      current_phase: "failed",
-      failed_at: completedAt,
-      error_code: "campaign_discovery_failed",
-      error_message: message,
-    });
-    await appendEvent(
-      context,
-      "campaign_discovery_failed",
-      "failed",
-      "Campaign discovery failed.",
-      { message },
-      "error",
-    );
-    await updateExecution(providerExecutionId, {
-      status: "failed",
-      completed_at: completedAt,
-      error_code: "campaign_discovery_failed",
-      error_message: message,
-    });
     throw error;
   }
 }

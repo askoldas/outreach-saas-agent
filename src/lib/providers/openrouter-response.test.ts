@@ -41,3 +41,13 @@ test("critical OpenRouter roles use only the configured paid fallback", () => {
     "openai/gpt-5-mini",
   ]);
 });
+
+test("OpenRouter performs one request and leaves durable retries to Trigger.dev", () => {
+  const source = readFileSync(new URL("./openrouter.ts", import.meta.url), "utf8");
+  const generation = source.slice(
+    source.indexOf("export async function generateTextResult"),
+    source.indexOf("export function describeEmptyCompletion"),
+  );
+  assert.equal(generation.match(/await fetch\(/g)?.length, 1);
+  assert.doesNotMatch(generation, /for \(let attempt/);
+});

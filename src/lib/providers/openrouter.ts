@@ -68,47 +68,36 @@ export async function generateTextResult(
   const timeoutMs = options.timeoutMs ?? route.timeoutMs;
   const taskName = options.taskName ?? options.role;
   const startedAt = Date.now();
-  let response: Response | undefined;
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= 2; attempt += 1) {
-    try {
-      response = await fetch(endpoint, {
-        body: JSON.stringify({
-          messages,
-          model: route.primaryModel,
-          ...(route.fallbackModels.length ? { models: route.fallbackModels } : {}),
-          ...(options.maxCompletionTokens
-            ? { max_completion_tokens: options.maxCompletionTokens }
-            : {}),
-          ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
-          ...(options.reasoningEffort
-            ? { reasoning: { effort: options.reasoningEffort, exclude: true } }
-            : {}),
-          temperature: 0.2,
-        }),
-        cache: "no-store",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${apiKey}`,
-          "HTTP-Referer": "http://localhost:3000",
-          "X-Title": "Opptium",
-        },
-        method: "POST",
-        signal: AbortSignal.timeout(timeoutMs),
-      });
-      if (response.ok || !isRetryableStatus(response.status) || attempt === 2) break;
-      await response.text();
-    } catch (error) {
-      lastError = error;
-      if (attempt === 2 || !isRetryableTransportError(error)) break;
-    }
-  }
-
-  if (!response) {
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      body: JSON.stringify({
+        messages,
+        model: route.primaryModel,
+        ...(route.fallbackModels.length ? { models: route.fallbackModels } : {}),
+        ...(options.maxCompletionTokens
+          ? { max_completion_tokens: options.maxCompletionTokens }
+          : {}),
+        ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
+        ...(options.reasoningEffort
+          ? { reasoning: { effort: options.reasoningEffort, exclude: true } }
+          : {}),
+        temperature: 0.2,
+      }),
+      cache: "no-store",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "http://localhost:3000",
+        "X-Title": "Opptium",
+      },
+      method: "POST",
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
     throw new OpenRouterRequestError(
-      normalizeNetworkError(lastError, timeoutMs),
-      isTimeoutError(lastError) ? "timeout" : "transport_error",
+      normalizeNetworkError(error, timeoutMs),
+      isTimeoutError(error) ? "timeout" : "transport_error",
       true,
     );
   }
@@ -242,10 +231,6 @@ function isTimeoutError(error: unknown) {
       (error.name === "TimeoutError" || error.name === "AbortError")) ||
     (error instanceof Error && /timeout|timed out/i.test(error.message))
   );
-}
-
-function isRetryableTransportError(error: unknown) {
-  return isTimeoutError(error) || error instanceof TypeError;
 }
 
 function normalizeNetworkError(error: unknown, timeoutMs: number) {

@@ -480,12 +480,14 @@ export async function recordCampaignAgentPlannerRequest(input: {
     throw new Error(`Could not save Campaign Agent planner audit: ${error.message}`);
 }
 
-export async function failCampaignAgentOrchestration(
+export async function failCampaignOrchestration(
   context: CampaignExecutionContext,
   failure: unknown,
 ) {
   const message =
-    failure instanceof Error ? failure.message.slice(0, 2_000) : "Campaign Agent failed.";
+    failure instanceof Error
+      ? failure.message.slice(0, 2_000)
+      : "Campaign orchestration failed.";
   const failedAt = new Date().toISOString();
   const supabase = createServiceRoleClient();
   const [{ error: parentError }, { error: childrenError }, { error: runError }] =
@@ -495,7 +497,7 @@ export async function failCampaignAgentOrchestration(
         .update({
           status: "failed",
           completed_at: failedAt,
-          error_code: "campaign_agent_failed",
+          error_code: "campaign_orchestration_failed",
           error_message: message,
         })
         .eq("workspace_id", context.workspaceId)
@@ -506,7 +508,7 @@ export async function failCampaignAgentOrchestration(
         .update({
           status: "failed",
           completed_at: failedAt,
-          error_code: "campaign_agent_aborted",
+          error_code: "campaign_orchestration_aborted",
           error_message: message,
         })
         .eq("workspace_id", context.workspaceId)
@@ -518,7 +520,7 @@ export async function failCampaignAgentOrchestration(
           status: "failed",
           current_phase: "failed",
           failed_at: failedAt,
-          error_code: "campaign_agent_failed",
+          error_code: "campaign_orchestration_failed",
           error_message: message,
         })
         .eq("workspace_id", context.workspaceId)
@@ -526,15 +528,15 @@ export async function failCampaignAgentOrchestration(
     ]);
   if (parentError || childrenError || runError)
     throw new Error(
-      `Could not persist Campaign Agent failure: ${
+      `Could not persist Campaign orchestration failure: ${
         parentError?.message ?? childrenError?.message ?? runError?.message
       }`,
     );
   await appendEventOnce(context, {
-    eventType: "campaign_agent_failed",
+    eventType: "campaign_orchestration_failed",
     phase: "failed",
     level: "error",
-    summary: "Campaign Agent execution failed.",
+    summary: "Campaign execution failed after all permitted attempts.",
   });
 }
 

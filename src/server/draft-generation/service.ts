@@ -4,7 +4,6 @@ import {
   generateGroundedDraft,
   type DraftGenerationInput,
 } from "@/lib/ai/draft-generation";
-import { getModelRoute } from "@/lib/ai/model-router";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 
 export async function executeDraftGeneration(providerExecutionId: string) {
@@ -31,7 +30,6 @@ export async function executeDraftGeneration(providerExecutionId: string) {
     error_message: null,
   });
 
-  const route = getModelRoute("outreach_generation");
   let requestHash = hash({ campaignCompanyId, campaignContactId });
   try {
     const input = await loadDraftInput({
@@ -157,30 +155,6 @@ export async function executeDraftGeneration(providerExecutionId: string) {
       await syncCampaignRun(execution.workspace_id, execution.campaign_run_id);
     return { draftId: draft.id, campaignCompanyId };
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Draft generation failed";
-    const completedAt = new Date().toISOString();
-    await supabase.from("ai_requests").insert({
-      workspace_id: execution.workspace_id,
-      campaign_run_id: execution.campaign_run_id,
-      provider_execution_id: execution.id,
-      role: "outreach_generation",
-      provider: "openrouter",
-      selected_model: route.primaryModel,
-      prompt_version: draftPromptVersion,
-      schema_version: "outreach-draft-v1",
-      request_hash: requestHash,
-      status: "failed",
-      error_message: message,
-      metadata: { campaignCompanyId, campaignContactId },
-      started_at: startedAt,
-      completed_at: completedAt,
-    });
-    await updateExecution(providerExecutionId, {
-      status: "failed",
-      completed_at: completedAt,
-      error_code: "draft_generation_failed",
-      error_message: message,
-    });
     throw error;
   }
 }

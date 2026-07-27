@@ -149,7 +149,9 @@ Schema retirement was guarded by a service-role-only readiness audit and complet
 AI business services depend on logical roles declared in
 `src/lib/ai/model-roles.ts`. `model-registry.ts` owns initial paid defaults,
 `model-router.ts` resolves environment overrides/fallback/timeout policy, and the
-OpenRouter adapter owns transport, retry classification, and usage metadata.
+OpenRouter adapter owns one transport attempt, failure classification, and usage
+metadata. Trigger.dev owns durable retry/backoff. Attempt failures remain diagnostic;
+only task-level final-failure hooks persist terminal execution and Campaign Run state.
 
 This boundary is provider-independent above the transport layer and is intentionally
 not coupled to an agent framework. Prompts, prompt versions, schema parsers, and

@@ -1,6 +1,9 @@
 import { task } from "@trigger.dev/sdk";
 import { executeCampaignDiscovery } from "@/server/campaign-discovery/service";
-import { runProviderTask } from "@/server/execution/run-provider-task";
+import {
+  finalizeProviderTaskFailure,
+  runProviderTask,
+} from "@/server/execution/run-provider-task";
 import type { CampaignAgentPlan } from "@/lib/campaign-agent/loop";
 
 export type DiscoverCampaignCompaniesPayload = {
@@ -8,7 +11,11 @@ export type DiscoverCampaignCompaniesPayload = {
   providerExecutionId: string;
 };
 
-export const discoverCampaignCompaniesTask = task({
+export const discoverCampaignCompaniesTask = task<
+  "discover-campaign-companies",
+  DiscoverCampaignCompaniesPayload,
+  Awaited<ReturnType<typeof executeCampaignDiscovery>>
+>({
   id: "discover-campaign-companies",
   retry: {
     maxAttempts: 2,
@@ -17,9 +24,11 @@ export const discoverCampaignCompaniesTask = task({
     factor: 2,
     randomize: true,
   },
-  run: async (payload: DiscoverCampaignCompaniesPayload) => {
+  onFailure: async ({ payload, error }) =>
+    finalizeProviderTaskFailure(payload.providerExecutionId, "campaign_discovery", error),
+  run: async (payload: DiscoverCampaignCompaniesPayload, { ctx }) => {
     if (!payload.providerExecutionId) throw new Error("providerExecutionId is required.");
-    return runProviderTask(payload.providerExecutionId, "campaign_discovery", () =>
+    return runProviderTask(payload.providerExecutionId, "campaign_discovery", ctx, () =>
       executeCampaignDiscovery(payload.providerExecutionId, payload.plan),
     );
   },

@@ -90,10 +90,17 @@ Contact enrichment is deployed as a provider boundary but is intentionally defer
 for the current product test environment until an external contact database/provider
 is connected. Campaign discovery and qualification do not require enrichment.
 
-All paid task wrappers use a shared failure boundary. If a task fails before its
-operation service finishes loading context, the boundary marks `provider_executions`
-failed; discovery startup failures also close the customer-visible `campaign_runs`
-row and append a visible failure event.
+All durable provider tasks use one retry boundary. The OpenRouter adapter performs
+one network request and classifies its failure; Trigger.dev owns retry attempts and
+backoff. Each failed attempt appends diagnostic metadata without changing business
+records to a terminal state. A task-level `onFailure` hook runs only after retries
+are exhausted (or a non-retryable error aborts the run), marks the corresponding
+`provider_executions` row failed, and applies operation-specific terminal projections.
+Discovery terminal failure also closes the customer-visible `campaign_runs` row and
+appends one deduplicated visible failure event.
+
+The `execute-campaign` parent follows the same rule: orchestration state is failed
+only in its final `onFailure` hook, never inside an individual attempt.
 
 Each Trigger task is a thin wrapper around a typed application service. Payloads carry
 only a `provider_executions.id`; services resolve workspace ownership and domain

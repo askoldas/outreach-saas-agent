@@ -20,7 +20,7 @@ import {
   cancelQueuedDiscovery,
   completeCampaignAgentParentExecution,
   createCampaignAgentIterationExecution,
-  failCampaignAgentOrchestration,
+  failCampaignOrchestration,
   loadCampaignAgentPlanningContext,
   loadCampaignExecutionContext,
   linkDiscoveryTriggerRun,
@@ -45,6 +45,10 @@ export const executeCampaignTask = task({
     maxTimeoutInMs: 60_000,
     factor: 2,
     randomize: true,
+  },
+  onFailure: async ({ payload, error }) => {
+    const context = await loadCampaignExecutionContext(payload.campaignRunId);
+    await failCampaignOrchestration(context, error);
   },
   run: async (payload: ExecuteCampaignPayload) => {
     if (!payload.campaignRunId) throw new Error("campaignRunId is required.");
@@ -148,128 +152,122 @@ async function executeDeterministicCampaign(
 async function executeAgentCampaign(
   context: Awaited<ReturnType<typeof loadCampaignExecutionContext>>,
 ) {
-  try {
-    const planner = createCampaignAgentPlanner(
-      await loadCampaignAgentPlanningContext(context.campaignRunId),
-      {
-        onResult: async (result) =>
-          recordCampaignAgentPlannerRequest({ context, result }),
-      },
-    );
-    const initialState = await loadLatestCampaignAgentCheckpoint({
-      campaignRunId: context.campaignRunId,
-      workspaceId: context.workspaceId,
-    });
-    let childIteration = initialState?.iteration ?? 0;
-    let previouslyQualified = initialState?.acceptedCompanies ?? 0;
-    const toolRegistry = createCampaignAgentToolRegistry().register(
-      createCampaignDiscoveryTool(async (plan, toolContext) => {
-        const iterationExecutionId = await createCampaignAgentIterationExecution({
-          context,
-          iteration: toolContext.iteration,
+  const planner = createCampaignAgentPlanner(
+    await loadCampaignAgentPlanningContext(context.campaignRunId),
+    {
+      onResult: async (result) => recordCampaignAgentPlannerRequest({ context, result }),
+    },
+  );
+  const initialState = await loadLatestCampaignAgentCheckpoint({
+    campaignRunId: context.campaignRunId,
+    workspaceId: context.workspaceId,
+  });
+  let childIteration = initialState?.iteration ?? 0;
+  let previouslyQualified = initialState?.acceptedCompanies ?? 0;
+  const toolRegistry = createCampaignAgentToolRegistry().register(
+    createCampaignDiscoveryTool(async (plan, toolContext) => {
+      const iterationExecutionId = await createCampaignAgentIterationExecution({
+        context,
+        iteration: toolContext.iteration,
+        plan,
+      });
+      const discovery = await discoverCampaignCompaniesTask.triggerAndWait(
+        { plan, providerExecutionId: iterationExecutionId },
+        {
+          idempotencyKey: `campaign-agent-discovery:${iterationExecutionId}:v1`,
+          tags: [
+            `workspace:${context.workspaceId}`,
+            `campaign_run:${context.campaignRunId}`,
+            `agent_iteration:${toolContext.iteration}`,
+            `agent_tool:${campaignDiscoveryToolName}`,
+          ],
+        },
+      );
+      await linkDiscoveryTriggerRun(context, discovery.id, iterationExecutionId);
+      if (!discovery.ok)
+        throw new Error(
+          `Campaign Agent discovery child failed: ${errorMessage(discovery.error)}`,
+        );
+      const newlyQualified = Math.max(
+        0,
+        discovery.output.totalQualifiedCount - previouslyQualified,
+      );
+      previouslyQualified = discovery.output.totalQualifiedCount;
+      return {
+        acceptedCompanies: newlyQualified,
+        inspectedCompanies: discovery.output.inspectedCount,
+        rejectedCompanies: discovery.output.rejectedCount,
+      };
+    }),
+  );
+  const result = await runCampaignAgentLoop(
+    planner,
+    {
+      discover: async (plan): Promise<CampaignAgentObservation> => {
+        childIteration += 1;
+        const receipt = await toolRegistry.invoke<CampaignAgentObservation>(
+          campaignDiscoveryToolName,
           plan,
-        });
-        const discovery = await discoverCampaignCompaniesTask.triggerAndWait(
-          { plan, providerExecutionId: iterationExecutionId },
           {
-            idempotencyKey: `campaign-agent-discovery:${iterationExecutionId}:v1`,
-            tags: [
-              `workspace:${context.workspaceId}`,
-              `campaign_run:${context.campaignRunId}`,
-              `agent_iteration:${toolContext.iteration}`,
-              `agent_tool:${campaignDiscoveryToolName}`,
-            ],
+            campaignRunId: context.campaignRunId,
+            iteration: childIteration,
+            workspaceId: context.workspaceId,
           },
         );
-        await linkDiscoveryTriggerRun(context, discovery.id, iterationExecutionId);
-        if (!discovery.ok)
-          throw new Error(
-            `Campaign Agent discovery child failed: ${errorMessage(discovery.error)}`,
-          );
-        const newlyQualified = Math.max(
-          0,
-          discovery.output.totalQualifiedCount - previouslyQualified,
-        );
-        previouslyQualified = discovery.output.totalQualifiedCount;
-        return {
-          acceptedCompanies: newlyQualified,
-          inspectedCompanies: discovery.output.inspectedCount,
-          rejectedCompanies: discovery.output.rejectedCount,
-        };
+        return receipt.output;
+      },
+      evaluate: async ({ observation }) => ({
+        evidenceSufficient: previouslyQualified >= context.desiredCompanyCount,
+        reason:
+          previouslyQualified >= context.desiredCompanyCount
+            ? "The requested company target was reached."
+            : observation.inspectedCompanies === 0
+              ? "No additional public results were available."
+              : "The target was not reached; refine the discovery plan.",
+        requiresUserInput:
+          previouslyQualified < context.desiredCompanyCount &&
+          observation.acceptedCompanies === 0,
+        shouldRefine:
+          previouslyQualified < context.desiredCompanyCount &&
+          observation.inspectedCompanies > 0 &&
+          observation.acceptedCompanies > 0,
       }),
-    );
-    const result = await runCampaignAgentLoop(
-      planner,
-      {
-        discover: async (plan): Promise<CampaignAgentObservation> => {
-          childIteration += 1;
-          const receipt = await toolRegistry.invoke<CampaignAgentObservation>(
-            campaignDiscoveryToolName,
-            plan,
-            {
-              campaignRunId: context.campaignRunId,
-              iteration: childIteration,
-              workspaceId: context.workspaceId,
-            },
-          );
-          return receipt.output;
-        },
-        evaluate: async ({ observation }) => ({
-          evidenceSufficient: previouslyQualified >= context.desiredCompanyCount,
-          reason:
-            previouslyQualified >= context.desiredCompanyCount
-              ? "The requested company target was reached."
-              : observation.inspectedCompanies === 0
-                ? "No additional public results were available."
-                : "The target was not reached; refine the discovery plan.",
-          requiresUserInput:
-            previouslyQualified < context.desiredCompanyCount &&
-            observation.acceptedCompanies === 0,
-          shouldRefine:
-            previouslyQualified < context.desiredCompanyCount &&
-            observation.inspectedCompanies > 0 &&
-            observation.acceptedCompanies > 0,
+    },
+    {
+      ...(initialState ? { initialState } : {}),
+      onCheckpoint: async (state) =>
+        saveCampaignAgentCheckpoint({
+          campaignRunId: context.campaignRunId,
+          state,
+          workspaceId: context.workspaceId,
         }),
-      },
-      {
-        ...(initialState ? { initialState } : {}),
-        onCheckpoint: async (state) =>
-          saveCampaignAgentCheckpoint({
-            campaignRunId: context.campaignRunId,
-            state,
-            workspaceId: context.workspaceId,
-          }),
-      },
-    );
-    if (result.nextGate === "user_input") {
-      await markCampaignAgentWaitingForInput(context, {
-        iteration: result.state.iteration,
-        reason: result.stopReason,
-      });
-      return {
-        campaignRunId: context.campaignRunId,
-        agent: result,
-        nextGate: "user_input",
-        status: "waiting_for_input",
-      };
-    }
-    await saveCampaignAgentLearnings(context, result.state);
-    await markOptionalEnrichmentGate(context);
-    await completeCampaignAgentParentExecution(context, {
-      acceptedCompanies: result.state.acceptedCompanies,
-      inspectedCompanies: result.state.inspectedCompanies,
+    },
+  );
+  if (result.nextGate === "user_input") {
+    await markCampaignAgentWaitingForInput(context, {
       iteration: result.state.iteration,
+      reason: result.stopReason,
     });
     return {
       campaignRunId: context.campaignRunId,
       agent: result,
-      nextGate: "optional_enrichment",
-      status: "waiting_for_optional_enrichment",
+      nextGate: "user_input",
+      status: "waiting_for_input",
     };
-  } catch (error) {
-    await failCampaignAgentOrchestration(context, error);
-    throw error;
   }
+  await saveCampaignAgentLearnings(context, result.state);
+  await markOptionalEnrichmentGate(context);
+  await completeCampaignAgentParentExecution(context, {
+    acceptedCompanies: result.state.acceptedCompanies,
+    inspectedCompanies: result.state.inspectedCompanies,
+    iteration: result.state.iteration,
+  });
+  return {
+    campaignRunId: context.campaignRunId,
+    agent: result,
+    nextGate: "optional_enrichment",
+    status: "waiting_for_optional_enrichment",
+  };
 }
 
 function errorMessage(error: unknown) {

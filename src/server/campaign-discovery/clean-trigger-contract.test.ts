@@ -12,6 +12,10 @@ const trigger = readFileSync(
   "utf8",
 );
 const dispatch = readFileSync(new URL("../trigger/dispatch.ts", import.meta.url), "utf8");
+const workflowRouting = readFileSync(
+  new URL("../../lib/intelligence/workflow-routing.ts", import.meta.url),
+  "utf8",
+);
 
 test("Campaign discovery creates a clean run and dispatches Trigger.dev", () => {
   const section = research.slice(
@@ -21,7 +25,8 @@ test("Campaign discovery creates a clean run and dispatches Trigger.dev", () => 
   assert.match(section, /create_clean_campaign_run/);
   assert.match(section, /dispatchCampaignRun/);
   assert.match(dispatch, /tasks\.trigger<typeof executeCampaignTask>/);
-  assert.match(dispatch, /"execute-campaign"/);
+  assert.match(dispatch, /resolveCampaignTaskId/);
+  assert.match(workflowRouting, /"execute-campaign"/);
   assert.match(dispatch, /trigger_run_id: handle\.id/);
   assert.doesNotMatch(section, /research_runs|research_tasks/);
   assert.match(trigger, /executeCampaignDiscovery/);

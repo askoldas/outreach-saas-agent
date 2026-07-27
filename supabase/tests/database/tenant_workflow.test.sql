@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(17);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password)
 values
@@ -195,9 +195,23 @@ select results_eq(
   array[9::bigint],
   'authenticated users can read global model routing'
 );
+select results_eq(
+  $$ select count(*)::bigint from public.workspace_intelligence_settings $$,
+  array[1::bigint],
+  'owner reads only their workspace Intelligence rollout settings'
+);
+select lives_ok(
+  $$ update public.workspace_intelligence_settings set shadow_mode = false where workspace_id = 'a0000000-0000-0000-0000-000000000001' $$,
+  'workspace owner may update their Intelligence rollout settings'
+);
 
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
 
+select results_eq(
+  $$ select count(*)::bigint from public.workspace_intelligence_settings where workspace_id = 'a0000000-0000-0000-0000-000000000001' $$,
+  array[0::bigint],
+  'another tenant cannot read the first workspace Intelligence settings'
+);
 select results_eq(
   $$ select count(*)::bigint from public.campaigns where id = 'a1000000-0000-0000-0000-000000000001' $$,
   array[0::bigint],

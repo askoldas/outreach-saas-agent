@@ -1050,6 +1050,7 @@ export type Database = {
           companies_evaluated: number;
           companies_qualified: number;
           completed_at: string | null;
+          contract_versions: Json;
           contacts_found: number;
           created_at: string;
           currency: string;
@@ -1075,6 +1076,7 @@ export type Database = {
           total_cost: number | null;
           trigger_run_id: string | null;
           updated_at: string;
+          workflow_version: string;
           workspace_id: string;
         };
         Insert: {
@@ -1087,6 +1089,7 @@ export type Database = {
           companies_evaluated?: number;
           companies_qualified?: number;
           completed_at?: string | null;
+          contract_versions?: Json;
           contacts_found?: number;
           created_at?: string;
           currency?: string;
@@ -1112,6 +1115,7 @@ export type Database = {
           total_cost?: number | null;
           trigger_run_id?: string | null;
           updated_at?: string;
+          workflow_version?: string;
           workspace_id: string;
         };
         Update: {
@@ -1124,6 +1128,7 @@ export type Database = {
           companies_evaluated?: number;
           companies_qualified?: number;
           completed_at?: string | null;
+          contract_versions?: Json;
           contacts_found?: number;
           created_at?: string;
           currency?: string;
@@ -1149,6 +1154,7 @@ export type Database = {
           total_cost?: number | null;
           trigger_run_id?: string | null;
           updated_at?: string;
+          workflow_version?: string;
           workspace_id?: string;
         };
         Relationships: [
@@ -1257,6 +1263,7 @@ export type Database = {
           id: string;
           industries: string[];
           initial_target_description: string;
+          intelligence_version: string;
           name: string;
           objective: string;
           outreach_enabled: boolean;
@@ -1268,6 +1275,7 @@ export type Database = {
           target_geography: string;
           target_volume: number;
           updated_at: string;
+          workflow_version: string;
           workspace_id: string;
         };
         Insert: {
@@ -1283,6 +1291,7 @@ export type Database = {
           id?: string;
           industries?: string[];
           initial_target_description?: string;
+          intelligence_version?: string;
           name: string;
           objective: string;
           outreach_enabled?: boolean;
@@ -1294,6 +1303,7 @@ export type Database = {
           target_geography?: string;
           target_volume?: number;
           updated_at?: string;
+          workflow_version?: string;
           workspace_id: string;
         };
         Update: {
@@ -1309,6 +1319,7 @@ export type Database = {
           id?: string;
           industries?: string[];
           initial_target_description?: string;
+          intelligence_version?: string;
           name?: string;
           objective?: string;
           outreach_enabled?: boolean;
@@ -1320,6 +1331,7 @@ export type Database = {
           target_geography?: string;
           target_volume?: number;
           updated_at?: string;
+          workflow_version?: string;
           workspace_id?: string;
         };
         Relationships: [
@@ -1552,6 +1564,7 @@ export type Database = {
           created_by: string | null;
           extracted_facts: Json;
           id: string;
+          intelligence_version: string;
           profile_status: string;
           provenance: string;
           readiness_score: number;
@@ -1572,6 +1585,7 @@ export type Database = {
           created_by?: string | null;
           extracted_facts?: Json;
           id?: string;
+          intelligence_version?: string;
           profile_status?: string;
           provenance?: string;
           readiness_score?: number;
@@ -1592,6 +1606,7 @@ export type Database = {
           created_by?: string | null;
           extracted_facts?: Json;
           id?: string;
+          intelligence_version?: string;
           profile_status?: string;
           provenance?: string;
           readiness_score?: number;
@@ -3550,6 +3565,50 @@ export type Database = {
             foreignKeyName: "workspace_memories_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      workspace_intelligence_settings: {
+        Row: {
+          campaign_workflow: string;
+          created_at: string;
+          enabled_providers: string[];
+          profile_version: string;
+          result_write_mode: string;
+          shadow_mode: boolean;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_workflow?: string;
+          created_at?: string;
+          enabled_providers?: string[];
+          profile_version?: string;
+          result_write_mode?: string;
+          shadow_mode?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_workflow?: string;
+          created_at?: string;
+          enabled_providers?: string[];
+          profile_version?: string;
+          result_write_mode?: string;
+          shadow_mode?: boolean;
+          updated_at?: string;
+          updated_by?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "workspace_intelligence_settings_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: true;
             referencedRelation: "workspaces";
             referencedColumns: ["id"];
           },

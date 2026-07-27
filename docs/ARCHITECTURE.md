@@ -200,3 +200,15 @@ profile model is introduced.
 Discovery remains organization-focused. Validation rejects consumer-only targets,
 targets without a B2B relationship type, and low-discoverability confirmed segments
 before a Campaign is created.
+
+## Intelligence V2 coexistence boundary
+
+Intelligence V2 is being added beside the working V1 workflow. Deployment-level flags
+and workspace settings control eligibility, while every Campaign and Campaign Run
+freezes its workflow version. Dispatch reads the persisted run version rather than a
+mutable environment switch. Until the V2 Trigger workflow is implemented and enabled,
+V2 dispatch fails closed and V1 remains the only executable path.
+
+Profile, campaign, and run records also retain contract-version metadata. Rollback
+disables future V2 creation or execution without deleting V2 artifacts or passing them
+through V1 services.

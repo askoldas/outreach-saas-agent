@@ -67,3 +67,11 @@ The canonical interaction is:
 Natural-language input is never a direct database mutation. Additive language preserves
 confirmed items by default. Explicit replacement is shown as a replacement preview and
 still requires confirmation.
+
+## Intelligence V2 rollout status
+
+The accepted Intelligence V2 direction is documented under `docs/V2/`. It replaces
+fixed generic discovery refinement and holistic model scoring only when the
+corresponding V2 workflow stages pass their rollout gates. Existing campaigns remain
+V1 and keep their current behavior; new V2 behavior is stage-flagged, workspace-scoped,
+version-frozen, and disabled by default.

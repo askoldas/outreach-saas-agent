@@ -4,6 +4,8 @@ import type { analyzeCompanyProfileTask } from "@/trigger/analyze-company-profil
 import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
 import type { executeCampaignTask } from "@/trigger/execute-campaign";
 import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
+import { resolveCampaignTaskId } from "@/lib/intelligence/workflow-routing";
+import type { IntelligenceVersion } from "@/lib/intelligence/rollout";
 
 const staleDispatchMs = 2 * 60 * 1_000;
 
@@ -31,6 +33,17 @@ export async function dispatchCampaignRun(input: {
   workspaceId: string;
 }) {
   const { supabase } = await createOperationalDatabaseClient();
+  const { data: campaignRun, error: runError } = await supabase
+    .from("campaign_runs")
+    .select("workflow_version")
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.campaignRunId)
+    .single();
+  if (runError)
+    throw new Error(`Could not load Campaign workflow version: ${runError.message}`);
+  const taskId = resolveCampaignTaskId(
+    campaignRun.workflow_version as IntelligenceVersion,
+  );
   const dispatchKey = input.idempotencyKey ?? `execute-campaign:${input.campaignRunId}`;
   await markDispatching(
     "campaign_runs",
@@ -40,13 +53,14 @@ export async function dispatchCampaignRun(input: {
   );
   try {
     const handle = await tasks.trigger<typeof executeCampaignTask>(
-      "execute-campaign",
+      taskId,
       { campaignRunId: input.campaignRunId },
       {
         idempotencyKey: dispatchKey,
         tags: [
           `workspace:${input.workspaceId}`,
           `campaign_run:${input.campaignRunId}`,
+          `workflow:${campaignRun.workflow_version}`,
           ...(input.tags ?? []),
         ],
       },

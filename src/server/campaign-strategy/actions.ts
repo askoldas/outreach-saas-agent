@@ -125,7 +125,7 @@ export async function generateCampaignStrategyAction(input: {
     operation: "strategy_generation",
     entry_type: "settlement",
     idempotency_key: requestHash,
-    credits: 3,
+    credits: 0,
     metadata: { createdBy: user.id, strategyVersionId: saved.id },
   });
   if (usageError)

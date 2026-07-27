@@ -137,8 +137,8 @@ export async function recordUsageEvent(
   input: {
     campaignId?: string;
     operation: string;
-    estimated: number;
-    actual: number;
+    estimatedUnits: number;
+    actualUnits: number;
     referenceId?: string;
   },
 ) {
@@ -160,6 +160,8 @@ export async function recordUsageEvent(
     campaign_external_id: input.campaignId ?? null,
     reference_id: input.referenceId ?? null,
     created_by: userId,
+    estimated_units: input.estimatedUnits,
+    actual_units: input.actualUnits,
   };
   const entries = [
     {
@@ -168,7 +170,7 @@ export async function recordUsageEvent(
       operation: input.operation,
       entry_type: "estimate" as const,
       idempotency_key: `${eventKey}:estimate`,
-      credits: input.estimated,
+      credits: 0,
       metadata,
     },
     {
@@ -177,7 +179,7 @@ export async function recordUsageEvent(
       operation: input.operation,
       entry_type: "settlement" as const,
       idempotency_key: `${eventKey}:settlement`,
-      credits: input.actual,
+      credits: 0,
       metadata,
     },
   ];
@@ -200,8 +202,14 @@ export async function listUsageEvents(workspaceId: string): Promise<UsageEvent[]
     id: row.id,
     campaignId: readMetadataString(row.metadata, "campaign_external_id"),
     operation: row.operation,
-    estimatedCredits: row.entry_type === "estimate" ? Number(row.credits) : 0,
-    actualCredits: row.entry_type === "settlement" ? Number(row.credits) : 0,
+    estimatedUnits:
+      row.entry_type === "estimate"
+        ? readMetadataNumber(row.metadata, "estimated_units")
+        : 0,
+    actualUnits:
+      row.entry_type === "settlement"
+        ? readMetadataNumber(row.metadata, "actual_units")
+        : 0,
     createdAt: row.created_at,
   }));
 }
@@ -247,4 +255,10 @@ function readMetadataString(value: unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const field = (value as Record<string, unknown>)[key];
   return typeof field === "string" ? field : null;
+}
+
+function readMetadataNumber(value: unknown, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
+  const field = (value as Record<string, unknown>)[key];
+  return typeof field === "number" && Number.isFinite(field) ? field : 0;
 }

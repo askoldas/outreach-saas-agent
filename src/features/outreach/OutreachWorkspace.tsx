@@ -8,7 +8,6 @@ import type {
   RecommendedRecipient,
   ResearchProgress,
 } from "@/types/domain";
-import { estimateCredits } from "@/lib/opptium/domain";
 import { updateDraftReviewAction } from "@/server/drafts/actions";
 import {
   acceptRecipientSelectionsAction,
@@ -140,13 +139,11 @@ export function OutreachWorkspace({
     });
   }
   function enrichApproved() {
-    const estimated = estimateCredits("enrichment", recipients.length);
     startTransition(async () => {
       try {
         const result = await queueContactEnrichmentAction({
           campaignId,
           leadIds: recipients.map((item) => item.leadId),
-          estimatedCredits: estimated,
         });
         setMessage(result.message);
         router.refresh();
@@ -255,8 +252,7 @@ export function OutreachWorkspace({
                 disabled={pending || recipients.length === 0}
                 onClick={generateDrafts}
               >
-                Create sequence for selected channels (
-                {estimateCredits("draft", recipients.length)} credits est.)
+                Create sequence for selected channels ({recipients.length} selected)
               </Button>
             }
           />

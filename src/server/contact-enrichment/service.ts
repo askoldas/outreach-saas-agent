@@ -162,7 +162,7 @@ export async function executeContactEnrichment(providerExecutionId: string) {
         operation: "contact_enrichment",
         entry_type: "settlement",
         idempotency_key: execution.idempotency_key,
-        credits: 3,
+        credits: 0,
         metadata: { campaignCompanyId, routeCount: routes.length },
       },
       { onConflict: "workspace_id,entry_type,idempotency_key" },

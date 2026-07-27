@@ -414,7 +414,7 @@ export async function executeCampaignDiscovery(
         operation: "campaign_discovery",
         entry_type: "settlement",
         idempotency_key: execution.idempotency_key,
-        credits: accepted.length,
+        credits: 0,
         metadata: {
           discoveredCount: accepted.length,
           cumulativeDiscovered,

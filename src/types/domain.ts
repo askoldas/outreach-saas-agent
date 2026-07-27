@@ -287,8 +287,8 @@ export type UsageEvent = {
   id: string;
   campaignId: string | null;
   operation: string;
-  estimatedCredits: number;
-  actualCredits: number;
+  estimatedUnits: number;
+  actualUnits: number;
   createdAt: string;
 };
 import type {

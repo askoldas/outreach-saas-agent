@@ -9,7 +9,6 @@ import {
 } from "./repository";
 import { enqueueLeadContactEnrichmentRun } from "@/server/research/repository";
 import { enqueueCampaignDraftGenerationRun } from "@/server/research/repository";
-import { estimateCredits } from "@/lib/opptium/domain";
 import { getLead } from "@/server/leads/repository";
 
 export async function acceptRecipientSelectionsAction(input: {
@@ -42,8 +41,8 @@ export async function createExportAction(input: {
   await recordUsageEvent(currentWorkspace.id, user.id, {
     campaignId: input.campaignId,
     operation: "export",
-    estimated: 0,
-    actual: 0,
+    estimatedUnits: 1,
+    actualUnits: 1,
     referenceId: id,
   });
   revalidatePath(`/campaigns/${input.campaignId}/outreach`);
@@ -54,7 +53,6 @@ export async function createExportAction(input: {
 export async function queueContactEnrichmentAction(input: {
   campaignId: string;
   leadIds: string[];
-  estimatedCredits: number;
 }) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) throw new Error("Authentication required");
@@ -75,8 +73,8 @@ export async function queueContactEnrichmentAction(input: {
   await recordUsageEvent(currentWorkspace.id, user.id, {
     campaignId: input.campaignId,
     operation: "contact_enrichment",
-    estimated: input.estimatedCredits,
-    actual: 0,
+    estimatedUnits: input.leadIds.length,
+    actualUnits: 0,
     referenceId: runs.map((run) => run.runId).join(","),
   });
   revalidatePath(`/campaigns/${input.campaignId}/outreach`);
@@ -97,8 +95,8 @@ export async function queueDraftGenerationAction(input: { campaignId: string }) 
   await recordUsageEvent(currentWorkspace.id, user.id, {
     campaignId: input.campaignId,
     operation: "draft_generation",
-    estimated: estimateCredits("draft", run.taskCount),
-    actual: 0,
+    estimatedUnits: run.taskCount,
+    actualUnits: 0,
     referenceId: run.runId,
   });
   revalidatePath(`/campaigns/${input.campaignId}/outreach`);

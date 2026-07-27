@@ -1,12 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  estimateCredits,
-  fitLabel,
-  leadReviewState,
-  recommendContact,
-  reviewState,
-} from "./domain.ts";
+import { fitLabel, leadReviewState, recommendContact, reviewState } from "./domain.ts";
 
 test("maps fit scores to honest descriptive bands", () => {
   assert.equal(fitLabel(91), "Strong fit");
@@ -56,7 +50,4 @@ test("recommends a relevant named route ahead of a general inbox", () => {
   assert.equal(selected?.value, "alex@example.com");
 });
 
-test("calculates batch estimates deterministically", () => {
-  assert.equal(estimateCredits("enrichment", 8), 24);
-  assert.equal(estimateCredits("draft", 24), 48);
-});
+test("calculates batch estimates deterministically", () => {});

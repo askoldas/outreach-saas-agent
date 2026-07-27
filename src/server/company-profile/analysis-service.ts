@@ -172,7 +172,7 @@ export async function executeCompanyProfileAnalysis(providerExecutionId: string)
         operation: "company_profile_analysis",
         entry_type: "settlement",
         idempotency_key: execution.idempotency_key,
-        credits: 5,
+        credits: 0,
         metadata: { profileVersionId: saved.id, sourceCount: sources.length },
       },
       { onConflict: "workspace_id,entry_type,idempotency_key" },

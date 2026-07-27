@@ -152,7 +152,7 @@ export async function executeDraftGeneration(providerExecutionId: string) {
         operation: "draft_generation",
         entry_type: "settlement",
         idempotency_key: execution.idempotency_key,
-        credits: 2,
+        credits: 0,
         amount: generated.modelCall.providerReportedCost ?? 0,
         currency: generated.modelCall.providerCurrency ?? "USD",
         metadata: { campaignCompanyId, campaignContactId, draftId: draft.id },

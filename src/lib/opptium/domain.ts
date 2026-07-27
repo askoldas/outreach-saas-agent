@@ -63,11 +63,3 @@ export function recommendContact(routes: ContactRoute[]) {
     )[0] ?? null
   );
 }
-
-export function estimateCredits(
-  operation: "research" | "enrichment" | "draft",
-  count: number,
-) {
-  const unit = operation === "research" ? 5 : operation === "enrichment" ? 3 : 2;
-  return Math.max(0, count) * unit;
-}

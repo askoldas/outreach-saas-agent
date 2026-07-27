@@ -14,25 +14,25 @@ export default async function UsagePage() {
     listUsageEvents(currentWorkspace.id),
     getCommercialValidationMetrics(currentWorkspace.id),
   ]);
-  const actual = events.reduce((sum, event) => sum + event.actualCredits, 0);
-  const estimated = events.reduce((sum, event) => sum + event.estimatedCredits, 0);
+  const actual = events.reduce((sum, event) => sum + event.actualUnits, 0);
+  const estimated = events.reduce((sum, event) => sum + event.estimatedUnits, 0);
   return (
     <div className={styles.grid}>
       <PageHeader
-        title="Usage & Credits"
-        description="Immutable operation-level estimates and actual usage for this workspace."
+        title="Internal usage"
+        description="Raw operation counts for development diagnostics. This is not billing."
       />
       <section className={styles.metricGrid}>
         <Card>
           <div className={styles.metric}>
-            <p>Actual credits recorded</p>
+            <p>Completed operation units</p>
             <h2>{actual}</h2>
-            <span>No billing balance is implied</span>
+            <span>Raw internal telemetry</span>
           </div>
         </Card>
         <Card>
           <div className={styles.metric}>
-            <p>Estimated credits</p>
+            <p>Queued operation units</p>
             <h2>{estimated}</h2>
             <span>{events.length} immutable usage events</span>
           </div>
@@ -51,8 +51,8 @@ export default async function UsagePage() {
               <tr>
                 <th>Operation</th>
                 <th>Campaign</th>
-                <th>Estimated</th>
-                <th>Actual</th>
+                <th>Queued units</th>
+                <th>Completed units</th>
                 <th>Date</th>
               </tr>
             </thead>
@@ -61,8 +61,8 @@ export default async function UsagePage() {
                 <tr key={event.id}>
                   <td>{event.operation.replaceAll("_", " ")}</td>
                   <td>{event.campaignId ?? "Workspace"}</td>
-                  <td>{event.estimatedCredits}</td>
-                  <td>{event.actualCredits}</td>
+                  <td>{event.estimatedUnits}</td>
+                  <td>{event.actualUnits}</td>
                   <td>{new Date(event.createdAt).toLocaleString()}</td>
                 </tr>
               ))}

@@ -1,5 +1,6 @@
 import { parseCompleteJsonObject } from "@/lib/ai/structured-json";
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
+import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import { generateTextResult } from "@/lib/providers/openrouter";
 import {
   QUALIFICATION_CONFIDENCE_POLICY_VERSION,
@@ -204,6 +205,7 @@ async function evaluateRelationship(input: {
     evidence: input.member.evidence,
   });
   const startedAt = new Date().toISOString();
+  assertIntelligenceExternalCallsAllowed("model");
   const modelCall = await generateTextResult(messages, {
     role: "company_qualification",
     jsonMode: true,
@@ -269,6 +271,7 @@ async function evaluateFactors(input: {
     evidence: input.member.evidence,
   });
   const startedAt = new Date().toISOString();
+  assertIntelligenceExternalCallsAllowed("model");
   const modelCall = await generateTextResult(messages, {
     role: "company_qualification",
     jsonMode: true,

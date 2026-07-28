@@ -18,6 +18,8 @@ import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { getControlledBetaReadiness } from "@/server/intelligence-rollout/readiness";
+import { IntelligenceRolloutReadiness } from "@/features/settings/IntelligenceRolloutReadiness";
 
 type SearchParams = {
   error?: string;
@@ -46,10 +48,11 @@ export default async function SettingsPage({
     redirect("/onboarding/workspace");
   }
 
-  const [members, params, profile] = await Promise.all([
+  const [members, params, profile, rolloutReadiness] = await Promise.all([
     listWorkspaceMembers(currentWorkspace.id),
     searchParams,
     getCurrentProfile(),
+    getControlledBetaReadiness(currentWorkspace.id),
   ]);
   const providerStatus = getProviderStatus();
 
@@ -242,6 +245,8 @@ export default async function SettingsPage({
           </table>
         </div>
       </Card>
+
+      <IntelligenceRolloutReadiness readiness={rolloutReadiness} />
 
       <Card>
         <CardHeader title="Data and privacy" eyebrow="Retention and deletion" />

@@ -37,7 +37,7 @@ behavior and deterministic tests are implemented.
 | WP-18 — V2 Campaign Trigger workflow                     | complete    | Durable/resumable stages execute semantic discovery, entity resolution, Candidate research, relationship-first Qualification, and deterministic Comparative Ranking; atomic pause/resume/cancel, checkpointed restart, progress reconciliation, terminal settlement, and Trigger cancellation are connected.     |
 | WP-19 — V2 campaign results UI                           | complete    | Run-scoped canonical results expose coverage, discovery gaps, stable lanes and ranks, independent fit/potential/confidence, evidence factors, eligibility, relationship and entity-review state; decisions and scoped correction proposals are durable, audited, tenant-safe, and accessible with a V1 fallback. |
 | WP-20 — Shadow mode and benchmark runner                 | not_started | Synthetic portfolio, comparison runner, report, and no-write shadow mode remain.                                                                                                                                                                                                                                 |
-| WP-21 — Controlled beta                                  | not_started | Selected-workspace rollout, telemetry, and rollback drill remain.                                                                                                                                                                                                                                                |
+| WP-21 — Controlled beta                                  | in_progress | Fail-closed readiness visibility, workspace rollout audit, non-destructive rollback, and independent provider/model call kill switches are implemented. Activation remains blocked by the postponed WP-20 benchmark evidence and requires explicit operator approval.                                            |
 | WP-22 — Default V2 and legacy freeze                     | not_started | Requires explicit product decision and all prior gates.                                                                                                                                                                                                                                                          |
 | WP-23 — Legacy removal                                   | blocked     | Requires explicit approval after V2 default and historical-read guarantees.                                                                                                                                                                                                                                      |
 
@@ -550,3 +550,19 @@ rollout decision.
   form the initial accessibility contract.
 - Controlled rollout remains unchanged. Apply migration 29, regenerate database types,
   and redeploy the Next.js application; no Trigger.dev task changed in WP-19.
+
+## WP-21 preparation record
+
+- Migration 30 adds workspace-isolated rollout audit events and an authenticated,
+  non-destructive rollback RPC. Rollback disables new V2 profile and Campaign routing
+  while preserving historical V2 campaigns, results, and active-run records.
+- Settings exposes a fail-closed controlled-beta readiness panel with observed V2 run
+  completion/failure, ranked output, user review and correction rates, unresolved
+  entity cases, rollout configuration, and explicit required versus informational gates.
+- Independent `INTELLIGENCE_V2_PROVIDER_CALLS_ENABLED` and
+  `INTELLIGENCE_V2_MODEL_CALLS_ENABLED` operator kill switches are enforced immediately
+  before uncached V2 external calls. Both default to enabled to preserve current
+  behavior and stop calls when explicitly set to `false`.
+- This preparation deliberately contains no activation function and changes no
+  workspace or environment rollout value. The benchmark and holdout gate is hard-coded
+  as blocking while WP-20 remains postponed. Controlled beta is therefore not complete.

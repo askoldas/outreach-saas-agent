@@ -9,6 +9,7 @@ import {
   type CandidateResearchQuestion,
 } from "@/lib/candidate-intelligence-v2";
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
+import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import { generateTextResult } from "@/lib/providers/openrouter";
 import type { Json } from "@/types/database.types";
 import {
@@ -93,6 +94,7 @@ export async function executeCandidateResearchMember(input: {
         evidence: evidenceContext,
       });
       const startedAt = new Date().toISOString();
+      assertIntelligenceExternalCallsAllowed("model");
       const modelCall = await generateTextResult(messages, {
         role: "website_extraction",
         jsonMode: true,

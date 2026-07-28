@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createFirstPartyFetchRequest } from "@/lib/candidate-intelligence-v2";
 import { extractWebPages } from "@/lib/providers/tavily";
+import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import {
   persistCandidateResearchSource,
   type CandidateResearchMemberContext,
@@ -61,6 +62,7 @@ export async function collectCandidateResearchSources(
     member.sourcePlan.maximumFirstPartyFetches > 0
   ) {
     try {
+      assertIntelligenceExternalCallsAllowed("provider");
       const request = createFirstPartyFetchRequest({
         organizationId: member.organizationId,
         url: member.canonicalUrl,

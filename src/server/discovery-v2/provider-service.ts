@@ -7,6 +7,7 @@ import {
   type ProviderDiscoveryExecutionPlan,
 } from "@/lib/discovery-v2";
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
+import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import {
   findPersistedProviderExecution,
   persistProviderResponse,
@@ -75,6 +76,7 @@ export async function executeAndPersistDiscoveryProvider(input: {
   ) {
     throw new Error("Discovery provider capabilities changed after plan freeze.");
   }
+  assertIntelligenceExternalCallsAllowed("provider");
   await input.assertConfigured?.();
   const response = providerDiscoveryResponseSchema.parse(
     await input.provider.search(request, input.executionPlan),

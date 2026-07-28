@@ -77,9 +77,10 @@ test("Qualification runtime APIs remain service-role only and cleanup-aware", ()
   assert.match(migration, /delete from public\.candidate_qualification_batches_v2/);
 });
 
-test("Qualification is connected while comparative ranking remains fail-closed", () => {
+test("Qualification hands off to the connected comparative ranking boundary", () => {
   assert.match(workflow, /input\.stage === "qualify_candidates"/);
   assert.match(workflow, /adapters\.qualifyCandidates/);
-  assert.doesNotMatch(workflow, /rankCandidates/);
+  assert.match(workflow, /input\.stage === "rank_candidates"/);
+  assert.match(workflow, /executeRankingStage/);
   assert.match(workflow, /stage adapter.*is not implemented/s);
 });

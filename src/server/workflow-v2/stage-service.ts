@@ -3,6 +3,7 @@ import { stageCheckpointKey } from "@/lib/workflow-v2/controller";
 import { classifyWorkflowError, errorForTrigger } from "@/server/execution/errors";
 import { executeSemanticDiscoveryStage } from "@/server/discovery-v2/targeted-discovery-stage";
 import { executeEntityResolutionStage } from "@/server/entity-resolution-v2/stage-service";
+import { executeRankingStage } from "@/server/ranking-v2/stage-service";
 import type { Json } from "@/types/database.types";
 import {
   claimWorkflowTask,
@@ -132,6 +133,7 @@ async function runStageAdapter(
     }
     return adapters.qualifyCandidates();
   }
+  if (input.stage === "rank_candidates") return executeRankingStage(input);
   throw new Error(
     `V2 stage adapter "${input.stage}" is not implemented and cannot execute.`,
   );

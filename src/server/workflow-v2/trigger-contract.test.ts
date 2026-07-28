@@ -28,7 +28,7 @@ test("V2 stage execution claims and settles one logical task", () => {
   assert.match(service, /saveWorkflowCheckpoint/);
 });
 
-test("V2 stages fail closed after the connected Qualification boundary", () => {
+test("V2 stages connect through deterministic Comparative Ranking", () => {
   assert.match(service, /input\.stage === "initialize"/);
   assert.match(service, /input\.stage === "discover"/);
   assert.match(service, /input\.stage === "resolve_entities"/);
@@ -45,7 +45,8 @@ test("V2 stages fail closed after the connected Qualification boundary", () => {
   assert.match(qualificationChild, /id: "qualify-campaign-candidate-v2"/);
   assert.match(qualificationChild, /batchTriggerAndWait/);
   assert.match(qualificationChild, /concurrencyLimit: 4/);
-  assert.doesNotMatch(service, /rankCandidates/);
+  assert.match(service, /input\.stage === "rank_candidates"/);
+  assert.match(service, /executeRankingStage/);
   assert.match(service, /stage adapter.*is not implemented/s);
   assert.match(routing, /not enabled yet/);
   assert.doesNotMatch(routing, /return "execute-campaign-v2"/);

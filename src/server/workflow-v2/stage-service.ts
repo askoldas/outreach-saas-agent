@@ -21,6 +21,7 @@ export type ExecuteCampaignV2StageInput = {
 };
 
 export type CampaignV2StageAdapters = {
+  qualifyCandidates?: () => Promise<StageResult>;
   researchCandidates?: () => Promise<StageResult>;
 };
 
@@ -122,6 +123,14 @@ async function runStageAdapter(
       );
     }
     return adapters.researchCandidates();
+  }
+  if (input.stage === "qualify_candidates") {
+    if (!adapters.qualifyCandidates) {
+      throw new Error(
+        'V2 stage adapter "qualify_candidates" requires its Trigger fan-out boundary.',
+      );
+    }
+    return adapters.qualifyCandidates();
   }
   throw new Error(
     `V2 stage adapter "${input.stage}" is not implemented and cannot execute.`,

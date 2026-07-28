@@ -4966,6 +4966,130 @@ export type Database = {
           },
         ];
       };
+      discovery_candidate_group_members_v2: {
+        Row: {
+          candidate_group_id: string;
+          created_at: string;
+          id: string;
+          normalized_candidate_id: string;
+          workspace_id: string;
+        };
+        Insert: {
+          candidate_group_id: string;
+          created_at?: string;
+          id?: string;
+          normalized_candidate_id: string;
+          workspace_id: string;
+        };
+        Update: {
+          candidate_group_id?: string;
+          created_at?: string;
+          id?: string;
+          normalized_candidate_id?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_candidate_group_members__normalized_candidate_id_fkey";
+            columns: ["normalized_candidate_id"];
+            isOneToOne: true;
+            referencedRelation: "normalized_provider_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidate_group_members_v2_candidate_group_id_fkey";
+            columns: ["candidate_group_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_candidate_groups_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidate_group_members_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      discovery_candidate_groups_v2: {
+        Row: {
+          campaign_id: string;
+          campaign_run_id: string;
+          canonical_organization_id: string | null;
+          created_at: string;
+          entity_resolution_batch_id: string;
+          group_key: string;
+          grouping_basis: string;
+          id: string;
+          status: string;
+          updated_at: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_id: string;
+          campaign_run_id: string;
+          canonical_organization_id?: string | null;
+          created_at?: string;
+          entity_resolution_batch_id: string;
+          group_key: string;
+          grouping_basis: string;
+          id?: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_id?: string;
+          campaign_run_id?: string;
+          canonical_organization_id?: string | null;
+          created_at?: string;
+          entity_resolution_batch_id?: string;
+          group_key?: string;
+          grouping_basis?: string;
+          id?: string;
+          status?: string;
+          updated_at?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "discovery_candidate_groups_v2_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidate_groups_v2_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidate_groups_v2_canonical_organization_id_fkey";
+            columns: ["canonical_organization_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidate_groups_v2_entity_resolution_batch_id_fkey";
+            columns: ["entity_resolution_batch_id"];
+            isOneToOne: false;
+            referencedRelation: "entity_resolution_batches_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "discovery_candidate_groups_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       discovery_candidates: {
         Row: {
           campaign_id: string;
@@ -6632,9 +6756,86 @@ export type Database = {
           },
         ];
       };
+      entity_resolution_batches_v2: {
+        Row: {
+          campaign_id: string;
+          campaign_run_id: string;
+          campaign_strategy_version_id: string;
+          candidate_count: number;
+          completed_at: string | null;
+          id: string;
+          input_hash: string;
+          rules_version: string;
+          started_at: string;
+          status: string;
+          summary_json: Json | null;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_id: string;
+          campaign_run_id: string;
+          campaign_strategy_version_id: string;
+          candidate_count: number;
+          completed_at?: string | null;
+          id?: string;
+          input_hash: string;
+          rules_version: string;
+          started_at?: string;
+          status: string;
+          summary_json?: Json | null;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_id?: string;
+          campaign_run_id?: string;
+          campaign_strategy_version_id?: string;
+          candidate_count?: number;
+          completed_at?: string | null;
+          id?: string;
+          input_hash?: string;
+          rules_version?: string;
+          started_at?: string;
+          status?: string;
+          summary_json?: Json | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "entity_resolution_batches_v2_campaign_id_fkey";
+            columns: ["campaign_id"];
+            isOneToOne: false;
+            referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_batches_v2_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_batches_v2_campaign_strategy_version_id_fkey";
+            columns: ["campaign_strategy_version_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_batches_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       entity_resolution_cases: {
         Row: {
           campaign_id: string | null;
+          campaign_run_id: string | null;
+          candidate_group_id: string | null;
+          entity_resolution_batch_id: string | null;
           id: string;
           normalized_candidate_id: string;
           opened_at: string;
@@ -6645,6 +6846,9 @@ export type Database = {
         };
         Insert: {
           campaign_id?: string | null;
+          campaign_run_id?: string | null;
+          candidate_group_id?: string | null;
+          entity_resolution_batch_id?: string | null;
           id?: string;
           normalized_candidate_id: string;
           opened_at?: string;
@@ -6655,6 +6859,9 @@ export type Database = {
         };
         Update: {
           campaign_id?: string | null;
+          campaign_run_id?: string | null;
+          candidate_group_id?: string | null;
+          entity_resolution_batch_id?: string | null;
           id?: string;
           normalized_candidate_id?: string;
           opened_at?: string;
@@ -6669,6 +6876,27 @@ export type Database = {
             columns: ["campaign_id"];
             isOneToOne: false;
             referencedRelation: "campaigns";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_cases_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_cases_candidate_group_id_fkey";
+            columns: ["candidate_group_id"];
+            isOneToOne: false;
+            referencedRelation: "discovery_candidate_groups_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "entity_resolution_cases_entity_resolution_batch_id_fkey";
+            columns: ["entity_resolution_batch_id"];
+            isOneToOne: false;
+            referencedRelation: "entity_resolution_batches_v2";
             referencedColumns: ["id"];
           },
           {
@@ -10727,6 +10955,10 @@ export type Database = {
         Args: { target_campaign_run_id: string; target_workspace_id: string };
         Returns: Json;
       };
+      load_campaign_entity_resolution_inputs_v2: {
+        Args: { target_campaign_run_id: string; target_workspace_id: string };
+        Returns: Json;
+      };
       load_campaign_run_memory_snapshot_v2: {
         Args: { target_campaign_run_id: string; target_workspace_id: string };
         Returns: Json;
@@ -10985,6 +11217,16 @@ export type Database = {
         };
         Returns: number;
       };
+      resolve_campaign_entities_v2: {
+        Args: {
+          target_campaign_run_id: string;
+          target_candidates: Json;
+          target_input_hash: string;
+          target_rules_version: string;
+          target_workspace_id: string;
+        };
+        Returns: Json;
+      };
       resolve_discovered_company: {
         Args: {
           company_name_value: string;
@@ -11031,6 +11273,10 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      resolve_organization_redirect_v2: {
+        Args: { target_organization_id: string; target_workspace_id: string };
+        Returns: string;
       };
       save_analyzed_company_profile_version: {
         Args: {

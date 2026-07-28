@@ -20,8 +20,13 @@ export type ExecuteCampaignV2StageInput = {
   workspaceId: string;
 };
 
+export type CampaignV2StageAdapters = {
+  researchCandidates?: () => Promise<StageResult>;
+};
+
 export async function executeCampaignV2Stage(
   input: ExecuteCampaignV2StageInput,
+  adapters: CampaignV2StageAdapters = {},
 ): Promise<StageResult & { cached: boolean; taskRunId: string }> {
   const inputReference = {
     campaignRunId: input.campaignRunId,
@@ -47,7 +52,7 @@ export async function executeCampaignV2Stage(
   }
 
   try {
-    const result = await runStageAdapter(input);
+    const result = await runStageAdapter(input, adapters);
     await completeWorkflowTask({
       outputReference: result as unknown as Json,
       status: result.status,
@@ -89,7 +94,10 @@ async function checkpointStage(
   });
 }
 
-async function runStageAdapter(input: ExecuteCampaignV2StageInput): Promise<StageResult> {
+async function runStageAdapter(
+  input: ExecuteCampaignV2StageInput,
+  adapters: CampaignV2StageAdapters,
+): Promise<StageResult> {
   if (input.stage === "initialize") {
     const campaignRun = await loadCampaignV2Run(input);
     return {
@@ -107,6 +115,14 @@ async function runStageAdapter(input: ExecuteCampaignV2StageInput): Promise<Stag
   }
   if (input.stage === "discover") return executeSemanticDiscoveryStage(input);
   if (input.stage === "resolve_entities") return executeEntityResolutionStage(input);
+  if (input.stage === "research_candidates") {
+    if (!adapters.researchCandidates) {
+      throw new Error(
+        'V2 stage adapter "research_candidates" requires its Trigger fan-out boundary.',
+      );
+    }
+    return adapters.researchCandidates();
+  }
   throw new Error(
     `V2 stage adapter "${input.stage}" is not implemented and cannot execute.`,
   );

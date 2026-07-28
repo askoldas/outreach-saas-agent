@@ -6,6 +6,7 @@ import test from "node:test";
 const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 const parent = source("src/trigger/execute-campaign-v2.ts");
 const child = source("src/trigger/run-campaign-v2-stage.ts");
+const researchChild = source("src/trigger/research-campaign-candidates-v2.ts");
 const service = source("src/server/workflow-v2/stage-service.ts");
 const routing = source("src/lib/intelligence/workflow-routing.ts");
 
@@ -26,11 +27,17 @@ test("V2 stage execution claims and settles one logical task", () => {
   assert.match(service, /saveWorkflowCheckpoint/);
 });
 
-test("V2 stages fail closed after the connected entity-resolution boundary", () => {
+test("V2 stages fail closed after the connected Candidate research boundary", () => {
   assert.match(service, /input\.stage === "initialize"/);
   assert.match(service, /input\.stage === "discover"/);
   assert.match(service, /input\.stage === "resolve_entities"/);
   assert.match(service, /executeEntityResolutionStage/);
+  assert.match(service, /input\.stage === "research_candidates"/);
+  assert.match(service, /adapters\.researchCandidates/);
+  assert.match(child, /executeCandidateResearchFanOut/);
+  assert.match(researchChild, /id: "research-campaign-candidate-v2"/);
+  assert.match(researchChild, /batchTriggerAndWait/);
+  assert.match(researchChild, /concurrencyLimit: 4/);
   assert.match(service, /stage adapter.*is not implemented/s);
   assert.match(routing, /not enabled yet/);
   assert.doesNotMatch(routing, /return "execute-campaign-v2"/);

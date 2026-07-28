@@ -1,6 +1,7 @@
 import { task } from "@trigger.dev/sdk";
 import type { CampaignV2Stage } from "@/lib/workflow-v2/contracts";
 import { executeCampaignV2Stage } from "@/server/workflow-v2/stage-service";
+import { executeCandidateResearchFanOut } from "./research-campaign-candidates-v2";
 
 export type RunCampaignV2StagePayload = {
   campaignRunId: string;
@@ -19,5 +20,10 @@ export const runCampaignV2StageTask = task({
     randomize: true,
   },
   run: (payload: RunCampaignV2StagePayload, { ctx }) =>
-    executeCampaignV2Stage({ ...payload, triggerRunId: ctx.run.id }),
+    executeCampaignV2Stage(
+      { ...payload, triggerRunId: ctx.run.id },
+      {
+        researchCandidates: () => executeCandidateResearchFanOut(payload),
+      },
+    ),
 });

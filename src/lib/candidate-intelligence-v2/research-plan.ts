@@ -14,6 +14,7 @@ export type ResearchPlanInput = {
   resolvedQuestionKeys?: string[];
   staleQuestionKeys?: string[];
   conflictQuestionKeys?: string[];
+  reusableQuestionKeys?: string[];
   procurementUnknown?: boolean;
   pageBudget?: number;
 };
@@ -71,6 +72,7 @@ function buildQuestion(
   required: boolean,
   priority: number,
   purposeOverride?: ResearchPurpose,
+  reusableScopeOverride?: CandidateResearchQuestion["reusableScope"],
 ): CandidateResearchQuestion {
   const catalog = QUESTION_CATALOG[key];
   return {
@@ -81,7 +83,7 @@ function buildQuestion(
     purpose: purposeOverride ?? catalog?.purpose ?? "qualification_factor",
     required,
     priority,
-    reusableScope: catalog?.reusableScope ?? "campaign_only",
+    reusableScope: reusableScopeOverride ?? catalog?.reusableScope ?? "campaign_only",
     expectedEvidenceTypes: catalog?.expectedEvidenceTypes ?? ["official_web_page"],
   };
 }
@@ -90,18 +92,59 @@ export function compileCandidateResearchPlan(
   input: ResearchPlanInput,
 ): CandidateResearchPlan {
   const resolved = new Set(input.resolvedQuestionKeys ?? []);
+  const reusable = new Set(input.reusableQuestionKeys ?? []);
   const questions = new Map<string, CandidateResearchQuestion>();
   input.requiredQuestionKeys
     .filter((key) => !resolved.has(key))
-    .forEach((key, index) => questions.set(key, buildQuestion(key, true, 90 - index)));
+    .forEach((key, index) =>
+      questions.set(
+        key,
+        buildQuestion(
+          key,
+          true,
+          90 - index,
+          undefined,
+          reusable.has(key) ? "organization" : undefined,
+        ),
+      ),
+    );
   (input.optionalQuestionKeys ?? [])
     .filter((key) => !resolved.has(key) && !questions.has(key))
-    .forEach((key, index) => questions.set(key, buildQuestion(key, false, 60 - index)));
+    .forEach((key, index) =>
+      questions.set(
+        key,
+        buildQuestion(
+          key,
+          false,
+          60 - index,
+          undefined,
+          reusable.has(key) ? "organization" : undefined,
+        ),
+      ),
+    );
   (input.staleQuestionKeys ?? []).forEach((key, index) =>
-    questions.set(key, buildQuestion(key, true, 95 - index, "freshness")),
+    questions.set(
+      key,
+      buildQuestion(
+        key,
+        true,
+        95 - index,
+        "freshness",
+        reusable.has(key) ? "organization" : undefined,
+      ),
+    ),
   );
   (input.conflictQuestionKeys ?? []).forEach((key, index) =>
-    questions.set(key, buildQuestion(key, true, 100 - index, "conflict_resolution")),
+    questions.set(
+      key,
+      buildQuestion(
+        key,
+        true,
+        100 - index,
+        "conflict_resolution",
+        reusable.has(key) ? "organization" : undefined,
+      ),
+    ),
   );
   if (input.procurementUnknown && !questions.has("procurement_authority")) {
     questions.set(
@@ -110,12 +153,14 @@ export function compileCandidateResearchPlan(
     );
   }
 
-  const ordered = [...questions.values()].sort(
-    (left, right) =>
-      Number(right.required) - Number(left.required) ||
-      right.priority - left.priority ||
-      left.key.localeCompare(right.key),
-  );
+  const ordered = [...questions.values()]
+    .sort(
+      (left, right) =>
+        Number(right.required) - Number(left.required) ||
+        right.priority - left.priority ||
+        left.key.localeCompare(right.key),
+    )
+    .slice(0, 12);
   const preferredPages = [
     ...new Set(ordered.flatMap((question) => PURPOSE_PAGES[question.purpose])),
   ];

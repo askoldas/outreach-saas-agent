@@ -4,6 +4,7 @@ import { Card, CardHeader } from "@/components/ui/Card";
 import form from "@/components/ui/FormControls.module.css";
 import styles from "@/features/shared/Feature.module.css";
 import { rollbackWorkspaceIntelligenceAction } from "@/server/intelligence-rollout/actions";
+import { enableWorkspaceControlledBetaAction } from "@/server/intelligence-rollout/actions";
 import type { ControlledBetaReadiness } from "@/server/intelligence-rollout/readiness";
 
 export function IntelligenceRolloutReadiness({
@@ -15,6 +16,11 @@ export function IntelligenceRolloutReadiness({
     readiness.settings.campaignWorkflow === "v2" ||
     readiness.settings.profileVersion === "v2" ||
     readiness.settings.resultWriteMode !== "none";
+  const controlledBetaActive =
+    readiness.settings.campaignWorkflow === "v2" &&
+    readiness.settings.profileVersion === "v2" &&
+    readiness.settings.resultWriteMode === "canonical" &&
+    !readiness.settings.shadowMode;
 
   return (
     <Card>
@@ -97,6 +103,28 @@ export function IntelligenceRolloutReadiness({
             </tbody>
           </table>
         </div>
+
+        {!controlledBetaActive ? (
+          <form className={styles.stack} action={enableWorkspaceControlledBetaAction}>
+            <h3>Enable controlled V2 beta</h3>
+            <p>
+              This workspace will create new Company Profiles and Campaigns with V2 and
+              write canonical V2 results. The postponed benchmark requirement will be
+              recorded as explicitly waived. Other database safety gates still apply.
+            </p>
+            <label className={form.field}>
+              <span>Authorization reason</span>
+              <textarea className={form.textarea} name="reason" required />
+            </label>
+            <label className={form.field}>
+              <span>Type ENABLE V2 BETA to confirm</span>
+              <input className={form.input} name="confirmation" required />
+            </label>
+            <Button type="submit" variant="primary">
+              Enable controlled beta
+            </Button>
+          </form>
+        ) : null}
 
         {v2Configured ? (
           <form className={styles.stack} action={rollbackWorkspaceIntelligenceAction}>

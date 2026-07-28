@@ -563,6 +563,11 @@ rollout decision.
   `INTELLIGENCE_V2_MODEL_CALLS_ENABLED` operator kill switches are enforced immediately
   before uncached V2 external calls. Both default to enabled to preserve current
   behavior and stop calls when explicitly set to `false`.
-- This preparation deliberately contains no activation function and changes no
-  workspace or environment rollout value. The benchmark and holdout gate is hard-coded
-  as blocking while WP-20 remains postponed. Controlled beta is therefore not complete.
+- The initial preparation changed no workspace or environment rollout value. The
+  benchmark and holdout gate remains visibly blocking while WP-20 is postponed.
+- Following explicit operator approval to waive the postponed benchmark gate, migration
+  31 adds the controlled workspace activation transaction. It still requires a
+  reviewable V2 run, refuses unresolved entity-resolution cases, records the exact
+  before/after settings and waiver evidence, enables only workspace-scoped canonical V2
+  routing, and preserves the migration-30 rollback path. Activation does not rewrite
+  historical Campaigns or runs.

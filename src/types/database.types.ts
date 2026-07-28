@@ -11199,6 +11199,10 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      consume_campaign_workflow_control_v2: {
+        Args: { target_workflow_run_id: string; target_workspace_id: string };
+        Returns: Json;
+      };
       create_campaign_discovery_plan_v2: {
         Args: {
           target_campaign_run_id: string;
@@ -12029,6 +12033,32 @@ export type Database = {
         };
         Returns: number;
       };
+      request_campaign_workflow_command_v2: {
+        Args: {
+          target_campaign_run_id: string;
+          target_command_type: string;
+          target_payload?: Json;
+          target_workspace_id: string;
+        };
+        Returns: {
+          command_type: string;
+          created_at: string;
+          id: string;
+          payload_json: Json;
+          processed_at: string | null;
+          requested_by_user_id: string | null;
+          status: string;
+          subject_id: string;
+          subject_type: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "workflow_commands";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
       resolve_campaign_entities_v2: {
         Args: {
           target_campaign_run_id: string;
@@ -12236,6 +12266,44 @@ export type Database = {
         SetofOptions: {
           from: "*";
           to: "workflow_checkpoints";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
+      };
+      settle_campaign_workflow_v2: {
+        Args: {
+          target_error_summary?: Json;
+          target_output_reference?: Json;
+          target_progress_summary?: Json;
+          target_status: string;
+          target_trigger_run_id?: string;
+          target_workflow_run_id: string;
+          target_workspace_id: string;
+        };
+        Returns: {
+          campaign_run_id: string;
+          cancelled_at: string | null;
+          completed_at: string | null;
+          created_at: string;
+          error_summary_json: Json | null;
+          id: string;
+          input_reference_json: Json;
+          output_reference_json: Json | null;
+          paused_at: string | null;
+          progress_summary_json: Json;
+          requested_by_user_id: string | null;
+          started_at: string | null;
+          status: string;
+          subject_id: string;
+          subject_type: string;
+          trigger_run_id: string | null;
+          workflow_family: string;
+          workflow_version_id: string;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "intelligence_workflow_runs";
           isOneToOne: true;
           isSetofReturn: false;
         };

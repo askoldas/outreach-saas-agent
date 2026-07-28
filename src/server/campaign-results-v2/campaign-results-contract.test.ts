@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import test from "node:test";
+
+const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
+const migration = source(
+  "supabase/migrations/20260728002900_v2_campaign_results_review.sql",
+);
+const repository = source("src/server/campaign-results-v2/repository.ts");
+const results = source("src/features/campaigns/CampaignV2Results.tsx");
+const page = source("src/app/(app)/campaigns/[id]/leads/page.tsx");
+
+test("V2 results are selected by immutable run and workspace boundaries", () => {
+  assert.match(repository, /\.eq\("workspace_id", workspaceId\)/);
+  assert.match(repository, /\.eq\("campaign_run_id", run\.id\)/);
+  assert.match(repository, /candidate_rank_snapshots/);
+  assert.match(page, /v2Results \?/);
+  assert.match(page, /CampaignLeadReview/);
+});
+
+test("results expose canonical queues and independent qualification measures", () => {
+  for (const label of [
+    "Recommended",
+    "Conditional",
+    "Needs research",
+    "Rejected",
+    "Excluded",
+    "Invalid & duplicates",
+  ])
+    assert.match(results, new RegExp(label.replace("&", "\\&")));
+  assert.match(results, />Fit</);
+  assert.match(results, />Potential</);
+  assert.match(results, />Confidence</);
+  assert.match(results, /Not enough data/);
+});
+
+test("results expose evidence, identity, corrections, and accessible table semantics", () => {
+  assert.match(results, /Factors and evidence/);
+  assert.match(results, /Identity:/);
+  assert.match(results, /entity-resolution cases/);
+  assert.match(results, /Propose correction/);
+  assert.match(results, /<caption/);
+  assert.match(results, /scope="col"/);
+  assert.match(results, /aria-label="Result lanes"/);
+  assert.doesNotMatch(results, /JSON\.stringify/);
+});
+
+test("review decisions and corrections are auditable and cannot silently rewrite evaluations", () => {
+  assert.match(migration, /candidate_review_decisions_v2/);
+  assert.match(migration, /candidate_corrections_v2/);
+  assert.match(migration, /supersedes_decision_id/);
+  assert.match(migration, /candidate_evaluation_events/);
+  assert.match(migration, /target_scope text default 'campaign'/);
+  assert.match(migration, /public\.is_workspace_admin\(target_workspace_id\)/);
+  assert.doesNotMatch(migration, /update public\.candidate_evaluation_versions/);
+});

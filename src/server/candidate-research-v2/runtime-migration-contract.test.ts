@@ -4,9 +4,12 @@ import { join } from "node:path";
 import test from "node:test";
 
 const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
-const migration = source(
+const migration = [
   "supabase/migrations/20260728002300_retry_safe_candidate_research_stage.sql",
-);
+  "supabase/migrations/20260728002400_retry_safe_candidate_research_stage_part_2.sql",
+]
+  .map(source)
+  .join("\n");
 const worker = source("src/server/candidate-research-v2/candidate-worker.ts");
 const sourceService = source("src/server/candidate-research-v2/source-service.ts");
 const trigger = source("src/trigger/research-campaign-candidates-v2.ts");

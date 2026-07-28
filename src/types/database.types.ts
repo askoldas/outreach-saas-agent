@@ -2631,6 +2631,86 @@ export type Database = {
           },
         ];
       };
+      candidate_corrections_v2: {
+        Row: {
+          campaign_candidate_id: string;
+          campaign_run_id: string;
+          candidate_evaluation_version_id: string;
+          correction_type: string;
+          created_at: string;
+          created_by: string;
+          id: string;
+          proposed_value_json: Json;
+          reason: string;
+          reverted_at: string | null;
+          reverted_by: string | null;
+          scope: string;
+          status: string;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_candidate_id: string;
+          campaign_run_id: string;
+          candidate_evaluation_version_id: string;
+          correction_type: string;
+          created_at?: string;
+          created_by: string;
+          id?: string;
+          proposed_value_json: Json;
+          reason: string;
+          reverted_at?: string | null;
+          reverted_by?: string | null;
+          scope?: string;
+          status?: string;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_candidate_id?: string;
+          campaign_run_id?: string;
+          candidate_evaluation_version_id?: string;
+          correction_type?: string;
+          created_at?: string;
+          created_by?: string;
+          id?: string;
+          proposed_value_json?: Json;
+          reason?: string;
+          reverted_at?: string | null;
+          reverted_by?: string | null;
+          scope?: string;
+          status?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_corrections_v2_campaign_candidate_id_fkey";
+            columns: ["campaign_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_corrections_v2_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_corrections_v2_candidate_evaluation_version_id_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_corrections_v2_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       candidate_eligibility_decisions: {
         Row: {
           candidate_evaluation_version_id: string;
@@ -4058,6 +4138,90 @@ export type Database = {
           },
           {
             foreignKeyName: "candidate_research_tasks_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      candidate_review_decisions_v2: {
+        Row: {
+          campaign_candidate_id: string;
+          campaign_run_id: string;
+          candidate_evaluation_version_id: string;
+          condition_text: string | null;
+          created_at: string;
+          decided_by: string;
+          decision: string;
+          id: string;
+          is_current: boolean;
+          reason: string;
+          scope: string;
+          supersedes_decision_id: string | null;
+          workspace_id: string;
+        };
+        Insert: {
+          campaign_candidate_id: string;
+          campaign_run_id: string;
+          candidate_evaluation_version_id: string;
+          condition_text?: string | null;
+          created_at?: string;
+          decided_by: string;
+          decision: string;
+          id?: string;
+          is_current?: boolean;
+          reason?: string;
+          scope?: string;
+          supersedes_decision_id?: string | null;
+          workspace_id: string;
+        };
+        Update: {
+          campaign_candidate_id?: string;
+          campaign_run_id?: string;
+          candidate_evaluation_version_id?: string;
+          condition_text?: string | null;
+          created_at?: string;
+          decided_by?: string;
+          decision?: string;
+          id?: string;
+          is_current?: boolean;
+          reason?: string;
+          scope?: string;
+          supersedes_decision_id?: string | null;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "candidate_review_decisions_v2_campaign_candidate_id_fkey";
+            columns: ["campaign_candidate_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_candidates";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_review_decisions_v2_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_review_decisions_v2_candidate_evaluation_version_fkey";
+            columns: ["candidate_evaluation_version_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_evaluation_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_review_decisions_v2_supersedes_decision_id_fkey";
+            columns: ["supersedes_decision_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_review_decisions_v2";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_review_decisions_v2_workspace_id_fkey";
             columns: ["workspace_id"];
             isOneToOne: false;
             referencedRelation: "workspaces";
@@ -11915,6 +12079,19 @@ export type Database = {
           isSetofReturn: false;
         };
       };
+      propose_candidate_correction_v2: {
+        Args: {
+          target_campaign_candidate_id: string;
+          target_campaign_run_id: string;
+          target_correction_type: string;
+          target_evaluation_version_id: string;
+          target_proposed_value_json: Json;
+          target_reason: string;
+          target_scope?: string;
+          target_workspace_id: string;
+        };
+        Returns: string;
+      };
       publish_candidate_intelligence_v2: {
         Args: {
           target_claim_ids: Json;
@@ -12023,6 +12200,18 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      record_candidate_review_decision_v2: {
+        Args: {
+          target_campaign_candidate_id: string;
+          target_campaign_run_id: string;
+          target_condition_text?: string;
+          target_decision: string;
+          target_evaluation_version_id: string;
+          target_reason?: string;
+          target_workspace_id: string;
+        };
+        Returns: string;
       };
       record_discovery_query_audit_v2: {
         Args: {

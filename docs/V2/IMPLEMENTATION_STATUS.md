@@ -571,3 +571,9 @@ rollout decision.
   before/after settings and waiver evidence, enables only workspace-scoped canonical V2
   routing, and preserves the migration-30 rollback path. Activation does not rewrite
   historical Campaigns or runs.
+- Migration 32 removes the circular requirement that a cleared test workspace retain a
+  reviewable V2 run before it may create its first fresh V2 run. Activation records
+  whether that prior-run gate was waived and always marks fresh end-to-end validation
+  as required. Historical entity cases remain visible telemetry rather than blocking a
+  clean test reset. Provider/model kill switches and non-destructive rollback remain
+  enforced.

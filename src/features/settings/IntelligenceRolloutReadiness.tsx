@@ -110,7 +110,9 @@ export function IntelligenceRolloutReadiness({
             <p>
               This workspace will create new Company Profiles and Campaigns with V2 and
               write canonical V2 results. The postponed benchmark requirement will be
-              recorded as explicitly waived. Other database safety gates still apply.
+              recorded as explicitly waived. If no prior run remains, the audit will mark
+              fresh end-to-end validation as required. External-call kill switches and
+              non-destructive rollback remain available.
             </p>
             <label className={form.field}>
               <span>Authorization reason</span>

@@ -24,7 +24,7 @@ export async function enableWorkspaceControlledBetaAction(formData: FormData) {
   }
   const readiness = await getControlledBetaReadiness(currentWorkspace.id);
   const remainingBlockers = readiness.gates.filter(
-    (gate) => gate.required && gate.key !== "benchmark_evidence" && !gate.passed,
+    (gate) => ["provider_calls", "model_calls"].includes(gate.key) && !gate.passed,
   );
   if (remainingBlockers.length) {
     redirect(

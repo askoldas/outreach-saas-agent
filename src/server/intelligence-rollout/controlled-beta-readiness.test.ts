@@ -14,6 +14,9 @@ const migration = source(
 const activationMigration = source(
   "supabase/migrations/20260728003100_enable_workspace_controlled_beta.sql",
 );
+const firstRunActivationMigration = source(
+  "supabase/migrations/20260728003200_allow_first_run_controlled_beta.sql",
+);
 const readiness = source("src/server/intelligence-rollout/readiness.ts");
 const settings = source("src/features/settings/IntelligenceRolloutReadiness.tsx");
 
@@ -51,7 +54,7 @@ test("rollback preserves V2 history and atomically disables new workspace routin
   assert.doesNotMatch(migration, /delete from public\.campaign/);
 });
 
-test("rollout changes are auditable and activation is not implemented by this pass", () => {
+test("readiness preparation alone cannot activate a workspace", () => {
   assert.match(migration, /intelligence_rollout_audit_events/);
   assert.match(migration, /public\.is_workspace_admin\(target_workspace_id\)/);
   assert.doesNotMatch(migration, /enable_workspace_intelligence_v2/);
@@ -73,4 +76,15 @@ test("controlled activation is workspace scoped, canonical, and reversible", () 
   assert.match(activationMigration, /result_write_mode = 'canonical'/);
   assert.doesNotMatch(activationMigration, /update public\.campaigns/);
   assert.match(migration, /rollback_workspace_intelligence_v2/);
+});
+
+test("a designated test workspace may activate before retaining a fresh V2 run", () => {
+  assert.match(firstRunActivationMigration, /freshValidationRequired', true/);
+  assert.match(firstRunActivationMigration, /priorRunGateWaived/);
+  assert.doesNotMatch(firstRunActivationMigration, /reviewable_run_count = 0 then/);
+  assert.doesNotMatch(
+    firstRunActivationMigration,
+    /unresolved_entity_case_count > 0 then/,
+  );
+  assert.match(firstRunActivationMigration, /'controlled_beta_enabled'/);
 });

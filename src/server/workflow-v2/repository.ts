@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { fingerprintJson } from "@/lib/workflow-v2/fingerprint";
 import type { Json } from "@/types/database.types";
+import { z } from "zod";
 
 type RpcResult = {
   data: unknown;
@@ -25,6 +26,13 @@ export type CampaignWorkflowRecord = {
   trigger_run_id: string | null;
   workspace_id: string;
 };
+
+const workflowControlSchema = z.object({
+  state: z.enum(["run", "paused", "cancelled", "terminal"]),
+  workflowRunId: z.string().uuid(),
+  campaignRunId: z.string().uuid(),
+  commandId: z.string().uuid().nullable(),
+});
 
 export async function ensureCampaignWorkflow(input: {
   campaignRunId: string;
@@ -116,8 +124,7 @@ export async function loadCompletedCheckpointKeys(input: {
     .eq("workspace_id", input.workspaceId)
     .eq("workflow_run_id", input.workflowRunId)
     .order("created_at", { ascending: true });
-  if (error)
-    throw new Error(`Could not load V2 workflow checkpoints: ${error.message}`);
+  if (error) throw new Error(`Could not load V2 workflow checkpoints: ${error.message}`);
   return [...new Set((data ?? []).map(({ checkpoint_key }) => checkpoint_key))];
 }
 
@@ -138,6 +145,36 @@ export async function loadCampaignV2Run(input: {
   if (data.workflow_version !== "v2")
     throw new Error("V2 workflow cannot execute a non-V2 Campaign Run.");
   return data;
+}
+
+export async function consumeWorkflowControl(input: {
+  workflowRunId: string;
+  workspaceId: string;
+}) {
+  const value = await rpcRecord("consume_campaign_workflow_control_v2", {
+    target_workflow_run_id: input.workflowRunId,
+    target_workspace_id: input.workspaceId,
+  });
+  return workflowControlSchema.parse(value);
+}
+
+export async function loadWorkflowCandidateProgress(input: {
+  campaignRunId: string;
+  workspaceId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const { data: batch, error: batchError } = await supabase
+    .from("candidate_qualification_batches_v2")
+    .select("id,candidate_count,blocked_count")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .maybeSingle();
+  if (batchError)
+    throw new Error(`Could not reconcile V2 Candidate progress: ${batchError.message}`);
+  return {
+    failedCandidateCount: batch?.blocked_count ?? 0,
+    totalCandidateCount: batch?.candidate_count ?? 0,
+  };
 }
 
 export async function updateCampaignWorkflow(input: {
@@ -161,36 +198,15 @@ export async function updateCampaignWorkflow(input: {
   workflowRunId: string;
   workspaceId: string;
 }) {
-  const supabase = createServiceRoleClient();
-  const now = new Date().toISOString();
-  const terminal = ["cancelled", "completed", "completed_partial", "failed"].includes(
-    input.status,
-  );
-  const { data, error } = await supabase
-    .from("intelligence_workflow_runs")
-    .update({
-      status: input.status,
-      ...(input.triggerRunId ? { trigger_run_id: input.triggerRunId } : {}),
-      ...(input.progressSummary
-        ? { progress_summary_json: input.progressSummary }
-        : {}),
-      ...(input.outputReference
-        ? { output_reference_json: input.outputReference }
-        : {}),
-      ...(input.errorSummary !== undefined
-        ? { error_summary_json: input.errorSummary }
-        : {}),
-      ...(input.status === "initializing" ? { started_at: now } : {}),
-      ...(terminal ? { completed_at: now } : {}),
-      ...(input.status === "cancelled" ? { cancelled_at: now } : {}),
-      ...(input.status === "paused" ? { paused_at: now } : {}),
-    })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", input.workflowRunId)
-    .select("id,workspace_id,campaign_run_id,status,trigger_run_id")
-    .single();
-  if (error) throw new Error(`Could not update V2 workflow: ${error.message}`);
-  return data as CampaignWorkflowRecord;
+  return (await rpcRecord("settle_campaign_workflow_v2", {
+    target_error_summary: input.errorSummary ?? null,
+    target_output_reference: input.outputReference ?? null,
+    target_progress_summary: input.progressSummary ?? null,
+    target_status: input.status,
+    target_trigger_run_id: input.triggerRunId ?? null,
+    target_workflow_run_id: input.workflowRunId,
+    target_workspace_id: input.workspaceId,
+  })) as unknown as CampaignWorkflowRecord;
 }
 
 async function rpcTaskRecord(name: string, args: Record<string, unknown>) {

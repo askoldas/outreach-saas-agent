@@ -8,7 +8,9 @@ import {
 } from "@/lib/workflow-v2";
 import {
   ensureCampaignWorkflow,
+  consumeWorkflowControl,
   loadCompletedCheckpointKeys,
+  loadWorkflowCandidateProgress,
   updateCampaignWorkflow,
 } from "@/server/workflow-v2/repository";
 import type { Json } from "@/types/database.types";
@@ -48,6 +50,13 @@ export const executeCampaignV2Task = task({
       workspaceId: payload.workspaceId,
     });
     const workflowRunId = String(workflow.id);
+    const initialControl = await consumeWorkflowControl({
+      workflowRunId,
+      workspaceId: payload.workspaceId,
+    });
+    if (initialControl.state !== "run") {
+      return { status: initialControl.state, workflowRunId };
+    }
     await updateCampaignWorkflow({
       status: "initializing",
       triggerRunId: ctx.run.id,
@@ -65,8 +74,15 @@ export const executeCampaignV2Task = task({
     const stages = remainingCampaignStages(completedStages);
 
     for (const stage of stages) {
+      const beforeStage = await consumeWorkflowControl({
+        workflowRunId,
+        workspaceId: payload.workspaceId,
+      });
+      if (beforeStage.state !== "run") {
+        return { status: beforeStage.state, stage, workflowRunId };
+      }
       await updateCampaignWorkflow({
-        progressSummary: progress(completedStages, stage),
+        progressSummary: await progress(payload, completedStages, stage),
         status: workflowStatusForStage(stage),
         workflowRunId,
         workspaceId: payload.workspaceId,
@@ -93,7 +109,7 @@ export const executeCampaignV2Task = task({
             blockedStage: stage,
             stageOutput: child.output.outputReferences,
           } as unknown as Json,
-          progressSummary: progress(completedStages, stage),
+          progressSummary: await progress(payload, completedStages, stage),
           status: "completed_partial",
           workflowRunId,
           workspaceId: payload.workspaceId,
@@ -101,6 +117,13 @@ export const executeCampaignV2Task = task({
         return { status: "completed_partial", stage, workflowRunId };
       }
       completedStages.push(stage);
+      const afterStage = await consumeWorkflowControl({
+        workflowRunId,
+        workspaceId: payload.workspaceId,
+      });
+      if (afterStage.state !== "run") {
+        return { status: afterStage.state, stage, workflowRunId };
+      }
     }
 
     const outputReference = {
@@ -109,7 +132,7 @@ export const executeCampaignV2Task = task({
     } satisfies Json;
     await updateCampaignWorkflow({
       outputReference,
-      progressSummary: progress(completedStages),
+      progressSummary: await progress(payload, completedStages),
       status: "ready_for_review",
       workflowRunId,
       workspaceId: payload.workspaceId,
@@ -126,15 +149,16 @@ function workflowStatusForStage(stage: CampaignV2Stage) {
   return "evaluating_candidates" as const;
 }
 
-function progress(
+async function progress(
+  payload: ExecuteCampaignV2Payload,
   completedStages: CampaignV2Stage[],
   activeStage?: CampaignV2Stage,
 ) {
+  const candidateProgress = await loadWorkflowCandidateProgress(payload);
   return aggregateWorkflowProgress({
     completedStages,
     activeStage,
-    failedCandidateCount: 0,
-    totalCandidateCount: 0,
+    ...candidateProgress,
   }) as unknown as Json;
 }
 

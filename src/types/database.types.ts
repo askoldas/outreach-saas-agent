@@ -3426,41 +3426,59 @@ export type Database = {
       };
       candidate_rank_snapshots: {
         Row: {
+          anomaly_count: number;
           anomaly_resolution_ids_json: Json;
+          blocking_anomaly_count: number;
           campaign_id: string;
+          campaign_run_id: string | null;
           campaign_strategy_version_id: string;
+          candidate_qualification_batch_id: string | null;
           comparative_batch_ids_json: Json;
           content_hash: string;
+          contract_version: string | null;
           created_at: string;
           id: string;
           included_evaluation_ids_json: Json;
           ordering_policy_version: string;
+          status: string;
           version_number: number;
           workspace_id: string;
         };
         Insert: {
+          anomaly_count?: number;
           anomaly_resolution_ids_json?: Json;
+          blocking_anomaly_count?: number;
           campaign_id: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id: string;
+          candidate_qualification_batch_id?: string | null;
           comparative_batch_ids_json?: Json;
           content_hash: string;
+          contract_version?: string | null;
           created_at?: string;
           id?: string;
           included_evaluation_ids_json: Json;
           ordering_policy_version: string;
+          status?: string;
           version_number: number;
           workspace_id: string;
         };
         Update: {
+          anomaly_count?: number;
           anomaly_resolution_ids_json?: Json;
+          blocking_anomaly_count?: number;
           campaign_id?: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id?: string;
+          candidate_qualification_batch_id?: string | null;
           comparative_batch_ids_json?: Json;
           content_hash?: string;
+          contract_version?: string | null;
           created_at?: string;
           id?: string;
           included_evaluation_ids_json?: Json;
           ordering_policy_version?: string;
+          status?: string;
           version_number?: number;
           workspace_id?: string;
         };
@@ -3473,10 +3491,24 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "candidate_rank_snapshots_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "candidate_rank_snapshots_campaign_strategy_version_id_fkey";
             columns: ["campaign_strategy_version_id"];
             isOneToOne: false;
             referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "candidate_rank_snapshots_candidate_qualification_batch_id_fkey";
+            columns: ["candidate_qualification_batch_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_qualification_batches_v2";
             referencedColumns: ["id"];
           },
           {
@@ -5178,13 +5210,18 @@ export type Database = {
         Row: {
           batch_number: number;
           campaign_id: string;
+          campaign_run_id: string | null;
           campaign_strategy_version_id: string;
+          candidate_qualification_batch_id: string | null;
           completed_at: string | null;
+          contract_version: string | null;
           created_at: string;
           id: string;
           input_hash: string;
+          input_snapshot_json: Json | null;
           lane: string;
           model_call_id: string | null;
+          output_reference_json: Json | null;
           rules_version: string;
           status: string;
           workspace_id: string;
@@ -5192,13 +5229,18 @@ export type Database = {
         Insert: {
           batch_number: number;
           campaign_id: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id: string;
+          candidate_qualification_batch_id?: string | null;
           completed_at?: string | null;
+          contract_version?: string | null;
           created_at?: string;
           id?: string;
           input_hash: string;
+          input_snapshot_json?: Json | null;
           lane: string;
           model_call_id?: string | null;
+          output_reference_json?: Json | null;
           rules_version: string;
           status?: string;
           workspace_id: string;
@@ -5206,13 +5248,18 @@ export type Database = {
         Update: {
           batch_number?: number;
           campaign_id?: string;
+          campaign_run_id?: string | null;
           campaign_strategy_version_id?: string;
+          candidate_qualification_batch_id?: string | null;
           completed_at?: string | null;
+          contract_version?: string | null;
           created_at?: string;
           id?: string;
           input_hash?: string;
+          input_snapshot_json?: Json | null;
           lane?: string;
           model_call_id?: string | null;
+          output_reference_json?: Json | null;
           rules_version?: string;
           status?: string;
           workspace_id?: string;
@@ -5226,10 +5273,24 @@ export type Database = {
             referencedColumns: ["id"];
           },
           {
+            foreignKeyName: "comparative_batches_campaign_run_id_fkey";
+            columns: ["campaign_run_id"];
+            isOneToOne: false;
+            referencedRelation: "campaign_runs";
+            referencedColumns: ["id"];
+          },
+          {
             foreignKeyName: "comparative_batches_campaign_strategy_version_id_fkey";
             columns: ["campaign_strategy_version_id"];
             isOneToOne: false;
             referencedRelation: "campaign_strategy_versions";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "comparative_batches_candidate_qualification_batch_id_fkey";
+            columns: ["candidate_qualification_batch_id"];
+            isOneToOne: false;
+            referencedRelation: "candidate_qualification_batches_v2";
             referencedColumns: ["id"];
           },
           {
@@ -11678,6 +11739,10 @@ export type Database = {
         Args: { target_campaign_run_id: string; target_workspace_id: string };
         Returns: Json;
       };
+      load_campaign_ranking_inputs_v2: {
+        Args: { target_campaign_run_id: string; target_workspace_id: string };
+        Returns: Json;
+      };
       load_campaign_run_memory_snapshot_v2: {
         Args: { target_campaign_run_id: string; target_workspace_id: string };
         Returns: Json;
@@ -11712,6 +11777,20 @@ export type Database = {
           isOneToOne: true;
           isSetofReturn: false;
         };
+      };
+      persist_campaign_ranking_v2: {
+        Args: {
+          target_anomalies: Json;
+          target_batches: Json;
+          target_campaign_run_id: string;
+          target_contract_version: string;
+          target_entries: Json;
+          target_input_hash: string;
+          target_ordering_policy_version: string;
+          target_qualification_batch_id: string;
+          target_workspace_id: string;
+        };
+        Returns: Json;
       };
       persist_candidate_research_source_v2: {
         Args: {

@@ -28,6 +28,7 @@ import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
 import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
 import { getCurrentCampaignStrategy } from "@/server/campaign-strategy/repository";
 import { createInitialCampaignStrategyV2 } from "@/server/campaign-strategy-v2/service";
+import { controlActiveCampaignWorkflowV2 } from "@/server/workflow-v2/control-service";
 
 type UpdateCampaignStatusInput = {
   campaignId: string;
@@ -124,16 +125,27 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
     throw new Error("Unsupported campaign status.");
   }
 
+  const v2Control = await controlActiveCampaignWorkflowV2({
+    campaignExternalId: input.campaignId,
+    command:
+      input.status === "completed"
+        ? "cancel"
+        : input.status === "paused"
+          ? "pause"
+          : "resume",
+    workspaceId: currentWorkspace.id,
+  });
   const stopped =
-    input.status === "completed"
+    !v2Control && input.status === "completed"
       ? await stopActiveCampaignRun({
           campaignId: input.campaignId,
           workspaceId: currentWorkspace.id,
         })
       : null;
-  await updateCampaignStatus(currentWorkspace.id, input.campaignId, input.status);
+  if (!v2Control)
+    await updateCampaignStatus(currentWorkspace.id, input.campaignId, input.status);
   const resumed =
-    input.status === "running"
+    !v2Control && input.status === "running"
       ? await resumePausedCampaignRun({
           campaignId: input.campaignId,
           workspaceId: currentWorkspace.id,
@@ -151,8 +163,13 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
   revalidatePath("/dashboard");
 
   return {
-    message:
-      input.status === "running"
+    message: v2Control
+      ? input.status === "running"
+        ? "Campaign resume queued"
+        : input.status === "paused"
+          ? "Campaign pause requested"
+          : "Campaign stopped"
+      : input.status === "running"
         ? resumed
           ? "Campaign run resumed"
           : "Campaign running"

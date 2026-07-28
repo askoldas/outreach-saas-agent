@@ -17,6 +17,9 @@ test("V2 parent resumes from checkpoints and waits for durable child stages", ()
   assert.match(parent, /remainingCampaignStages/);
   assert.match(parent, /runCampaignV2StageTask\.triggerAndWait/);
   assert.match(parent, /campaign-v2:\$\{workflowRunId\}:\$\{stage\}/);
+  assert.match(parent, /consumeWorkflowControl/);
+  assert.match(parent, /beforeStage/);
+  assert.match(parent, /afterStage/);
 });
 
 test("V2 stage execution claims and settles one logical task", () => {

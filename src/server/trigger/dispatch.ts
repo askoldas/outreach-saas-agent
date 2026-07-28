@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { analyzeCompanyProfileTask } from "@/trigger/analyze-company-profile";
 import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
 import type { executeCampaignTask } from "@/trigger/execute-campaign";
+import type { executeCampaignV2Task } from "@/trigger/execute-campaign-v2";
 import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
 import { resolveCampaignTaskId } from "@/lib/intelligence/workflow-routing";
 import type { IntelligenceVersion } from "@/lib/intelligence/rollout";
@@ -86,6 +87,31 @@ export async function dispatchCampaignRun(input: {
     );
     throw error;
   }
+}
+
+export async function dispatchCampaignV2Resume(input: {
+  campaignRunId: string;
+  commandId: string;
+  workspaceId: string;
+}) {
+  return (
+    await tasks.trigger<typeof executeCampaignV2Task>(
+      "execute-campaign-v2",
+      {
+        campaignRunId: input.campaignRunId,
+        workspaceId: input.workspaceId,
+      },
+      {
+        idempotencyKey: `execute-campaign-v2-resume:${input.campaignRunId}:${input.commandId}`,
+        tags: [
+          `workspace:${input.workspaceId}`,
+          `campaign_run:${input.campaignRunId}`,
+          "workflow:v2",
+          "campaign_resume",
+        ],
+      },
+    )
+  ).id;
 }
 
 export async function dispatchProviderExecution(input: {

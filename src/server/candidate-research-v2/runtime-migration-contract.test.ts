@@ -36,6 +36,8 @@ test("Research evidence retains V2 provider or first-party fetch provenance", ()
   assert.match(migration, /length\(content_text\) between 1 and 100000/i);
   assert.match(migration, /First-party source is outside the canonical domain/i);
   assert.match(migration, /does not match frozen raw evidence/i);
+  assert.match(migration, /expected_discovery_page_kind := 'other'/i);
+  assert.doesNotMatch(migration, /target_page_kind <> case/i);
   assert.match(sourceService, /maximumFirstPartyFetches > 0/);
   assert.match(sourceService, /minimumReusableContentLength/);
   assert.match(

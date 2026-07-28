@@ -28,6 +28,7 @@ declare
   canonical_domain text;
   source_host text;
   task_type text;
+  expected_discovery_page_kind text;
 begin
   if auth.role() <> 'service_role'
     and not public.is_workspace_admin(target_workspace_id)
@@ -100,18 +101,18 @@ begin
     ) then
       raise exception 'Discovery source does not belong to the Campaign Candidate.';
     end if;
+    expected_discovery_page_kind := 'other';
+    if source_record.raw_payload_json->>'pageType' = 'company_homepage' then
+      expected_discovery_page_kind := 'home';
+    elsif source_record.raw_payload_json->>'pageType' = 'company_subpage' then
+      expected_discovery_page_kind := 'about';
+    end if;
     if target_retrieved_at is distinct from source_record.retrieved_at
       or target_content <> left(
         coalesce(source_record.raw_payload_json->>'content', ''),
         100000
       )
-      or target_page_kind <> case
-        when source_record.raw_payload_json->>'pageType' = 'company_homepage'
-          then 'home'
-        when source_record.raw_payload_json->>'pageType' = 'company_subpage'
-          then 'about'
-        else 'other'
-      end
+      or target_page_kind <> expected_discovery_page_kind
     then
       raise exception 'Discovery source payload does not match frozen raw evidence.';
     end if;

@@ -62,12 +62,26 @@ test("low-confidence possible and excluded candidates cannot request evaluation"
   assert.equal(result[1]?.shouldEvaluate, false);
 });
 
-test("candidate classification rejects malformed, missing, or duplicate results", () => {
-  assert.throws(
-    () =>
-      parseCandidateClassificationBatch({ classifications: [] }, new Set(["required"])),
-    /every candidate/,
+test("candidate classification retains omitted candidates as insufficient data", () => {
+  const result = parseCandidateClassificationBatch(
+    { classifications: [] },
+    new Set(["required"]),
   );
+  assert.deepEqual(result, [
+    {
+      candidateKey: "required",
+      status: "insufficient_data",
+      confidence: 0,
+      geographyMatch: null,
+      reasons: [
+        "The classification provider omitted this candidate; it was retained as insufficient data.",
+      ],
+      shouldEvaluate: false,
+    },
+  ]);
+});
+
+test("candidate classification still rejects invalid and duplicate results", () => {
   assert.throws(
     () =>
       parseCandidateClassificationBatch(
@@ -84,6 +98,63 @@ test("candidate classification rejects malformed, missing, or duplicate results"
         new Set(["x"]),
       ),
     /invalid status/,
+  );
+  assert.throws(
+    () =>
+      parseCandidateClassificationBatch(
+        {
+          classifications: [
+            {
+              candidateKey: "a",
+              status: "possible",
+              confidence: 0.7,
+              geographyMatch: null,
+              reasons: [],
+              shouldEvaluate: true,
+            },
+            {
+              candidateKey: "a",
+              status: "possible",
+              confidence: 0.7,
+              geographyMatch: null,
+              reasons: [],
+              shouldEvaluate: true,
+            },
+          ],
+        },
+        new Set(["a", "b"]),
+      ),
+    /unknown or duplicate key/,
+  );
+});
+
+test("candidate classification preserves valid rows and fills only missing keys", () => {
+  const result = parseCandidateClassificationBatch(
+    {
+      classifications: [
+        {
+          candidateKey: "b",
+          status: "promising",
+          confidence: 0.9,
+          geographyMatch: true,
+          reasons: ["Visible match"],
+          shouldEvaluate: true,
+        },
+      ],
+    },
+    new Set(["a", "b", "c"]),
+  );
+  assert.deepEqual(
+    result.map(({ candidateKey, status, shouldEvaluate }) => ({
+      candidateKey,
+      status,
+      shouldEvaluate,
+    })),
+    [
+      { candidateKey: "b", status: "promising", shouldEvaluate: true },
+      { candidateKey: "a", status: "insufficient_data", shouldEvaluate: false },
+      { candidateKey: "c", status: "insufficient_data", shouldEvaluate: false },
+    ],
   );
 });
 

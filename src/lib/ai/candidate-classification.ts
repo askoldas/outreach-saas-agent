@@ -1,6 +1,6 @@
 import { generateTextResult, type AiCallResult } from "../providers/openrouter.ts";
 
-export const candidateClassificationPromptVersion = "search-result-classification-v2";
+export const candidateClassificationPromptVersion = "search-result-classification-v3";
 
 export type CandidateClassificationStatus =
   | "promising"
@@ -133,8 +133,8 @@ export function parseCandidateClassificationBatch(
   if (!Array.isArray(root.classifications)) {
     throw new Error("Candidate classification returned no classifications.");
   }
-  if (root.classifications.length !== expectedKeys.size) {
-    throw new Error("Candidate classification did not return every candidate.");
+  if (root.classifications.length > expectedKeys.size) {
+    throw new Error("Candidate classification returned too many classifications.");
   }
   const seen = new Set<string>();
   const allowed = new Set<CandidateClassificationStatus>([
@@ -175,6 +175,19 @@ export function parseCandidateClassificationBatch(
       shouldEvaluate,
     };
   });
+  for (const candidateKey of expectedKeys) {
+    if (seen.has(candidateKey)) continue;
+    classifications.push({
+      candidateKey,
+      status: "insufficient_data",
+      confidence: 0,
+      geographyMatch: null,
+      reasons: [
+        "The classification provider omitted this candidate; it was retained as insufficient data.",
+      ],
+      shouldEvaluate: false,
+    });
+  }
   return classifications;
 }
 

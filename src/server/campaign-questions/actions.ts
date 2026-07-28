@@ -53,7 +53,10 @@ export async function answerCampaignQuestionAction(formData: FormData) {
       .eq("id", question.id);
     throw error;
   }
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath(`/campaigns/${campaignId}/discovery`);
   revalidatePath(`/campaigns/${campaignId}/leads`);
+  return { message: "Clarification saved. Campaign resume queued." };
 }
 
 function stringField(formData: FormData, key: string) {

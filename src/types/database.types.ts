@@ -8300,6 +8300,50 @@ export type Database = {
           },
         ];
       };
+      intelligence_rollout_audit_events: {
+        Row: {
+          actor_user_id: string | null;
+          created_at: string;
+          event_type: string;
+          evidence_json: Json;
+          id: string;
+          next_settings_json: Json;
+          previous_settings_json: Json;
+          reason: string;
+          workspace_id: string;
+        };
+        Insert: {
+          actor_user_id?: string | null;
+          created_at?: string;
+          event_type: string;
+          evidence_json?: Json;
+          id?: string;
+          next_settings_json: Json;
+          previous_settings_json: Json;
+          reason: string;
+          workspace_id: string;
+        };
+        Update: {
+          actor_user_id?: string | null;
+          created_at?: string;
+          event_type?: string;
+          evidence_json?: Json;
+          id?: string;
+          next_settings_json?: Json;
+          previous_settings_json?: Json;
+          reason?: string;
+          workspace_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_rollout_audit_events_workspace_id_fkey";
+            columns: ["workspace_id"];
+            isOneToOne: false;
+            referencedRelation: "workspaces";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       intelligence_task_attempts: {
         Row: {
           attempt_number: number;
@@ -12308,6 +12352,26 @@ export type Database = {
       resolve_organization_redirect_v2: {
         Args: { target_organization_id: string; target_workspace_id: string };
         Returns: string;
+      };
+      rollback_workspace_intelligence_v2: {
+        Args: { target_reason: string; target_workspace_id: string };
+        Returns: {
+          campaign_workflow: string;
+          created_at: string;
+          enabled_providers: string[];
+          profile_version: string;
+          result_write_mode: string;
+          shadow_mode: boolean;
+          updated_at: string;
+          updated_by: string | null;
+          workspace_id: string;
+        };
+        SetofOptions: {
+          from: "*";
+          to: "workspace_intelligence_settings";
+          isOneToOne: true;
+          isSetofReturn: false;
+        };
       };
       save_analyzed_company_profile_version: {
         Args: {

@@ -114,8 +114,7 @@ for each row execute function public.enforce_default_v2_legacy_freeze();
 revoke all on function public.rollback_workspace_intelligence_v2(uuid, text)
 from public, anon, authenticated;
 revoke all on function public.enable_workspace_controlled_beta_v2(
-  uuid, text, boolean
+  uuid, boolean, text
 ) from public, anon, authenticated;
 
 revoke all on function public.enforce_default_v2_legacy_freeze() from public;
-

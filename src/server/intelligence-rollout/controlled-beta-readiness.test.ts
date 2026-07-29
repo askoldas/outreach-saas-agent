@@ -17,6 +17,9 @@ const activationMigration = source(
 const firstRunActivationMigration = source(
   "supabase/migrations/20260728003200_allow_first_run_controlled_beta.sql",
 );
+const defaultV2Migration = source(
+  "supabase/migrations/20260729000100_default_v2_and_freeze_legacy.sql",
+);
 const readiness = source("src/server/intelligence-rollout/readiness.ts");
 const settings = source("src/features/settings/IntelligenceRolloutReadiness.tsx");
 
@@ -37,12 +40,12 @@ test("external-call kill switches default on and stop V2 calls explicitly", () =
   );
 });
 
-test("controlled beta remains fail-closed while benchmark evidence is postponed", () => {
+test("postponed benchmark evidence remains visible after V2 becomes canonical", () => {
   assert.match(readiness, /key: "benchmark_evidence"/);
   assert.match(readiness, /passed: false/);
-  assert.match(readiness, /required: true/);
-  assert.match(settings, /Activation blocked/);
-  assert.match(settings, /cannot enable V2/i);
+  assert.match(readiness, /required: false/);
+  assert.match(settings, /V2 canonical/);
+  assert.match(settings, /V1 creation and workspace\s+rollback routing are frozen/);
 });
 
 test("rollback preserves V2 history and atomically disables new workspace routing", () => {
@@ -87,4 +90,17 @@ test("a designated test workspace may activate before retaining a fresh V2 run",
     /unresolved_entity_case_count > 0 then/,
   );
   assert.match(firstRunActivationMigration, /'controlled_beta_enabled'/);
+});
+
+test("WP-22 revokes the superseded beta activation and rollback controls", () => {
+  assert.match(
+    defaultV2Migration,
+    /revoke all on function public\.rollback_workspace_intelligence_v2/,
+  );
+  assert.match(
+    defaultV2Migration,
+    /revoke all on function public\.enable_workspace_controlled_beta_v2/,
+  );
+  assert.doesNotMatch(settings, /enableWorkspaceControlledBetaAction/);
+  assert.doesNotMatch(settings, /rollbackWorkspaceIntelligenceAction/);
 });

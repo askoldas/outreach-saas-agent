@@ -51,6 +51,5 @@ test("V2 stages connect through deterministic Comparative Ranking", () => {
   assert.match(service, /input\.stage === "rank_candidates"/);
   assert.match(service, /executeRankingStage/);
   assert.match(service, /stage adapter.*is not implemented/s);
-  assert.match(routing, /not enabled yet/);
-  assert.doesNotMatch(routing, /return "execute-campaign-v2"/);
+  assert.match(routing, /return "execute-campaign-v2"/);
 });

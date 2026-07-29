@@ -35,7 +35,8 @@ test("V2 routing creates a review draft without auto-starting discovery", () => 
 
 test("strategy review uses an explicit confirmation gate and keeps discovery gated", () => {
   assert.match(strategyPage, /CampaignStrategyV2Workspace/);
-  assert.match(strategyPage, /campaignWorkflow === "v2"/);
+  assert.match(strategyPage, /getCampaignWorkflowVersion/);
+  assert.match(strategyPage, /workflowVersion === "v2"/);
   assert.match(workspace, /Confirm strategy/);
   assert.match(workspace, /confirmCampaignStrategyV2Action/);
   assert.match(workspace, /Start discovery/);

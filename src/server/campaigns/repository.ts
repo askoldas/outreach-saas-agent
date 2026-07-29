@@ -66,6 +66,24 @@ export async function getCampaign(workspaceId: string, id: string) {
   if (!data) return null;
   return (await hydrate(supabase, workspaceId, [data as CampaignRow]))[0] ?? null;
 }
+
+export async function getCampaignWorkflowVersion(
+  workspaceId: string,
+  id: string,
+): Promise<"v1" | "v2" | null> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data, error } = await supabase
+    .from("campaigns")
+    .select("workflow_version")
+    .eq("workspace_id", workspaceId)
+    .eq("external_id", id)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load Campaign workflow: ${error.message}`);
+  if (!data) return null;
+  if (data.workflow_version !== "v1" && data.workflow_version !== "v2")
+    throw new Error("Campaign has an unsupported workflow version.");
+  return data.workflow_version;
+}
 export async function updateCampaignStatus(
   workspaceId: string,
   id: string,

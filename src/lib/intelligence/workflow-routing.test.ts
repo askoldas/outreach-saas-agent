@@ -6,6 +6,6 @@ test("persisted V1 Campaign Runs continue using the existing Trigger workflow", 
   assert.equal(resolveCampaignTaskId("v1"), "execute-campaign");
 });
 
-test("V2 runs fail closed until the V2 Trigger workflow package is installed", () => {
-  assert.throws(() => resolveCampaignTaskId("v2"), /not enabled yet/);
+test("persisted V2 Campaign Runs use the canonical V2 Trigger workflow", () => {
+  assert.equal(resolveCampaignTaskId("v2"), "execute-campaign-v2");
 });

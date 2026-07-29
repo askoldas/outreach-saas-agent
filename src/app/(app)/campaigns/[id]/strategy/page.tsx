@@ -9,7 +9,7 @@ import {
   getCurrentCampaignStrategyV2Draft,
   getCurrentConfirmedCampaignStrategyV2,
 } from "@/server/campaign-strategy-v2/repository";
-import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
+import { getCampaignWorkflowVersion } from "@/server/campaigns/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 export default async function StrategyPage({
   params,
@@ -22,10 +22,10 @@ export default async function StrategyPage({
   const { mode, message } = await searchParams;
   const campaign = await loadCampaignPage(id);
   const { currentWorkspace } = await getWorkspaceContext();
-  const settings = currentWorkspace
-    ? await getWorkspaceIntelligenceSettings(currentWorkspace.id)
+  const workflowVersion = currentWorkspace
+    ? await getCampaignWorkflowVersion(currentWorkspace.id, campaign.id)
     : null;
-  if (currentWorkspace && settings?.campaignWorkflow === "v2") {
+  if (currentWorkspace && workflowVersion === "v2") {
     const [draft, confirmed] = await Promise.all([
       getCurrentCampaignStrategyV2Draft(currentWorkspace.id, campaign.id),
       getCurrentConfirmedCampaignStrategyV2(currentWorkspace.id, campaign.id),

@@ -53,19 +53,30 @@ export async function dispatchCampaignRun(input: {
     dispatchKey,
   );
   try {
-    const handle = await tasks.trigger<typeof executeCampaignTask>(
-      taskId,
-      { campaignRunId: input.campaignRunId },
-      {
-        idempotencyKey: dispatchKey,
-        tags: [
-          `workspace:${input.workspaceId}`,
-          `campaign_run:${input.campaignRunId}`,
-          `workflow:${campaignRun.workflow_version}`,
-          ...(input.tags ?? []),
-        ],
-      },
-    );
+    const options = {
+      idempotencyKey: dispatchKey,
+      tags: [
+        `workspace:${input.workspaceId}`,
+        `campaign_run:${input.campaignRunId}`,
+        `workflow:${campaignRun.workflow_version}`,
+        ...(input.tags ?? []),
+      ],
+    };
+    const handle =
+      taskId === "execute-campaign-v2"
+        ? await tasks.trigger<typeof executeCampaignV2Task>(
+            taskId,
+            {
+              campaignRunId: input.campaignRunId,
+              workspaceId: input.workspaceId,
+            },
+            options,
+          )
+        : await tasks.trigger<typeof executeCampaignTask>(
+            taskId,
+            { campaignRunId: input.campaignRunId },
+            options,
+          );
     const { error } = await supabase
       .from("campaign_runs")
       .update({

@@ -107,11 +107,12 @@ export async function getControlledBetaReadiness(
 
   const gates: RolloutGate[] = [
     {
-      detail: "WP-20 benchmark and holdout evidence is intentionally postponed.",
+      detail:
+        "WP-20 benchmark and holdout evidence was explicitly postponed before V2 became the canonical default.",
       key: "benchmark_evidence",
       label: "Frozen and holdout benchmarks meet release thresholds",
       passed: false,
-      required: true,
+      required: false,
     },
     {
       detail: intelligenceExternalCallsAllowed("provider")
@@ -159,11 +160,11 @@ export async function getControlledBetaReadiness(
     },
     {
       detail: flags.INTELLIGENCE_V2_ENABLED
-        ? "The global V2 master switch is available."
-        : "The global V2 master switch remains off.",
+        ? "The retired rollout flag agrees with the canonical V2 default."
+        : "The retired rollout flag is off but cannot downgrade canonical V2 routing.",
       key: "master_switch",
-      label: "Global V2 switch is deliberately controlled",
-      passed: flags.INTELLIGENCE_V2_ENABLED,
+      label: "Retired rollout flag does not control workflow routing",
+      passed: true,
       required: false,
     },
   ];

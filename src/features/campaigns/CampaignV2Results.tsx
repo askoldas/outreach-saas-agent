@@ -23,6 +23,8 @@ const laneLabels: Record<ResultLane, string> = {
   rejected: "Rejected",
 };
 
+type ResultView = "all" | ResultLane;
+
 export function CampaignV2Results({
   campaignId,
   results,
@@ -30,7 +32,7 @@ export function CampaignV2Results({
   campaignId: string;
   results: Results;
 }) {
-  const [lane, setLane] = useState<ResultLane>("recommended");
+  const [view, setView] = useState<ResultView>("all");
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
   const [pending, startTransition] = useTransition();
@@ -38,7 +40,7 @@ export function CampaignV2Results({
     const needle = query.trim().toLowerCase();
     return results.candidates.filter(
       (candidate) =>
-        candidate.lane === lane &&
+        (view === "all" || candidate.lane === view) &&
         (!needle ||
           [
             candidate.name,
@@ -48,7 +50,7 @@ export function CampaignV2Results({
             ...candidate.archetypes,
           ].some((value) => value?.toLowerCase().includes(needle))),
     );
-  }, [lane, query, results.candidates]);
+  }, [query, results.candidates, view]);
 
   function decide(
     candidate: Results["candidates"][number],
@@ -155,12 +157,19 @@ export function CampaignV2Results({
       </div>
 
       <nav className={styles.lanes} aria-label="Result lanes">
+        <Button
+          aria-pressed={view === "all"}
+          onClick={() => setView("all")}
+          variant={view === "all" ? "primary" : "secondary"}
+        >
+          All evaluated ({results.candidates.length})
+        </Button>
         {resultLanes.map((item) => (
           <Button
-            aria-pressed={lane === item}
+            aria-pressed={view === item}
             key={item}
-            onClick={() => setLane(item)}
-            variant={lane === item ? "primary" : "secondary"}
+            onClick={() => setView(item)}
+            variant={view === item ? "primary" : "secondary"}
           >
             {laneLabels[item]} ({results.laneCounts[item]})
           </Button>
@@ -182,11 +191,13 @@ export function CampaignV2Results({
       <div className={styles.tableWrap}>
         <table className={styles.table}>
           <caption className={styles.muted}>
-            {laneLabels[lane]} candidates, ranked within this Campaign Run.
+            {view === "all" ? "All evaluated" : laneLabels[view]} candidates, ranked
+            within this Campaign Run.
           </caption>
           <thead>
             <tr>
               <th scope="col">Company</th>
+              <th scope="col">Outcome</th>
               <th scope="col">Relationship</th>
               <th scope="col">Archetype</th>
               <th scope="col">Fit</th>
@@ -213,6 +224,11 @@ export function CampaignV2Results({
                       candidate.domain
                     )}
                   </span>
+                </td>
+                <td>
+                  <Badge tone={laneTone(candidate.lane)}>
+                    {laneLabels[candidate.lane]}
+                  </Badge>
                 </td>
                 <td>
                   {candidate.relationship}
@@ -370,10 +386,17 @@ export function CampaignV2Results({
         </table>
       </div>
       {!visible.length ? (
-        <p>No candidates in this lane match the current search.</p>
+        <p>No evaluated candidates in this view match the current search.</p>
       ) : null}
     </section>
   );
+}
+
+function laneTone(lane: ResultLane) {
+  if (lane === "recommended") return "success" as const;
+  if (lane === "conditional" || lane === "needs_research") return "warning" as const;
+  if (lane === "rejected" || lane === "excluded") return "danger" as const;
+  return "neutral" as const;
 }
 
 function formatScore(value: number | null) {

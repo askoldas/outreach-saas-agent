@@ -35,6 +35,14 @@ test("results expose canonical queues and independent qualification measures", (
   assert.match(results, /Not enough data/);
 });
 
+test("results default to every evaluated company and expose each outcome", () => {
+  assert.match(results, /useState<ResultView>\("all"\)/);
+  assert.match(results, /All evaluated \(\{results\.candidates\.length\}\)/);
+  assert.match(results, /view === "all" \|\| candidate\.lane === view/);
+  assert.match(results, /<th scope="col">Outcome<\/th>/);
+  assert.match(results, /laneLabels\[candidate\.lane\]/);
+});
+
 test("results expose evidence, identity, corrections, and accessible table semantics", () => {
   assert.match(results, /Factors and evidence/);
   assert.match(results, /Identity:/);

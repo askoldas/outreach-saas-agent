@@ -12,7 +12,6 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
-    "test:discovery-quality": "node --experimental-strip-types --test src/lib/discovery/quality-evaluation.test.ts src/lib/discovery/benchmark.test.ts",
     "test:e2e": "playwright test",
     "test:db": "supabase test db",
     "db:baseline:build": "node scripts/build-clean-baseline.mjs",

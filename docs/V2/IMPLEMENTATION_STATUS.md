@@ -39,17 +39,16 @@ behavior and deterministic tests are implemented.
 | WP-20 — Shadow mode and benchmark runner                 | postponed | Synthetic portfolio, comparison runner, report, and no-write shadow mode were explicitly postponed by product decision.                                                                                                                                                                                          |
 | WP-21 — Controlled beta                                  | complete  | Workspace-scoped activation, readiness telemetry, rollback preparation, provider/model kill switches, and successful end-to-end production tests established the controlled rollout boundary before the explicit default-V2 decision.                                                                            |
 | WP-22 — Default V2 and legacy freeze                     | complete  | V2 is canonical for new workspaces, profiles, campaigns, and runs; initial dispatch routes persisted V2 runs to the V2 parent; new V1 writes and workspace switching are database-blocked; historical V1 reads remain routed by frozen record version.                                                           |
-| WP-23 — Legacy removal                                   | blocked   | Requires explicit approval after V2 default and historical-read guarantees.                                                                                                                                                                                                                                      |
+| WP-23 — Legacy removal                                   | complete  | Native Company Intelligence and Campaign Strategy entry points are canonical. V1 constructors, mutation actions, compatibility adapters, deprecated prompts, rollout switching UI/actions, and legacy Trigger execution code are removed; historical reads and exports remain intact.                            |
 
 ## Known compatibility boundaries
 
-- Existing profiles, campaigns, runs, qualifications, and exports remain V1.
-- V2 is introduced beside V1 through persisted campaign/run workflow versions.
-- New workspace settings are fixed to canonical V2 routing. Historical V1 campaigns and
-  runs remain readable through their persisted immutable workflow versions.
+- Existing V1 profiles, campaigns, runs, qualifications, and exports remain readable.
+- New profiles, campaigns, and Campaign Runs are native V2/V3 only.
+- Historical V1 Campaign Runs cannot be dispatched, resumed, or mutated.
 - V1 records are not reinterpreted as V2 records.
-- Compatibility paths may read V1 into user-reviewed V2 drafts only when their package
-  is implemented.
+- Historical strategy and result readers stay version-aware; exports retain frozen
+  payload behavior.
 
 ## WP-01 delivery record
 
@@ -586,14 +585,78 @@ rollout decision.
 - New workspaces receive canonical V2 settings. Direct workspace downgrade, shadow
   routing, controlled-beta activation, and rollback-to-V1 execution are no longer
   available.
-- Generic Campaign Run dispatch now routes immutable `v1` runs to the historical Trigger
-  parent and immutable `v2` runs to `execute-campaign-v2`; the V2 payload includes its
-  workspace boundary.
+- Generic Campaign Run dispatch now accepts immutable `v2` runs and passes their
+  workspace boundary to `execute-campaign-v2`; immutable `v1` runs are read-only.
 - Campaign Strategy pages choose their read model from the Campaign's persisted workflow
   version rather than the workspace default, preserving historical V1 readability.
 - Provider and model external-call kill switches remain available. They stop external
   work without switching the product back to V1.
-- WP-23 cleanup must remove V1 creation services, Trigger execution code, deprecated
-  prompts, rollout activation/rollback actions, and compatibility adapters only after a
-  final legacy-reference and historical-read audit. Historical exports and read models
-  remain protected until that audit is explicitly approved.
+- WP-23 cleanup completed after the approved legacy-reference and historical-read audit.
+  Historical exports and read models remain protected.
+
+## WP-23.1 delivery record
+
+- The approved final audit found no live profile versions, campaigns, Campaign Runs,
+  exports, or memories that require a compatibility write path. The required empty
+  workspace profile container remains preserved by Settings cleanup.
+- New Company Intelligence drafts start directly from workspace identity and the saved
+  official website. They no longer require, load, or adapt a V1 structured profile.
+- The first V3 stage collects a bounded set of first-party website pages through the
+  provider kill switch, persists immutable workspace-scoped evidence and provider
+  execution audit, and supplies raw evidence only to fact extraction.
+- All six model stages now enforce the model-call kill switch. The context compiler was
+  versioned so adapter-era cached inputs cannot be confused with native evidence input.
+- Migration `20260729000200_native_company_intelligence_v3_entry.sql` adds the native
+  draft RPC, revokes the generic adapter-era constructor and both legacy
+  profile-version writers, and rejects future canonical profile versions that do not
+  contain a compiled native V3 official-website source snapshot.
+- The Company page now saves its source URL on the workspace, starts/retries native
+  analysis without a legacy profile version, shows six-stage progress, and reloads into
+  review when questions or a completed draft are ready.
+- Historical V1 records and read models have not been dropped. WP-23.2 must replace
+  adapter-seeded Campaign Strategy creation before final V1 service, Trigger, prompt,
+  and adapter deletion.
+
+## WP-23.2 delivery record
+
+- New Campaign creation reads only the current published Company Intelligence V3
+  version, active normalized offerings, reviewed buyer archetypes, business roles, and
+  commercial rules. Offering stable keys are the user-facing Campaign references.
+- The Campaign brief defaults and AI-planning context now use the normalized V3
+  commercial graph. The V2 model-call kill switch is enforced before an AI Campaign
+  proposal.
+- `create_native_campaign_v2` creates the Campaign and frozen profile snapshot without
+  inserting a flat V1 strategy. Campaign list hydration supports this short-lived
+  strategy-review state.
+- The native deterministic compiler creates relationship archetypes, semantic
+  Discovery segments, evidence questions, scoped rules, qualification factors,
+  coverage, and stopping policy directly from the confirmed Campaign brief and selected
+  V3 offering. New strategies carry `native-campaign-strategy/v1` and no
+  `legacyImport`.
+- Migration `20260729000300_native_campaign_strategy_v2_entry.sql` validates the frozen
+  native V3 profile and offering references, versions the native context/compiler
+  contracts, revokes both adapter-era creation RPCs, and prevents a native Campaign
+  from receiving a non-native Strategy version.
+- Historical Campaign strategies and V1 read models remain unchanged. WP-23.3 may now
+  remove unused V1 creation services, adapters, prompts, Trigger code, and switch-era
+  rollout surfaces after a final dead-reference check.
+
+## WP-23.3 delivery record
+
+- Campaign dispatch now accepts only persisted V2 Campaign Runs. Historical V1 runs
+  fail closed and are excluded from dispatch recovery.
+- The V1 Trigger parent, discovery child, Campaign Agent loop/checkpoints, sequential
+  discovery/classification/qualification services, legacy Company Profile analyzer,
+  deprecated Strategy generator, and their prompt/query modules were removed.
+- The Company page is native V3-only. The Campaign Strategy page keeps a read-only V1
+  view for historical campaigns while new strategy confirmation remains V2-native.
+- Rollout readiness and activation/rollback UI/actions were removed. Provider/model kill
+  switches remain independent of workflow version.
+- Compatibility adapters were removed from production and tests now build native
+  strategy fixtures.
+- Migration `20260729000400_remove_legacy_write_and_execution_surfaces.sql` drops
+  retired constructor/rollout RPCs and rejects new legacy profile-analysis or Campaign
+  discovery provider executions. Historical tables and rows are not deleted.
+- Current Trigger deployment contains only Company Intelligence V3, Campaign Workflow
+  V2, document processing, optional contact enrichment, grounded draft generation, and
+  verification tasks.

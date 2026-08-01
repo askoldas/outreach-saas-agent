@@ -12,6 +12,7 @@ const migration = [
   .join("\n");
 const worker = source("src/server/candidate-research-v2/candidate-worker.ts");
 const sourceService = source("src/server/candidate-research-v2/source-service.ts");
+const stageService = source("src/server/candidate-research-v2/stage-service.ts");
 const trigger = source("src/trigger/research-campaign-candidates-v2.ts");
 
 test("Candidate research freezes one exact run-scoped batch after Entity Resolution", () => {
@@ -57,6 +58,14 @@ test("Paid extraction and candidate completion are separately replay safe", () =
   assert.match(worker, /findCandidateResearchExtraction/);
   assert.match(worker, /saveCandidateResearchExtraction/);
   assert.match(worker, /completeCandidateResearchMember/);
+});
+
+test("Stage retries reuse the frozen batch before reading mutable candidate state", () => {
+  assert.match(stageService, /findCandidateResearchBatch\(input\)/);
+  assert.match(
+    stageService,
+    /if \(frozenBatch\) return frozenBatch;[\s\S]*loadCampaignResearchContext\(input\)/,
+  );
 });
 
 test("Research fans candidates out with bounded Trigger concurrency", () => {

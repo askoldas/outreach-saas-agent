@@ -2,16 +2,10 @@ export type ProfileV3DraftState = "ready_for_review" | "needs_input";
 
 export function resolveProfileV3DraftState(input: {
   publishRecommendation: string;
-  clarificationQuestions: Array<{ impact: string; skipAllowed: boolean }>;
 }): ProfileV3DraftState {
-  const hasBlockingQuestion = input.clarificationQuestions.some(
-    (question) => question.impact === "blocking" && !question.skipAllowed,
-  );
-  if (hasBlockingQuestion) return "needs_input";
-  return input.publishRecommendation === "ready" ||
-    input.publishRecommendation === "ready_with_warnings"
-    ? "ready_for_review"
-    : "needs_input";
+  return input.publishRecommendation === "invalid"
+    ? "needs_input"
+    : "ready_for_review";
 }
 
 export async function runProfileV3Workflow<TStageId extends string>(input: {

@@ -79,38 +79,6 @@ export async function finalizeProviderTaskFailure(
         .eq("id", enrichmentId)
         .in("status", ["pending", "running"]);
   }
-
-  if (operation === "campaign_discovery" && execution.campaign_run_id) {
-    await supabase
-      .from("campaign_runs")
-      .update({
-        status: "failed",
-        current_phase: "failed",
-        failed_at: completedAt,
-        error_code: classified.category,
-        error_message: classified.message.slice(0, 2_000),
-      })
-      .eq("workspace_id", execution.workspace_id)
-      .eq("id", execution.campaign_run_id);
-    const { data: existing } = await supabase
-      .from("campaign_run_events")
-      .select("id")
-      .eq("workspace_id", execution.workspace_id)
-      .eq("campaign_run_id", execution.campaign_run_id)
-      .eq("event_type", `terminal_${operation}_failure`)
-      .maybeSingle();
-    if (!existing)
-      await supabase.from("campaign_run_events").insert({
-        workspace_id: execution.workspace_id,
-        campaign_run_id: execution.campaign_run_id,
-        event_type: `terminal_${operation}_failure`,
-        phase: "failed",
-        level: "error",
-        summary: "Campaign discovery failed after all permitted attempts.",
-        details: { category: classified.category, providerExecutionId },
-        visible_to_user: true,
-      });
-  }
 }
 
 async function updateProviderDispatch(

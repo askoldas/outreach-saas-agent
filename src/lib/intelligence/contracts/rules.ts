@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const intelligenceRuleSchema = z
+const intelligenceRuleBaseSchema = z
   .object({
     ruleKey: z.string().min(1),
     label: z.string().min(1),
@@ -29,22 +29,36 @@ export const intelligenceRuleSchema = z
     evidenceIds: z.array(z.string()).default([]),
     confidence: z.number().min(0).max(1),
   })
-  .strict()
-  .superRefine((rule, context) => {
-    if (rule.source === "ai" && !["proposed", "provisional"].includes(rule.status)) {
-      context.addIssue({
-        code: "custom",
-        message: "AI may create only proposed or provisional rules.",
-        path: ["status"],
-      });
-    }
-    if (rule.ruleType === "hard_exclusion" && rule.strength !== "hard") {
-      context.addIssue({
-        code: "custom",
-        message: "Hard exclusions must have hard strength.",
-        path: ["strength"],
-      });
-    }
-  });
+  .strict();
+
+function refineIntelligenceRule(
+  rule: z.infer<typeof intelligenceRuleBaseSchema>,
+  context: z.RefinementCtx,
+) {
+  if (rule.source === "ai" && !["proposed", "provisional"].includes(rule.status)) {
+    context.addIssue({
+      code: "custom",
+      message: "AI may create only proposed or provisional rules.",
+      path: ["status"],
+    });
+  }
+  if (rule.ruleType === "hard_exclusion" && rule.strength !== "hard") {
+    context.addIssue({
+      code: "custom",
+      message: "Hard exclusions must have hard strength.",
+      path: ["strength"],
+    });
+  }
+}
+
+export const intelligenceRuleSchema =
+  intelligenceRuleBaseSchema.superRefine(refineIntelligenceRule);
+
+export const profileIntelligenceRuleSchema = intelligenceRuleBaseSchema
+  .extend({
+    scope: z.enum(["workspace", "offering"]),
+  })
+  .superRefine(refineIntelligenceRule);
 
 export type IntelligenceRule = z.infer<typeof intelligenceRuleSchema>;
+export type ProfileIntelligenceRule = z.infer<typeof profileIntelligenceRuleSchema>;

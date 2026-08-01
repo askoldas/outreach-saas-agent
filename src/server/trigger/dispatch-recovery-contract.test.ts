@@ -10,6 +10,13 @@ const migration = readFileSync(
   ),
   "utf8",
 );
+const removalMigration = readFileSync(
+  new URL(
+    "../../../supabase/migrations/20260729000400_remove_legacy_write_and_execution_surfaces.sql",
+    import.meta.url,
+  ),
+  "utf8",
+);
 
 test("Trigger dispatches persist recoverable state and stable idempotency keys", () => {
   for (const state of [
@@ -30,11 +37,16 @@ test("Trigger dispatches persist recoverable state and stable idempotency keys",
   assert.match(dispatch, /reconcileTriggerDispatches/);
 });
 
-test("Campaign run and initial discovery execution are created transactionally", () => {
-  const functionBody = migration.slice(
-    migration.indexOf("create or replace function public.create_clean_campaign_run"),
+test("current Campaign Run creation leaves discovery execution to native V2 Trigger tasks", () => {
+  const functionBody = removalMigration.slice(
+    removalMigration.indexOf(
+      "create or replace function public.create_clean_campaign_run",
+    ),
+    removalMigration.indexOf(
+      "create or replace function public.reject_retired_provider_execution",
+    ),
   );
   assert.match(functionBody, /insert into public\.campaign_runs/);
-  assert.match(functionBody, /insert into public\.provider_executions/);
-  assert.match(functionBody, /'provider-dispatch:' \|\| execution_idempotency_key/);
+  assert.match(functionBody, /'execute-campaign-v2:' \|\| created_run\.id::text/);
+  assert.doesNotMatch(functionBody, /insert into public\.provider_executions/);
 });

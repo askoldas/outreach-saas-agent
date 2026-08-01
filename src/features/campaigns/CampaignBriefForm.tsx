@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { CompanyProfile } from "@/types/domain";
 import {
   createCampaignAction,
   proposeCampaignBriefAction,
@@ -10,7 +9,14 @@ import type {
   CampaignBriefProposal,
   ConfirmedCampaignBrief,
 } from "@/lib/campaign-workflow/contracts";
-import { isConsumerOnlyLabel } from "@/lib/campaign-workflow/target-segments";
+import type {
+  B2BRelationshipType,
+  TargetSegment,
+} from "@/lib/campaign-workflow/target-segments";
+import type {
+  CampaignPlanningOffering,
+  CampaignPlanningProfile,
+} from "@/lib/intelligence/campaign-strategy-v2";
 import { Button } from "@/components/ui/Button";
 import form from "@/components/ui/FormControls.module.css";
 import shared from "@/features/shared/Feature.module.css";
@@ -20,7 +26,7 @@ import {
   GuidedStatus,
 } from "@/features/guided/AiGuidedWorkspace";
 import {
-  OfferingSuggestionCard,
+  NativeOfferingSuggestionCard,
   TargetSuggestionCard,
 } from "@/features/guided/SuggestionCards";
 import type { GuidedDraft } from "@/server/guided/repository";
@@ -71,12 +77,10 @@ type ProposalResult = Awaited<ReturnType<typeof proposeCampaignBriefAction>>;
 export function CampaignBriefForm({
   error,
   profile,
-  strategyV2 = false,
 }: {
   error?: string;
-  profile: CompanyProfile;
+  profile: CampaignPlanningProfile;
   initialDraft: GuidedDraft | null;
-  strategyV2?: boolean;
 }) {
   const [step, setStep] = useState(1);
   const [countryInput, setCountryInput] = useState("");
@@ -218,12 +222,8 @@ export function CampaignBriefForm({
   }
 
   function startWithProfileDefaults() {
-    const offerings =
-      profile.structuredProfile?.offerings.filter(
-        (offering) => offering.status !== "excluded" && offering.status !== "rejected",
-      ) ?? [];
-    const preferred =
-      offerings.find((offering) => offering.priority === "primary") ?? offerings[0];
+    const offerings = profile.offerings;
+    const preferred = offerings[0];
     if (!preferred) {
       setProposalError("The Company Profile has no campaign-ready offering.");
       return;
@@ -231,7 +231,7 @@ export function CampaignBriefForm({
     const next = buildProfileDefaultProposal(
       profile,
       { countryCodes, regionLabel },
-      preferred.id,
+      preferred.stableKey,
     );
     setResult(null);
     applyProposal(next);
@@ -419,19 +419,14 @@ export function CampaignBriefForm({
               hidden
             />
             <div className={styles.options}>
-              {profile.structuredProfile?.offerings
-                .filter(
-                  (offering) =>
-                    offering.status !== "excluded" && offering.status !== "rejected",
-                )
-                .map((offering) => (
-                  <OfferingSuggestionCard
-                    key={offering.id}
-                    offering={offering}
-                    primary={selectedOfferingId === offering.id}
-                    onSelect={() => selectOffering(offering.id)}
-                  />
-                ))}
+              {profile.offerings.map((offering) => (
+                <NativeOfferingSuggestionCard
+                  key={offering.stableKey}
+                  offering={offering}
+                  primary={selectedOfferingId === offering.stableKey}
+                  onSelect={() => selectOffering(offering.stableKey)}
+                />
+              ))}
             </div>
           </div>
           <Field
@@ -724,15 +719,13 @@ export function CampaignBriefForm({
                 Back
               </Button>
               <Button type="submit" variant="primary" disabled={!name.trim()}>
-                {strategyV2 ? "Build campaign strategy" : "Start campaign"}
+                Build campaign strategy
               </Button>
             </div>
-            {strategyV2 ? (
-              <p className={styles.secondaryText}>
-                This creates a reviewable Campaign Strategy V2 draft. Discovery starts
-                only after explicit strategy confirmation and V2 provider enablement.
-              </p>
-            ) : null}
+            <p className={styles.secondaryText}>
+              This creates a reviewable native Campaign Strategy V2 draft. Discovery
+              starts only after explicit strategy confirmation.
+            </p>
           </form>
         </section>
       ) : null}
@@ -741,123 +734,205 @@ export function CampaignBriefForm({
 }
 
 function buildProfileDefaultProposal(
-  profile: CompanyProfile,
+  profile: CampaignPlanningProfile,
   geography: { countryCodes: string[]; regionLabel: string },
   offeringId: string,
 ): CampaignBriefProposal {
-  const structured = profile.structuredProfile;
-  if (!structured) throw new Error("The Company Profile is not available.");
-  const offering = structured.offerings.find((item) => item.id === offeringId);
+  const offering = profile.offerings.find((item) => item.stableKey === offeringId);
   if (!offering) throw new Error("Select one Company Profile offering.");
-  const offerings = [offering];
   const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
-  const companyTypes = unique(
-    offerings
-      .flatMap((offering) => offering.targetCustomerTypes)
-      .filter((value) => !isConsumerOnlyLabel(value)),
-  );
-  const industries = unique(offerings.flatMap((offering) => offering.targetIndustries));
-  const roles = unique(
-    offerings.flatMap((offering) =>
-      offering.buyerPersonas.flatMap((persona) => [
-        persona.titleGroup,
-        ...persona.exampleTitles,
-      ]),
-    ),
-  );
-  const title = offerings.map((offering) => offering.name).join(" + ");
+  const archetypes = offering.archetypes
+    .filter(
+      (archetype) =>
+        archetype.status !== "user_rejected" &&
+        archetype.status !== "superseded" &&
+        archetype.priority !== "avoid",
+    )
+    .slice(0, 5);
+  const roles = unique(archetypes.flatMap((archetype) => archetype.likelyDecisionRoles));
+  const title = offering.name;
   const market =
     geography.regionLabel || geography.countryCodes.join(", ") || "the selected market";
-  const organizationTypes = companyTypes.length
-    ? companyTypes
-    : [`Organizations purchasing ${offering.name}`];
+  const organizationTypes = archetypes.length
+    ? unique(archetypes.map((archetype) => archetype.name))
+    : [`Organizations commercially compatible with ${offering.name}`];
   const targetLabel = organizationTypes.join(", ");
+  const characteristics = unique([
+    ...offering.commercialMechanics.customerProblems,
+    ...offering.buyerLogic.requiredConditions,
+    ...offering.buyerLogic.preferredConditions,
+  ]);
+  const positiveSignals = unique([
+    ...offering.commercialMechanics.expectedOutcomes,
+    ...offering.buyerLogic.likelyTriggers,
+    ...archetypes.flatMap((archetype) => archetype.positiveSignals),
+  ]);
+  const requiredCriteria = unique([
+    ...offering.buyerLogic.requiredConditions,
+    ...archetypes.flatMap((archetype) => archetype.requiredEvidence),
+  ]);
+  const exclusions = unique([
+    ...offering.buyerLogic.incompatibleConditions,
+    ...archetypes.flatMap((archetype) => archetype.negativeSignals),
+  ]);
+  const targetSegments = archetypes.length
+    ? archetypes.map((archetype, index) =>
+        profileArchetypeSegment({
+          archetype,
+          geography,
+          offering,
+          index,
+        }),
+      )
+    : [
+        fallbackOfferingSegment({
+          geography,
+          offering,
+          organizationTypes,
+          roles,
+        }),
+      ];
   return {
     geography: {
       countryCodes: geography.countryCodes,
       ...(geography.regionLabel ? { regionLabel: geography.regionLabel } : {}),
-      ...(structured.outreachLanguages[0] || structured.supportedLanguages[0]
-        ? {
-            primaryLanguage:
-              structured.outreachLanguages[0] ?? structured.supportedLanguages[0],
-          }
-        : {}),
+      primaryLanguage: profile.primaryLanguage,
     },
     offering: {
-      profileOfferingIds: offerings.map((offering) => offering.id),
+      profileOfferingIds: [offering.stableKey],
       title,
-      summary: offerings
-        .map((offering) => offering.shortDescription)
-        .filter(Boolean)
-        .join(" "),
-      valueProposition: offerings
-        .map(
-          (offering) =>
-            offering.valueProposition ||
-            offering.expectedOutcomes.join(", ") ||
-            offering.shortDescription,
-        )
-        .join(" "),
+      summary: offering.shortDescription,
+      valueProposition:
+        offering.commercialMechanics.valueProposition.join(" ") ||
+        offering.commercialMechanics.expectedOutcomes.join(", ") ||
+        offering.shortDescription,
       rationale:
-        "Loaded from the selected Company Profile offering defaults. Adjustments remain campaign-specific.",
+        "Loaded from the selected published Company Intelligence V3 offering. Campaign adjustments do not mutate the profile.",
     },
     targetClient: {
       companyTypes: organizationTypes,
-      industries: industries.length
-        ? industries
-        : (structured.customerLandscape?.buyerIndustries ?? []),
-      characteristics: unique(
-        offerings.flatMap((offering) => [
-          ...offering.customerProblems,
-          ...offering.useCases,
-          ...offering.targetCompanySizes,
-        ]),
-      ),
-      positiveSignals: unique(offerings.flatMap((offering) => offering.expectedOutcomes)),
-      requiredCriteria: unique(
-        offerings.flatMap((offering) => offering.qualificationRequirements),
-      ),
-      exclusions: unique(
-        offerings.flatMap((offering) => offering.disqualifyingConditions),
-      ),
+      industries: [],
+      characteristics,
+      positiveSignals,
+      requiredCriteria,
+      exclusions,
       recommendedDecisionMakerRoles: roles,
       summary: `${targetLabel || "Relevant B2B companies"} in ${market} for ${title}.`,
     },
-    targetSegments: [
-      {
-        id: "primary_organization_segment",
-        name: organizationTypes[0] ?? "Target organizations",
-        summary: `${targetLabel} in ${market} for ${title}.`,
-        relationshipType: "customer",
-        organizationTypes,
-        industries,
-        geographies: geography.countryCodes,
-        characteristics: unique(
-          offerings.flatMap((item) => [
-            ...item.customerProblems,
-            ...item.useCases,
-            ...item.targetCompanySizes,
-          ]),
-        ),
-        buyingSignals: unique(offerings.flatMap((item) => item.expectedOutcomes)),
-        likelyBuyerRoles: roles,
-        exclusions: unique(offerings.flatMap((item) => item.disqualifyingConditions)),
-        rationale:
-          "Derived from the selected Company Profile offering and Campaign market.",
-        supportingEvidence: offerings.flatMap((item) =>
-          item.sourceReferences
-            .map((source) => source.extractedText)
-            .filter((value): value is string => Boolean(value)),
-        ),
-        discoverability: "medium",
-        source: "ai_suggested",
-        confidence: "medium",
-        status: "suggested",
-      },
-    ],
+    targetSegments,
     ambiguity: { requiresClarification: false },
-    confidence: 0.75,
+    confidence: offering.confidence,
   };
+}
+
+function profileArchetypeSegment(input: {
+  archetype: CampaignPlanningOffering["archetypes"][number];
+  geography: { countryCodes: string[]; regionLabel: string };
+  offering: CampaignPlanningOffering;
+  index: number;
+}): TargetSegment {
+  const market =
+    input.geography.regionLabel ||
+    input.geography.countryCodes.join(", ") ||
+    "the selected market";
+  return {
+    id: campaignKey(input.archetype.key || `profile-archetype-${input.index + 1}`),
+    name: input.archetype.name,
+    summary: `${input.archetype.description} Target market: ${market}.`,
+    relationshipType: briefRelationshipType(input.archetype.relationshipType),
+    organizationTypes: [input.archetype.name],
+    industries: [],
+    geographies: input.geography.countryCodes,
+    characteristics: uniqueStrings([
+      ...input.offering.buyerLogic.requiredConditions,
+      ...input.offering.buyerLogic.preferredConditions,
+    ]),
+    buyingSignals: uniqueStrings([
+      ...input.archetype.positiveSignals,
+      ...input.offering.buyerLogic.likelyTriggers,
+    ]),
+    likelyBuyerRoles: input.archetype.likelyDecisionRoles,
+    exclusions: uniqueStrings([
+      ...input.archetype.negativeSignals,
+      ...input.offering.buyerLogic.incompatibleConditions,
+    ]),
+    rationale: input.archetype.whyCompatible.join(" ") || input.archetype.description,
+    supportingEvidence: input.archetype.whyCompatible,
+    discoverability: "medium",
+    source: "saved_template",
+    confidence:
+      input.archetype.confidence >= 0.75
+        ? "high"
+        : input.archetype.confidence >= 0.45
+          ? "medium"
+          : "low",
+    status: "suggested",
+  };
+}
+
+function fallbackOfferingSegment(input: {
+  geography: { countryCodes: string[]; regionLabel: string };
+  offering: CampaignPlanningOffering;
+  organizationTypes: string[];
+  roles: string[];
+}): TargetSegment {
+  const relationship =
+    input.offering.relationshipOptions.find((option) => option.relevance === "primary") ??
+    input.offering.relationshipOptions[0];
+  return {
+    id: "primary-organization-segment",
+    name: input.organizationTypes[0] ?? "Target organizations",
+    summary: `Organizations in ${
+      input.geography.regionLabel || input.geography.countryCodes.join(", ")
+    } with a plausible commercial fit for ${input.offering.name}.`,
+    relationshipType: briefRelationshipType(
+      relationship?.relationshipType ?? "direct_buyer",
+    ),
+    organizationTypes: input.organizationTypes,
+    industries: [],
+    geographies: input.geography.countryCodes,
+    characteristics: uniqueStrings([
+      ...input.offering.commercialMechanics.customerProblems,
+      ...input.offering.buyerLogic.requiredConditions,
+    ]),
+    buyingSignals: uniqueStrings([
+      ...input.offering.commercialMechanics.expectedOutcomes,
+      ...input.offering.buyerLogic.likelyTriggers,
+    ]),
+    likelyBuyerRoles: input.roles,
+    exclusions: input.offering.buyerLogic.incompatibleConditions,
+    rationale:
+      relationship?.rationale ?? "Derived directly from the selected published offering.",
+    supportingEvidence: [],
+    discoverability: "medium",
+    source: "saved_template",
+    confidence: input.offering.confidence >= 0.7 ? "high" : "medium",
+    status: "suggested",
+  };
+}
+
+function briefRelationshipType(value: string): B2BRelationshipType {
+  if (value === "direct_buyer" || value === "end_user") return "customer";
+  if (value === "distributor" || value === "reseller" || value === "supplier") {
+    return value;
+  }
+  if (value === "implementation_partner") return "contractor";
+  return "partner";
+}
+
+function campaignKey(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "target-segment"
+  );
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function Field({

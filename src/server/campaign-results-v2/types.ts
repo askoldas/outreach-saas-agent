@@ -41,6 +41,7 @@ export type CampaignResultCandidate = {
   relationshipConfidence: number | null;
   reviewDecision: string | null;
   reviewReason: string | null;
+  sourceUrl: string | null;
   strongestEvidence: string;
   unresolvedQuestions: string[];
   websiteUrl: string | null;
@@ -59,6 +60,7 @@ export type CampaignV2Results = {
     archetype: string;
     confidence: number;
     geography: string;
+    id: string;
     reasons: string[];
     status: string;
   }>;

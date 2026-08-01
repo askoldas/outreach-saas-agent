@@ -1,5 +1,9 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { MarketAnalysis } from "@/lib/campaign-workflow/market-planning";
+import {
+  campaignStrategyV2Schema,
+  type CampaignStrategyV2,
+} from "@/lib/intelligence/campaign-strategy-v2";
 
 export type CampaignWorkflowSummary = {
   selectedRunId: string | null;
@@ -65,6 +69,58 @@ export type CampaignWorkflowSummary = {
     errorMessage: string | null;
   } | null;
   marketAnalysis: MarketAnalysis | null;
+  v2Strategy: {
+    summary: string;
+    objective: string;
+    objectiveDescription: string;
+    geography: string;
+    countryCodes: string[];
+    localLanguages: string[];
+    workingLanguages: string[];
+    archetypes: Array<{
+      id: string;
+      label: string;
+      relationshipType: string;
+      rationale: string;
+    }>;
+    segments: Array<{
+      id: string;
+      label: string;
+      geography: string;
+      targetCandidateCount: number;
+    }>;
+  } | null;
+  v2Discovery: {
+    planId: string;
+    planStatus: string;
+    runStatus: string | null;
+    stoppingReason: string | null;
+    providerCalls: number;
+    providerRecords: number;
+    normalizedCandidates: number;
+    uniqueCandidates: number;
+    coverageSummary: Record<string, unknown>;
+    continuationDecision: Record<string, unknown> | null;
+    segments: Array<{
+      id: string;
+      label: string;
+      geography: string;
+      status: string;
+      targetCandidateCount: number;
+      passCount: number;
+      providerRecords: number;
+      normalizedCandidates: number;
+      uniqueCandidates: number;
+    }>;
+    queries: Array<{
+      id: string;
+      query: string;
+      family: string;
+      language: string;
+      country: string | null;
+      purpose: string;
+    }>;
+  } | null;
   discoveryPaths: Array<{
     id: string;
     type: string;
@@ -97,7 +153,7 @@ export async function getCampaignWorkflowSummary(
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
-    .select("id")
+    .select("id,workflow_version,current_strategy_version_id")
     .eq("workspace_id", workspaceId)
     .eq("external_id", campaignExternalId)
     .single();
@@ -106,7 +162,7 @@ export async function getCampaignWorkflowSummary(
   const { data: runs, error: runError } = await supabase
     .from("campaign_runs")
     .select(
-      "id,status,current_phase,current_iteration,progress_percentage,candidates_discovered,candidates_classified,companies_evaluated,companies_qualified,llm_cost,provider_cost,total_cost,currency,error_code,error_message,created_at,completed_at,cancelled_at",
+      "id,status,current_phase,current_iteration,progress_percentage,candidates_discovered,candidates_classified,companies_evaluated,companies_qualified,llm_cost,provider_cost,total_cost,currency,error_code,error_message,created_at,completed_at,cancelled_at,strategy_version_id,workflow_version",
     )
     .eq("workspace_id", workspaceId)
     .eq("campaign_id", campaign.id)
@@ -123,6 +179,13 @@ export async function getCampaignWorkflowSummary(
       candidateAudit: [],
       latestRun: null,
       marketAnalysis: null,
+      v2Strategy: await loadV2StrategySummary({
+        supabase,
+        workspaceId,
+        campaignId: campaign.id,
+        strategyVersionId: campaign.current_strategy_version_id,
+      }),
+      v2Discovery: null,
       discoveryPaths: [],
       classificationCounts: {},
       excludedCandidates: [],
@@ -134,6 +197,26 @@ export async function getCampaignWorkflowSummary(
   if (!selectedRun) {
     throw new Error("The selected Campaign Run was not found in this workspace.");
   }
+  const v2Strategy =
+    campaign.workflow_version === "v2" || selectedRun.workflow_version === "v2"
+      ? await loadV2StrategySummary({
+          supabase,
+          workspaceId,
+          campaignId: campaign.id,
+          strategyVersionId:
+            selectedRun.strategy_version_id || campaign.current_strategy_version_id,
+        })
+      : null;
+  const v2Discovery =
+    campaign.workflow_version === "v2" || selectedRun.workflow_version === "v2"
+      ? await loadV2DiscoverySummary({
+          supabase,
+          workspaceId,
+          campaignId: campaign.id,
+          campaignRunId: selectedRun.id,
+          strategy: v2Strategy,
+        })
+      : null;
 
   const [
     { data: analysis },
@@ -289,6 +372,8 @@ export async function getCampaignWorkflowSummary(
       errorMessage: selectedRun.error_message,
     },
     marketAnalysis: (analysis?.analysis as MarketAnalysis | undefined) ?? null,
+    v2Strategy,
+    v2Discovery,
     discoveryPaths: paths
       .sort((a, b) => a.priority - b.priority)
       .map((path) => ({
@@ -335,4 +420,222 @@ export async function getCampaignWorkflowSummary(
 function numeric(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+type AuthenticatedSupabase = Awaited<
+  ReturnType<typeof createAuthenticatedDatabaseClient>
+>["supabase"];
+
+async function loadV2StrategySummary(input: {
+  supabase: AuthenticatedSupabase;
+  workspaceId: string;
+  campaignId: string;
+  strategyVersionId: string | null;
+}): Promise<CampaignWorkflowSummary["v2Strategy"]> {
+  if (!input.strategyVersionId) return null;
+  const { data, error } = await input.supabase
+    .from("campaign_strategy_versions")
+    .select("strategy")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_id", input.campaignId)
+    .eq("id", input.strategyVersionId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load Campaign Strategy V2: ${error.message}`);
+  if (!data) return null;
+  const strategy = campaignStrategyV2Schema.parse(data.strategy);
+  return summarizeV2Strategy(strategy);
+}
+
+function summarizeV2Strategy(
+  strategy: CampaignStrategyV2,
+): NonNullable<CampaignWorkflowSummary["v2Strategy"]> {
+  return {
+    summary: strategy.strategySummary,
+    objective: strategy.objective.label,
+    objectiveDescription: strategy.objective.description,
+    geography: strategy.geography.displayName,
+    countryCodes: [...strategy.geography.countryCodes],
+    localLanguages: [...strategy.geography.localLanguages],
+    workingLanguages: [...strategy.geography.workingLanguages],
+    archetypes: strategy.archetypes.map((archetype) => ({
+      id: archetype.id,
+      label: archetype.label,
+      relationshipType: archetype.relationshipType,
+      rationale: archetype.commercialRationale,
+    })),
+    segments: strategy.discoverySegments.map((segment) => ({
+      id: segment.id,
+      label: segment.label,
+      geography: segment.geography.displayName,
+      targetCandidateCount: segment.targetCandidateCount ?? 0,
+    })),
+  };
+}
+
+async function loadV2DiscoverySummary(input: {
+  supabase: AuthenticatedSupabase;
+  workspaceId: string;
+  campaignId: string;
+  campaignRunId: string;
+  strategy: CampaignWorkflowSummary["v2Strategy"];
+}): Promise<CampaignWorkflowSummary["v2Discovery"]> {
+  const { data: plan, error: planError } = await input.supabase
+    .from("discovery_plans_v2")
+    .select("id,status")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_id", input.campaignId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .order("version_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (planError)
+    throw new Error(`Could not load Semantic Discovery plan: ${planError.message}`);
+  if (!plan) return null;
+  const [segmentsResult, runResult] = await Promise.all([
+    input.supabase
+      .from("discovery_segments_v2")
+      .select("id,segment_key,status,target_candidate_count,geography_json")
+      .eq("workspace_id", input.workspaceId)
+      .eq("discovery_plan_id", plan.id)
+      .order("priority"),
+    input.supabase
+      .from("discovery_runs_v2")
+      .select(
+        "id,status,stopping_reason,coverage_summary_json,continuation_decision_json",
+      )
+      .eq("workspace_id", input.workspaceId)
+      .eq("discovery_plan_id", plan.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  if (segmentsResult.error)
+    throw new Error(
+      `Could not load Semantic Discovery segments: ${segmentsResult.error.message}`,
+    );
+  if (runResult.error)
+    throw new Error(`Could not load Semantic Discovery run: ${runResult.error.message}`);
+  const segmentRows = segmentsResult.data ?? [];
+  const discoveryRun = runResult.data;
+  const segmentRunResult = discoveryRun
+    ? await input.supabase
+        .from("discovery_segment_runs_v2")
+        .select(
+          "id,discovery_segment_id,status,pass_number,provider_record_count,normalized_candidate_count,unique_candidate_count",
+        )
+        .eq("workspace_id", input.workspaceId)
+        .eq("discovery_run_id", discoveryRun.id)
+        .order("pass_number")
+    : { data: [], error: null };
+  if (segmentRunResult.error)
+    throw new Error(
+      `Could not load Semantic Discovery passes: ${segmentRunResult.error.message}`,
+    );
+  const segmentRuns = segmentRunResult.data ?? [];
+  const segmentRunIds = segmentRuns.map(({ id }) => id);
+  const queryPlanResult = segmentRunIds.length
+    ? await input.supabase
+        .from("discovery_query_plans_v2")
+        .select("id,discovery_segment_run_id,queries_json")
+        .eq("workspace_id", input.workspaceId)
+        .in("discovery_segment_run_id", segmentRunIds)
+        .order("created_at")
+    : { data: [], error: null };
+  if (queryPlanResult.error)
+    throw new Error(
+      `Could not load Semantic Discovery queries: ${queryPlanResult.error.message}`,
+    );
+  const strategySegmentById = new Map(
+    (input.strategy?.segments ?? []).map((segment) => [segment.id, segment] as const),
+  );
+  const runsBySegment = new Map<string, typeof segmentRuns>();
+  for (const segmentRun of segmentRuns) {
+    const current = runsBySegment.get(segmentRun.discovery_segment_id) ?? [];
+    current.push(segmentRun);
+    runsBySegment.set(segmentRun.discovery_segment_id, current);
+  }
+  const queries = (queryPlanResult.data ?? []).flatMap((queryPlan) =>
+    jsonArray(queryPlan.queries_json).map((query, index) => ({
+      id: stringField(query, "id") || `${queryPlan.id}:${index}`,
+      query: stringField(query, "query") || stringField(query, "queryText"),
+      family: stringField(query, "family") || "web_search",
+      language: stringField(query, "language") || "Unknown",
+      country: stringField(query, "country") || null,
+      purpose: stringField(query, "purpose") || "Candidate discovery",
+    })),
+  );
+  return {
+    planId: plan.id,
+    planStatus: plan.status,
+    runStatus: discoveryRun?.status ?? null,
+    stoppingReason: discoveryRun?.stopping_reason ?? null,
+    providerCalls: queries.length,
+    providerRecords: segmentRuns.reduce(
+      (total, run) => total + run.provider_record_count,
+      0,
+    ),
+    normalizedCandidates: segmentRuns.reduce(
+      (total, run) => total + run.normalized_candidate_count,
+      0,
+    ),
+    uniqueCandidates: segmentRuns.reduce(
+      (total, run) => total + run.unique_candidate_count,
+      0,
+    ),
+    coverageSummary: objectValue(discoveryRun?.coverage_summary_json),
+    continuationDecision: nullableObjectValue(discoveryRun?.continuation_decision_json),
+    segments: segmentRows.map((segment) => {
+      const runs = runsBySegment.get(segment.id) ?? [];
+      const frozen = strategySegmentById.get(segment.segment_key);
+      const geography = objectValue(segment.geography_json);
+      return {
+        id: segment.id,
+        label: frozen?.label ?? segment.segment_key,
+        geography:
+          frozen?.geography ?? (stringField(geography, "displayName") || "Not specified"),
+        status: runs.at(-1)?.status ?? segment.status,
+        targetCandidateCount:
+          segment.target_candidate_count ?? frozen?.targetCandidateCount ?? 0,
+        passCount: runs.length,
+        providerRecords: runs.reduce(
+          (total, run) => total + run.provider_record_count,
+          0,
+        ),
+        normalizedCandidates: runs.reduce(
+          (total, run) => total + run.normalized_candidate_count,
+          0,
+        ),
+        uniqueCandidates: runs.reduce(
+          (total, run) => total + run.unique_candidate_count,
+          0,
+        ),
+      };
+    }),
+    queries,
+  };
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function nullableObjectValue(value: unknown): Record<string, unknown> | null {
+  const object = objectValue(value);
+  return Object.keys(object).length ? object : null;
+}
+
+function jsonArray(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value)
+    ? value.filter(
+        (item): item is Record<string, unknown> =>
+          Boolean(item) && typeof item === "object" && !Array.isArray(item),
+      )
+    : [];
+}
+
+function stringField(value: Record<string, unknown>, key: string) {
+  const field = value[key];
+  return typeof field === "string" ? field : "";
 }

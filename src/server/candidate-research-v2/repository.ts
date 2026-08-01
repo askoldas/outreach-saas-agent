@@ -269,6 +269,57 @@ export async function loadCampaignResearchContext(input: {
   );
 }
 
+export async function findCandidateResearchBatch(input: {
+  campaignRunId: string;
+  workspaceId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const { data: batch, error: batchError } = await supabase
+    .from("candidate_research_batches_v2")
+    .select(
+      "id,campaign_run_id,contract_version,input_hash,status,candidate_count",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .maybeSingle();
+  if (batchError) {
+    throw new Error(
+      `Could not inspect the frozen Candidate research batch: ${batchError.message}`,
+    );
+  }
+  if (!batch) return null;
+
+  const { data: members, error: memberError } = await supabase
+    .from("candidate_research_batch_members_v2")
+    .select("id,status,attempt_count")
+    .eq("workspace_id", input.workspaceId)
+    .eq("candidate_research_batch_id", batch.id)
+    .order("id");
+  if (memberError) {
+    throw new Error(
+      `Could not inspect frozen Candidate research members: ${memberError.message}`,
+    );
+  }
+
+  return researchBatchSchema.parse({
+    schemaVersion: 2,
+    batchId: batch.id,
+    campaignRunId: batch.campaign_run_id,
+    contractVersion: batch.contract_version,
+    inputHash: batch.input_hash,
+    status: batch.status,
+    candidateCount: batch.candidate_count,
+    memberIds: members.map(({ id }) => id),
+    pendingMemberIds: members
+      .filter(({ status }) => ["queued", "running"].includes(status))
+      .map(({ id }) => id),
+    reusedMemberCount: members.filter(
+      ({ status, attempt_count: attempts }) =>
+        status === "completed" && attempts === 0,
+    ).length,
+  });
+}
+
 export async function initializeCandidateResearchBatch(input: {
   campaignRunId: string;
   workspaceId: string;

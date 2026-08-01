@@ -13,8 +13,9 @@ test("Company Profile progress is authenticated and workspace scoped", async () 
   assert.match(route, /Cache-Control.*no-store/s);
 
   const repository = await readFile(new URL("./repository.ts", import.meta.url), "utf8");
-  assert.match(repository, /\.from\("provider_executions"\)/);
-  assert.match(repository, /\.eq\("operation", "company_profile_analysis"\)/);
+  assert.match(repository, /\.from\("company_profile_drafts"\)/);
+  assert.match(repository, /\.from\("profile_task_runs"\)/);
+  assert.doesNotMatch(repository, /company_profile_analysis/);
 });
 
 test("shared progress panel polls only active durable runs", async () => {

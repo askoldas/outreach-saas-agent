@@ -28,6 +28,11 @@ export interface AiCallResult<T> {
 export type GenerateTextOptions = {
   role: ModelRole;
   jsonMode?: boolean;
+  jsonSchema?: {
+    name: string;
+    schema: Record<string, unknown>;
+    strict?: boolean;
+  };
   maxCompletionTokens?: number;
   reasoningEffort?: "none" | "minimal" | "low" | "medium" | "high";
   taskName?: string;
@@ -78,7 +83,20 @@ export async function generateTextResult(
         ...(options.maxCompletionTokens
           ? { max_completion_tokens: options.maxCompletionTokens }
           : {}),
-        ...(options.jsonMode ? { response_format: { type: "json_object" } } : {}),
+        ...(options.jsonSchema
+          ? {
+              response_format: {
+                type: "json_schema",
+                json_schema: {
+                  name: options.jsonSchema.name,
+                  strict: options.jsonSchema.strict ?? true,
+                  schema: options.jsonSchema.schema,
+                },
+              },
+            }
+          : options.jsonMode
+            ? { response_format: { type: "json_object" } }
+            : {}),
         ...(options.reasoningEffort
           ? { reasoning: { effort: options.reasoningEffort, exclude: true } }
           : {}),

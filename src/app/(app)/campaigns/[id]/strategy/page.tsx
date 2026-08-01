@@ -4,7 +4,10 @@ import { StrategyWorkspace } from "@/features/campaigns/StrategyWorkspace";
 import { getCurrentCampaignStrategy } from "@/server/campaign-strategy/repository";
 import { CampaignDocuments } from "@/features/campaigns/CampaignDocuments";
 import { listCampaignDocuments } from "@/server/documents/repository";
-import { CampaignStrategyV2Workspace } from "@/features/campaigns/CampaignStrategyV2Workspace";
+import {
+  CampaignStrategyV2Recovery,
+  CampaignStrategyV2Workspace,
+} from "@/features/campaigns/CampaignStrategyV2Workspace";
 import {
   getCurrentCampaignStrategyV2Draft,
   getCurrentConfirmedCampaignStrategyV2,
@@ -16,10 +19,10 @@ export default async function StrategyPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ mode?: string; message?: string }>;
+  searchParams: Promise<{ message?: string }>;
 }) {
   const { id } = await params;
-  const { mode, message } = await searchParams;
+  const { message } = await searchParams;
   const campaign = await loadCampaignPage(id);
   const { currentWorkspace } = await getWorkspaceContext();
   const workflowVersion = currentWorkspace
@@ -30,14 +33,26 @@ export default async function StrategyPage({
       getCurrentCampaignStrategyV2Draft(currentWorkspace.id, campaign.id),
       getCurrentConfirmedCampaignStrategyV2(currentWorkspace.id, campaign.id),
     ]);
-    const current = draft ?? confirmed;
-    if (!current) throw new Error("Campaign Strategy V2 is missing for this campaign.");
+    if (draft && !draft.strategy) {
+      return (
+        <CampaignShell campaign={campaign} active="strategy">
+          <CampaignStrategyV2Recovery
+            campaignId={campaign.id}
+            draftId={draft.id}
+            state={draft.state}
+            message={message}
+          />
+        </CampaignShell>
+      );
+    }
+    const strategy = draft?.strategy ?? confirmed?.strategy;
+    if (!strategy) throw new Error("Campaign Strategy V2 is missing for this campaign.");
     return (
-      <CampaignShell campaign={campaign} active="discovery">
+      <CampaignShell campaign={campaign} active="strategy">
         <CampaignStrategyV2Workspace
           campaignId={campaign.id}
           draftId={draft?.id ?? null}
-          strategy={current.strategy}
+          strategy={strategy}
           message={message}
         />
       </CampaignShell>
@@ -49,12 +64,8 @@ export default async function StrategyPage({
     throw new Error("Campaign Strategy is missing for this campaign.");
   }
   return (
-    <CampaignShell campaign={campaign} active="discovery">
-      <StrategyWorkspace
-        campaign={campaign}
-        initialStrategy={strategy}
-        startRevising={mode === "revise"}
-      />
+    <CampaignShell campaign={campaign} active="strategy">
+      <StrategyWorkspace campaign={campaign} initialStrategy={strategy} />
       <CampaignDocuments campaignId={campaign.id} documents={documents} />
     </CampaignShell>
   );

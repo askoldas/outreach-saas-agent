@@ -7,14 +7,6 @@ const attempt = readFileSync(new URL("./provider-attempt.ts", import.meta.url), 
 
 const durableTasks = [
   {
-    file: "analyze-company-profile.ts",
-    operation: "company_profile_analysis",
-  },
-  {
-    file: "discover-campaign-companies.ts",
-    operation: "campaign_discovery",
-  },
-  {
     file: "enrich-company-contacts.ts",
     operation: "contact_enrichment",
   },
@@ -34,14 +26,6 @@ test("attempt failures are diagnostic and terminal failure is a separate transit
   assert.match(boundary, /\.in\("status", \["pending", "running"\]\)/);
 });
 
-test("terminal discovery failure closes the customer-visible Campaign Run once", () => {
-  assert.match(boundary, /operation === "campaign_discovery"/);
-  assert.match(boundary, /\.from\("campaign_runs"\)/);
-  assert.match(boundary, /\.from\("campaign_run_events"\)/);
-  assert.match(boundary, /terminal_\$\{operation\}_failure/);
-  assert.match(boundary, /current_phase: "failed"/);
-});
-
 test("every durable provider task delegates terminal failure to Trigger onFailure", () => {
   for (const { file, operation } of durableTasks) {
     const source = readFileSync(
@@ -58,8 +42,6 @@ test("every durable provider task delegates terminal failure to Trigger onFailur
 
 test("service-level task attempts rethrow without terminalizing the execution", () => {
   for (const file of [
-    "../company-profile/analysis-service.ts",
-    "../campaign-discovery/service.ts",
     "../contact-enrichment/service.ts",
     "../draft-generation/service.ts",
   ]) {

@@ -13,10 +13,7 @@ export async function createCompanyProfileV3DraftAction() {
   try {
     await createAndDispatchCompanyIntelligenceV3Draft(currentWorkspace.id);
   } catch (error) {
-    const code =
-      error instanceof Error && error.message.includes("structured Company Profile")
-        ? "structured-profile-required"
-        : "v3-draft-create-failed";
+    const code = companyIntelligenceStartErrorCode(error);
     redirect(`/company-profile?error=${code}`);
   }
   revalidatePath("/company-profile");
@@ -56,7 +53,6 @@ export async function skipCompanyProfileV3QuestionAction(formData: FormData) {
     .update({ status: "skipped", updated_at: new Date().toISOString() })
     .eq("workspace_id", currentWorkspace.id)
     .eq("id", questionId)
-    .eq("skip_allowed", true)
     .eq("status", "pending");
   if (error) throw new Error(`Could not skip profile clarification: ${error.message}`);
   revalidatePath("/company-profile");
@@ -128,10 +124,7 @@ export async function publishCompanyProfileV3Action(formData: FormData) {
     target_profile_draft_id: context.draftId,
   });
   if (error) {
-    const code = error.message.includes("Blocking clarification")
-      ? "v3-blocking-questions"
-      : "v3-publish-failed";
-    redirect(`/company-profile?error=${code}`);
+    redirect(`/company-profile?error=${profilePublishErrorCode(error)}`);
   }
   revalidatePath("/company-profile");
   revalidatePath("/campaigns/new");
@@ -194,4 +187,43 @@ async function recordDecision(
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function companyIntelligenceStartErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("website")) return "website-required";
+  if (message.includes("profile container")) return "v3-profile-container-missing";
+  if (message.includes("not enabled")) return "v3-workspace-not-ready";
+  if (
+    message.includes("digest") ||
+    message.includes("schema cache") ||
+    message.includes("create_native_company_profile_v3_draft")
+  )
+    return "v3-database-repair-required";
+  if (message.includes("trigger dispatch")) return "v3-trigger-dispatch-failed";
+  return "v3-draft-create-failed";
+}
+
+function profilePublishErrorCode(error: unknown) {
+  const message = errorMessage(error).toLowerCase();
+  if (message.includes("consistency audit is invalid"))
+    return "v3-publish-stale-audit-gate";
+  if (message.includes("active offering")) return "v3-publish-no-active-offering";
+  if (message.includes("business model")) return "v3-publish-missing-model";
+  if (message.includes("not ready for publication")) return "v3-publish-not-ready";
+  if (message.includes("forbidden")) return "v3-publish-forbidden";
+  if (
+    message.includes("schema cache") ||
+    message.includes("publish_company_profile_v3_draft")
+  )
+    return "v3-publish-database-update-required";
+  return "v3-publish-failed";
+}
+
+function errorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === "object" && "message" in error) {
+    return String(error.message);
+  }
+  return "";
 }

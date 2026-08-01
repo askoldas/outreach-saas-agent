@@ -96,6 +96,7 @@ const questionFindingSchema = z
   .object({
     questionKey: z.string().min(1),
     state: z.enum(["answered_positive", "answered_negative", "unknown", "conflicting"]),
+    claimKeys: z.array(z.string().min(1)).optional(),
     claimIds: z.array(z.string().min(1)),
     evidenceIds: z.array(z.string().min(1)),
     conciseAnswer: z.string().min(1),

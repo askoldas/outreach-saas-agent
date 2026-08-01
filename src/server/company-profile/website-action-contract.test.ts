@@ -2,11 +2,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-test("company website updates preserve the current profile as a new version", async () => {
+test("company website updates the native analysis source without a V1 profile write", async () => {
   const actions = await readFile(new URL("./actions.ts", import.meta.url), "utf8");
   assert.match(actions, /export async function updateCompanyWebsiteAction/);
-  assert.match(actions, /const currentProfile = await getCurrentCompanyProfile/);
-  assert.match(actions, /\.\.\.currentProfile,[\s\S]*id: null,[\s\S]*website,/);
+  assert.match(actions, /\.from\("workspaces"\)/);
+  assert.match(actions, /\.update\(\{ website_url: website \}\)/);
+  assert.doesNotMatch(actions, /saveCompanyProfileVersion/);
   assert.match(
     actions,
     /redirect\("\/company-profile\?message=company-website-updated"\)/,

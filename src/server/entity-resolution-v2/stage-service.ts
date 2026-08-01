@@ -6,6 +6,11 @@ export async function executeEntityResolutionStage(input: {
   workspaceId: string;
 }): Promise<StageResult> {
   const summary = await resolveCampaignEntities(input);
+  if (summary.candidateCount > 0 && summary.campaignCandidateCount === 0) {
+    throw new Error(
+      "Entity Resolution deferred every discovered candidate for review; refusing to complete an empty Campaign Run.",
+    );
+  }
   return {
     stage: "resolve_entities",
     status: summary.needsReview > 0 ? "partial" : "completed",

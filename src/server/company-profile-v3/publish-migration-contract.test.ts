@@ -3,16 +3,30 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync(
-  "supabase/migrations/20260728000600_publish_company_intelligence_v3.sql",
+  "supabase/migrations/20260729000700_reviewed_profile_publish_gate.sql",
   "utf8",
 );
 
-test("V3 publish validates ownership, review state, blockers, and active offerings", () => {
+test("V3 publish validates ownership, review state, and structural prerequisites", () => {
   assert.match(migration, /is_workspace_admin\(target_workspace_id\)/);
-  assert.match(migration, /draft_record\.state <> 'ready_for_review'/);
-  assert.match(migration, /impact = 'blocking'/);
-  assert.match(migration, /skip_allowed = false/);
+  assert.match(
+    migration,
+    /draft_record\.state not in \('ready_for_review', 'needs_input'\)/,
+  );
+  assert.doesNotMatch(migration, /profile\.consistency_audit/);
+  assert.doesNotMatch(migration, /consistency_recommendation/);
+  assert.doesNotMatch(migration, /impact = 'blocking'/);
   assert.match(migration, /status = 'active'/);
+});
+
+test("all profile clarifications are optional in storage and publication", () => {
+  const optionalityMigration = readFileSync(
+    "supabase/migrations/20260729000600_optional_profile_clarifications.sql",
+    "utf8",
+  );
+  assert.match(optionalityMigration, /set skip_allowed = true/);
+  assert.match(optionalityMigration, /check \(skip_allowed\)/);
+  assert.doesNotMatch(migration, /Blocking clarification questions must be answered/);
 });
 
 test("V3 publish creates an immutable V2 version and advances the profile atomically", () => {

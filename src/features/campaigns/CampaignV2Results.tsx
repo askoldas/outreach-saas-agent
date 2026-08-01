@@ -110,7 +110,7 @@ export function CampaignV2Results({
           <p>{results.coverage.length} segment assessments</p>
           <ul className={styles.auditList}>
             {results.coverage.slice(0, 5).map((item) => (
-              <li key={`${item.archetype}-${item.geography}`}>
+              <li key={item.id}>
                 <strong>
                   {item.archetype} · {item.geography}
                 </strong>
@@ -217,12 +217,27 @@ export function CampaignV2Results({
                       #{candidate.rank} {candidate.name}
                     </strong>
                     {candidate.websiteUrl ? (
-                      <a href={candidate.websiteUrl}>
+                      <a
+                        href={candidate.websiteUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
                         {candidate.domain ?? candidate.websiteUrl}
                       </a>
                     ) : (
                       candidate.domain
                     )}
+                    {candidate.sourceUrl &&
+                    candidate.sourceUrl !== candidate.websiteUrl ? (
+                      <a
+                        className={styles.muted}
+                        href={candidate.sourceUrl}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        Evidence page
+                      </a>
+                    ) : null}
                   </span>
                 </td>
                 <td>

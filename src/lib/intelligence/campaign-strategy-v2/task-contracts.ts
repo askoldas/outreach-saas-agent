@@ -154,14 +154,14 @@ export const campaignV2TaskContracts = {
     taskId: "campaign.market_context",
     promptVersion: "campaign-market-context/v2.0",
     schemaVersion: "campaign-market-context/v2.0",
-    contextCompilerVersion: "campaign-context/v2.0",
+    contextCompilerVersion: "campaign-context/v2.1-native",
     outputSchema: campaignMarketContextOutputSchema,
   },
   strategyCompiler: {
     taskId: "campaign.strategy_compiler",
     promptVersion: "campaign-strategy-compiler/v2.0",
     schemaVersion: "campaign-strategy-compiler/v2.0",
-    contextCompilerVersion: "campaign-context/v2.0",
+    contextCompilerVersion: "campaign-context/v2.1-native",
     outputSchema: campaignStrategyCompilerOutputSchema,
   },
 } as const;

@@ -17,6 +17,10 @@ export type ResearchPlanInput = {
   reusableQuestionKeys?: string[];
   procurementUnknown?: boolean;
   pageBudget?: number;
+  questionOverrides?: Record<
+    string,
+    Omit<CandidateResearchQuestion, "id" | "key" | "required" | "priority">
+  >;
 };
 
 const QUESTION_CATALOG: Record<
@@ -71,6 +75,7 @@ function buildQuestion(
   key: string,
   required: boolean,
   priority: number,
+  override?: Omit<CandidateResearchQuestion, "id" | "key" | "required" | "priority">,
   purposeOverride?: ResearchPurpose,
   reusableScopeOverride?: CandidateResearchQuestion["reusableScope"],
 ): CandidateResearchQuestion {
@@ -79,12 +84,20 @@ function buildQuestion(
     id: `research:${key}`,
     key,
     question:
-      catalog?.question ?? `Resolve the research question: ${key.replaceAll("_", " ")}.`,
-    purpose: purposeOverride ?? catalog?.purpose ?? "qualification_factor",
+      override?.question ??
+      catalog?.question ??
+      `Resolve the research question: ${key.replaceAll("_", " ")}.`,
+    purpose:
+      purposeOverride ?? override?.purpose ?? catalog?.purpose ?? "qualification_factor",
     required,
     priority,
-    reusableScope: reusableScopeOverride ?? catalog?.reusableScope ?? "campaign_only",
-    expectedEvidenceTypes: catalog?.expectedEvidenceTypes ?? ["official_web_page"],
+    reusableScope:
+      reusableScopeOverride ??
+      override?.reusableScope ??
+      catalog?.reusableScope ??
+      "campaign_only",
+    expectedEvidenceTypes: override?.expectedEvidenceTypes ??
+      catalog?.expectedEvidenceTypes ?? ["official_web_page"],
   };
 }
 
@@ -103,6 +116,7 @@ export function compileCandidateResearchPlan(
           key,
           true,
           90 - index,
+          input.questionOverrides?.[key],
           undefined,
           reusable.has(key) ? "organization" : undefined,
         ),
@@ -117,6 +131,7 @@ export function compileCandidateResearchPlan(
           key,
           false,
           60 - index,
+          input.questionOverrides?.[key],
           undefined,
           reusable.has(key) ? "organization" : undefined,
         ),
@@ -129,6 +144,7 @@ export function compileCandidateResearchPlan(
         key,
         true,
         95 - index,
+        input.questionOverrides?.[key],
         "freshness",
         reusable.has(key) ? "organization" : undefined,
       ),
@@ -141,6 +157,7 @@ export function compileCandidateResearchPlan(
         key,
         true,
         100 - index,
+        input.questionOverrides?.[key],
         "conflict_resolution",
         reusable.has(key) ? "organization" : undefined,
       ),
@@ -149,7 +166,12 @@ export function compileCandidateResearchPlan(
   if (input.procurementUnknown && !questions.has("procurement_authority")) {
     questions.set(
       "procurement_authority",
-      buildQuestion("procurement_authority", false, 70),
+      buildQuestion(
+        "procurement_authority",
+        false,
+        70,
+        input.questionOverrides?.procurement_authority,
+      ),
     );
   }
 

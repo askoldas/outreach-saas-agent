@@ -1,4 +1,5 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { campaignStrategyV2Schema } from "@/lib/intelligence/campaign-strategy-v2";
 import type { Json } from "@/types/database.types";
 import {
   resultLanes,
@@ -6,6 +7,7 @@ import {
   type CampaignV2Results,
   type ResultLane,
 } from "./types";
+import { resolveCandidateDisplayIdentity } from "./display-identity";
 
 type RecordValue = Record<string, unknown>;
 
@@ -27,7 +29,7 @@ export async function getCampaignV2Results(
 
   let runQuery = supabase
     .from("campaign_runs")
-    .select("id,status,workflow_version")
+    .select("id,status,strategy_version_id,workflow_version")
     .eq("workspace_id", workspaceId)
     .eq("campaign_id", campaign.id)
     .eq("workflow_version", "v2");
@@ -38,6 +40,16 @@ export async function getCampaignV2Results(
   if (runError) throw new Error(`Could not load V2 Campaign Run: ${runError.message}`);
   const run = runs?.[0];
   if (!run) return null;
+
+  const { data: strategyVersion, error: strategyError } = await supabase
+    .from("campaign_strategy_versions")
+    .select("strategy")
+    .eq("workspace_id", workspaceId)
+    .eq("id", run.strategy_version_id)
+    .maybeSingle();
+  if (strategyError)
+    throw new Error(`Could not load V2 Campaign Strategy: ${strategyError.message}`);
+  const labels = resultLabels(strategyVersion?.strategy);
 
   const { data: snapshot, error: snapshotError } = await supabase
     .from("candidate_rank_snapshots")
@@ -107,13 +119,7 @@ export async function getCampaignV2Results(
     return {
       anomalies: [],
       candidates: [],
-      coverage: (coverageResult.data ?? []).map((item) => ({
-        archetype: item.archetype_key,
-        confidence: item.confidence,
-        geography: item.geography_key,
-        reasons: stringArray(item.reasons_json),
-        status: item.status,
-      })),
+      coverage: mapCoverage(coverageResult.data ?? [], labels),
       entityReviewCases:
         entityCasesResult.data?.map((item) => ({
           id: item.id,
@@ -240,6 +246,39 @@ export async function getCampaignV2Results(
       throw new Error(`Could not load V2 company intelligence: ${result.error.message}`);
   }
 
+  const normalizedCandidateIds = [
+    ...new Set(
+      (organizationsResult.data ?? []).flatMap((organization) => {
+        const id = objectString(organization.metadata, "normalizedCandidateId");
+        return id ? [id] : [];
+      }),
+    ),
+  ];
+  const emptyUuid = "00000000-0000-0000-0000-000000000000";
+  const normalizedCandidatesResult = await supabase
+    .from("normalized_provider_candidates")
+    .select("id,canonical_domain_hint,provider_source_record_id,source_url")
+    .eq("workspace_id", workspaceId)
+    .in("id", normalizedCandidateIds.length ? normalizedCandidateIds : [emptyUuid]);
+  if (normalizedCandidatesResult.error) {
+    throw new Error(
+      `Could not load V2 candidate provenance: ${normalizedCandidatesResult.error.message}`,
+    );
+  }
+  const providerSourceRecordIds = (
+    normalizedCandidatesResult.data ?? []
+  ).map((candidate) => candidate.provider_source_record_id);
+  const sourceRecordsResult = await supabase
+    .from("provider_source_records")
+    .select("id,raw_payload_json,source_url")
+    .eq("workspace_id", workspaceId)
+    .in("id", providerSourceRecordIds.length ? providerSourceRecordIds : [emptyUuid]);
+  if (sourceRecordsResult.error) {
+    throw new Error(
+      `Could not load V2 candidate source records: ${sourceRecordsResult.error.message}`,
+    );
+  }
+
   // These WP-19 tables exist after migration 29. Keeping this read optional makes
   // an in-flight deployment display results while the migration is being applied.
   type ReviewQuery = {
@@ -279,6 +318,8 @@ export async function getCampaignV2Results(
   const evaluationById = byId(evaluationsResult.data);
   const organizationById = byId(organizationsResult.data);
   const intelligenceById = byId(intelligenceResult.data);
+  const normalizedCandidateById = byId(normalizedCandidatesResult.data);
+  const sourceRecordById = byId(sourceRecordsResult.data);
   const relationshipByEvaluation = new Map(
     (relationshipsResult.data ?? []).map((item) => [
       item.candidate_evaluation_version_id,
@@ -341,16 +382,41 @@ export async function getCampaignV2Results(
       (domainsByOrganization.get(organization.id) ?? []).find(
         (item) => item.is_primary,
       ) ?? (domainsByOrganization.get(organization.id) ?? [])[0];
+    const normalizedCandidateId = objectString(
+      organization.metadata,
+      "normalizedCandidateId",
+    );
+    const normalizedCandidate = normalizedCandidateId
+      ? normalizedCandidateById.get(normalizedCandidateId)
+      : undefined;
+    const sourceRecord = normalizedCandidate
+      ? sourceRecordById.get(normalizedCandidate.provider_source_record_id)
+      : undefined;
+    const displayIdentity = resolveCandidateDisplayIdentity({
+      canonicalDomainHint: normalizedCandidate?.canonical_domain_hint ?? null,
+      organizationDomain: primaryDomain?.domain ?? null,
+      organizationName: organization.name,
+      organizationWebsiteUrl: organization.website_url,
+      sourceTitle: objectString(sourceRecord?.raw_payload_json, "title"),
+      sourceUrl:
+        sourceRecord?.source_url ?? normalizedCandidate?.source_url ?? null,
+    });
     const review = reviewByCandidate.get(candidate.id);
     const lane = normalizeLane(entry.lane);
     return [
       {
-        archetypes: stringArray(candidate.matched_archetype_ids_json),
+        archetypes: [
+          ...new Set(
+            stringArray(candidate.matched_archetype_ids_json).map((value) =>
+              archetypeLabel(value, labels),
+            ),
+          ),
+        ],
         candidateId: candidate.id,
         confidence: confidence?.overall_confidence ?? null,
         correctionCount: (correctionsByCandidate.get(candidate.id) ?? []).length,
         country: organization.country,
-        domain: primaryDomain?.domain ?? null,
+        domain: displayIdentity.domain,
         eligibility: eligibility?.eligibility ?? "unknown",
         eligibilityReason: eligibility?.reason_text ?? "",
         evaluationId: evaluation.id,
@@ -370,19 +436,20 @@ export async function getCampaignV2Results(
         location:
           [organization.city, organization.country].filter(Boolean).join(", ") ||
           "Unknown",
-        name: organization.name,
+        name: displayIdentity.name,
         organizationType: organization.organization_type,
         potential: scoreValue(scores, "potential"),
         rank: entry.rank_overall,
-        relationship: relationship?.primary_relationship ?? "unknown",
+        relationship: displayEnum(relationship?.primary_relationship ?? "unknown"),
         relationshipConfidence: relationship?.confidence ?? null,
         reviewDecision: review ? String(review.decision) : null,
         reviewReason: review ? String(review.reason ?? "") : null,
+        sourceUrl: displayIdentity.sourceUrl,
         strongestEvidence: strongestEvidence(factorRows),
         unresolvedQuestions: stringArray(
           intelligence?.unresolved_question_keys_json ?? [],
         ),
-        websiteUrl: organization.website_url,
+        websiteUrl: displayIdentity.websiteUrl,
       },
     ];
   });
@@ -398,13 +465,7 @@ export async function getCampaignV2Results(
       severity: item.severity,
     })),
     candidates,
-    coverage: (coverageResult.data ?? []).map((item) => ({
-      archetype: item.archetype_key,
-      confidence: item.confidence,
-      geography: item.geography_key,
-      reasons: stringArray(item.reasons_json),
-      status: item.status,
-    })),
+    coverage: mapCoverage(coverageResult.data ?? [], labels),
     entityReviewCases:
       entityCasesResult.data?.map((item) => ({
         id: item.id,
@@ -416,6 +477,96 @@ export async function getCampaignV2Results(
     runId: run.id,
     runStatus: run.status,
   };
+}
+
+type ResultLabels = {
+  archetypes: Map<string, string>;
+  geographies: Map<string, string>;
+};
+
+function resultLabels(value: Json | undefined): ResultLabels {
+  const labels: ResultLabels = {
+    archetypes: new Map(),
+    geographies: new Map(),
+  };
+  const parsed = campaignStrategyV2Schema.safeParse(value);
+  if (!parsed.success) return labels;
+
+  for (const archetype of parsed.data.archetypes) {
+    labels.archetypes.set(archetype.id, archetype.label);
+  }
+  const geographies = [
+    parsed.data.geography,
+    ...parsed.data.discoverySegments.map((segment) => segment.geography),
+  ];
+  for (const geography of geographies) {
+    labels.geographies.set(
+      [...geography.countryCodes].sort().join("+"),
+      geography.displayName,
+    );
+  }
+  return labels;
+}
+
+function mapCoverage(
+  rows: Array<{
+    archetype_key: string;
+    confidence: number;
+    geography_key: string;
+    id: string;
+    reasons_json: Json;
+    status: string;
+  }>,
+  labels: ResultLabels,
+): CampaignV2Results["coverage"] {
+  const seen = new Set<string>();
+  return rows.flatMap((item) => {
+    const identity = `${item.archetype_key}:${item.geography_key}`;
+    if (seen.has(identity)) return [];
+    seen.add(identity);
+    return [
+      {
+        archetype: archetypeLabel(item.archetype_key, labels),
+        confidence: item.confidence,
+        geography: geographyLabel(item.geography_key, labels),
+        id: item.id,
+        reasons: stringArray(item.reasons_json),
+        status: displayEnum(item.status),
+      },
+    ];
+  });
+}
+
+function archetypeLabel(value: string, labels: ResultLabels) {
+  const configured = labels.archetypes.get(value);
+  if (configured) return configured;
+  const semanticKey = value.includes(".archetype.")
+    ? value.split(".archetype.").at(-1) ?? value
+    : value;
+  if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(semanticKey)) return "Target company";
+  return humanizeKey(semanticKey);
+}
+
+function geographyLabel(value: string, labels: ResultLabels) {
+  const configured = labels.geographies.get(value);
+  if (configured) return configured;
+  const countryCodes = value.split("+");
+  if (countryCodes.length && countryCodes.every((code) => /^[A-Z]{2}$/.test(code))) {
+    const names = new Intl.DisplayNames(["en"], { type: "region" });
+    return countryCodes.map((code) => names.of(code) ?? code).join(", ");
+  }
+  return humanizeKey(value);
+}
+
+function displayEnum(value: string) {
+  return value === "unknown" ? "Not established" : humanizeKey(value);
+}
+
+function humanizeKey(value: string) {
+  const words = value.replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
+  return words
+    ? `${words.charAt(0).toUpperCase()}${words.slice(1)}`
+    : "Not established";
 }
 
 function emptyLaneCounts(): Record<ResultLane, number> {
@@ -463,4 +614,12 @@ function stringArray(value: Json | unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+function objectString(value: Json | unknown, key: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const candidate = (value as Record<string, unknown>)[key];
+  return typeof candidate === "string" && candidate.trim()
+    ? candidate.trim()
+    : null;
 }

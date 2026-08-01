@@ -9,7 +9,7 @@ const child = source("src/trigger/run-campaign-v2-stage.ts");
 const researchChild = source("src/trigger/research-campaign-candidates-v2.ts");
 const qualificationChild = source("src/trigger/qualify-campaign-candidates-v2.ts");
 const service = source("src/server/workflow-v2/stage-service.ts");
-const routing = source("src/lib/intelligence/workflow-routing.ts");
+const dispatch = source("src/server/trigger/dispatch.ts");
 
 test("V2 parent resumes from checkpoints and waits for durable child stages", () => {
   assert.match(parent, /id: "execute-campaign-v2"/);
@@ -51,5 +51,6 @@ test("V2 stages connect through deterministic Comparative Ranking", () => {
   assert.match(service, /input\.stage === "rank_candidates"/);
   assert.match(service, /executeRankingStage/);
   assert.match(service, /stage adapter.*is not implemented/s);
-  assert.match(routing, /return "execute-campaign-v2"/);
+  assert.match(dispatch, /"execute-campaign-v2"/);
+  assert.match(dispatch, /Historical V1 Campaign Runs are read-only/);
 });

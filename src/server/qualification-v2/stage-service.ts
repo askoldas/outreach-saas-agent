@@ -23,7 +23,6 @@ export async function prepareQualificationStage(input: {
   const strategy = campaignStrategyV2Schema.parse(context.strategy);
   if (
     strategy.id !== context.strategyVersionId ||
-    strategy.campaignId !== context.campaignId ||
     strategy.status !== "confirmed"
   ) {
     throw new Error("Qualification requires the run's frozen confirmed Strategy.");

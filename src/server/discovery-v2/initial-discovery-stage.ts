@@ -334,6 +334,20 @@ export async function executeInitialDiscoveryStage(input: {
     consecutiveLowYieldPasses: 0,
     maximumConsecutiveLowYieldPasses: 2,
   });
+  if (fatalProviderFailure) {
+    const providerErrors = [
+      ...new Set(
+        outcomes.flatMap(({ errors }) =>
+          providerErrorMessages(errors),
+        ),
+      ),
+    ].slice(0, 3);
+    if (providerErrors.length) {
+      decision.rationale = `No provider returned source records. ${providerErrors.join(
+        " ",
+      )}`;
+    }
+  }
   const coverageSnapshots = await mapWithConcurrency(
     coverageResults,
     4,
@@ -591,6 +605,15 @@ function jsonSummaryCount(value: unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return 0;
   const count = Number((value as Record<string, unknown>)[key]);
   return Number.isFinite(count) && count >= 0 ? count : 0;
+}
+
+function providerErrorMessages(value: Json) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const message = entry.message;
+    return typeof message === "string" && message.trim() ? [message.trim()] : [];
+  });
 }
 
 export async function mapWithConcurrency<T, R>(

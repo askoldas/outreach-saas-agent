@@ -30,7 +30,11 @@ export function RunProgressPanel({
         if (!cancelled) {
           setProgress(payload);
           setError("");
-          if (["completed", "failed", "cancelled"].includes(payload.status)) {
+          if (
+            ["completed", "failed", "cancelled", "waiting_for_input"].includes(
+              payload.status,
+            )
+          ) {
             window.location.reload();
           }
         }

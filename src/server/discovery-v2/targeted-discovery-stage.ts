@@ -610,6 +610,20 @@ function finalStageResult(input: {
 }): StageResult {
   const decisionKind = input.decision.decision_json.decision;
   const usage = jsonRecord(input.run.usage_summary_json);
+  const normalizedCandidateCount = recordNumber(
+    usage,
+    "normalizedProviderCandidates",
+  );
+  if (decisionKind === "stop" && normalizedCandidateCount === 0) {
+    if (input.decision.decision_json.reasonCode === "fatal_provider_failure") {
+      throw new Error(
+        `Semantic Discovery provider failed before returning source records. ${input.decision.decision_json.rationale}`,
+      );
+    }
+    throw new Error(
+      "Semantic Discovery completed without normalized candidates. Review the provider records and normalization diagnostics.",
+    );
+  }
   return {
     stage: "discover",
     status: decisionKind === "stop" ? "completed" : "blocked",
@@ -628,7 +642,7 @@ function finalStageResult(input: {
     },
     progressDelta: {
       discoveryPasses: input.decision.pass_number,
-      normalizedCandidates: recordNumber(usage, "normalizedProviderCandidates"),
+      normalizedCandidates: normalizedCandidateCount,
       providerCalls: recordNumber(usage, "providerCalls"),
       providerRecords: recordNumber(usage, "providerRecordsRetrieved"),
       uniqueCandidateGroups: recordNumber(usage, "uniqueCandidateGroups"),

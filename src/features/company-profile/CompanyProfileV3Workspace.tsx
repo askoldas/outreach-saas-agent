@@ -19,13 +19,9 @@ export function CompanyProfileV3Workspace({
   review,
 }: Readonly<{ review: CompanyProfileV3Review }>) {
   const pending = review.questions.filter((question) => question.status === "pending");
-  const blocking = pending.filter(
-    (question) => question.impact === "blocking" && !question.skip_allowed,
-  );
   const reviewable = ["needs_input", "ready_for_review"].includes(review.state);
   const publishable =
-    review.state === "ready_for_review" &&
-    blocking.length === 0 &&
+    reviewable &&
     review.offerings.some((offering) => offering.status === "active");
   return (
     <>
@@ -51,10 +47,10 @@ export function CompanyProfileV3Workspace({
             Review the commercial model, offering-specific buyer logic, assumptions,
             unknowns, and scoped rules before publishing this profile for campaigns.
           </p>
-          {blocking.length ? (
+          {pending.length ? (
             <Badge tone="warning">
-              {blocking.length} blocking clarification
-              {blocking.length === 1 ? "" : "s"} must be answered
+              {pending.length} optional clarification
+              {pending.length === 1 ? "" : "s"} remain. Answer only what is useful.
             </Badge>
           ) : null}
         </div>
@@ -307,7 +303,7 @@ export function CompanyProfileV3Workspace({
                 <input type="hidden" name="questionId" value={question.id} />
                 <div>
                   <Badge tone={question.impact === "blocking" ? "danger" : "warning"}>
-                    {question.impact}
+                    {question.impact === "blocking" ? "high impact" : question.impact}
                   </Badge>
                   <strong> {question.question}</strong>
                   <p>{question.explanation}</p>
@@ -317,11 +313,9 @@ export function CompanyProfileV3Workspace({
                   <Button type="submit" variant="primary">
                     Save answer
                   </Button>
-                  {question.skip_allowed ? (
-                    <Button type="submit" formAction={skipCompanyProfileV3QuestionAction}>
-                      Skip
-                    </Button>
-                  ) : null}
+                  <Button type="submit" formAction={skipCompanyProfileV3QuestionAction}>
+                    Skip
+                  </Button>
                 </div>
               </form>
             ))}
@@ -345,6 +339,7 @@ function QuestionInput({
               type={question.answer_type === "multi_select" ? "checkbox" : "radio"}
               name="answer"
               value={String(option.optionKey)}
+              required={question.answer_type !== "multi_select"}
             />
             <span>
               {String(option.label)}

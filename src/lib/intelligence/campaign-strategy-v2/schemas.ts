@@ -75,7 +75,7 @@ export const campaignGeographyV2Schema = z
   .object({
     mode: z.enum(["country", "multi_country", "region", "subregion"]),
     displayName: z.string().min(1),
-    countryCodes: z.array(z.string().length(2)).min(1),
+    countryCodes: z.array(z.string().min(2).max(64)).min(1),
     includedRegions: z.array(z.string()).default([]),
     includedCities: z.array(z.string()).default([]),
     excludedRegions: z.array(z.string()).default([]),
@@ -377,6 +377,7 @@ export const discoverySegmentRequestV2Schema = z
 export const campaignStrategyV2Schema = z
   .object({
     schemaVersion: z.literal(2),
+    creationContract: z.literal("native-campaign-strategy/v1").optional(),
     id: z.string().min(1),
     campaignId: z.string().min(1),
     versionNumber: z.number().int().positive(),
@@ -401,7 +402,7 @@ export const campaignStrategyV2Schema = z
       .object({
         confirmed: z.boolean(),
         confirmedByUserId: z.string().min(1).optional(),
-        confirmedAt: z.string().datetime().optional(),
+        confirmedAt: z.string().datetime({ offset: true }).optional(),
       })
       .strict(),
     legacyImport: z

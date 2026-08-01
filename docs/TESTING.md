@@ -259,8 +259,10 @@ duplicate/exclusion classification gates, progressive counters, and bounded targ
 iteration, query, result, and marginal-yield stopping rules.
 
 Campaign navigation contract coverage verifies the responsive Overview, Market Analysis,
-Discovery, Companies, Contacts, and Outreach sections and ensures the Campaign root is a
-real stage overview rather than a redirect.
+Strategy, Discovery, Companies, Contacts, and Outreach sections and ensures the Campaign
+root is a real stage overview rather than a redirect. Provider and research tests also
+protect per-country query coverage, derived local-language coverage, country forwarding,
+and the target-geography evidence gate.
 
 The labeled synthetic discovery evaluation can be run independently with
 `pnpm test:discovery-quality`. It enforces minimum precision and recall for deterministic

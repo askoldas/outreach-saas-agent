@@ -1,8 +1,16 @@
 import type { FactorDefinition } from "./contracts.ts";
 
-export const STANDARD_FACTOR_LIBRARY_VERSION = "qualification-factors-v2.1";
+export const STANDARD_FACTOR_LIBRARY_VERSION = "qualification-factors-v2.2";
 
 export const STANDARD_FACTOR_LIBRARY: readonly FactorDefinition[] = [
+  {
+    key: "target_geography",
+    label: "Target-market presence",
+    purposes: ["eligibility"],
+    weight: 1,
+    criticality: "required",
+    unknownPolicy: "requires_research_if_required",
+  },
   {
     key: "business_model_compatibility",
     label: "Business-model compatibility",

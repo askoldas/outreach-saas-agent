@@ -1,7 +1,13 @@
-import type { CampaignStrategyV2 } from "@/lib/intelligence/campaign-strategy-v2";
-import { confirmCampaignStrategyV2Action } from "@/server/campaign-strategy-v2/actions";
+import {
+  canRetryCampaignStrategyV2Draft,
+  type CampaignStrategyV2,
+} from "@/lib/intelligence/campaign-strategy-v2";
+import {
+  confirmCampaignStrategyV2Action,
+  retryCampaignStrategyV2Action,
+} from "@/server/campaign-strategy-v2/actions";
 import { Badge } from "@/components/ui/Badge";
-import { Button } from "@/components/ui/Button";
+import { Button, ButtonLink } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import styles from "@/features/shared/Feature.module.css";
 
@@ -112,16 +118,60 @@ export function CampaignStrategyV2Workspace({
                 </Button>
               </form>
             ) : null}
-            <Button disabled title="Enabled with the V2 discovery provider packages">
-              Start discovery
-            </Button>
-            <p className={styles.secondaryText}>
-              V2 discovery remains intentionally gated until provider routing is
-              implemented in WP-11 and later packages.
-            </p>
+            {confirmed ? (
+              <ButtonLink href={`/campaigns/${campaignId}`} variant="primary">
+                Go to campaign controls
+              </ButtonLink>
+            ) : null}
           </div>
         </Card>
       </div>
+    </div>
+  );
+}
+
+export function CampaignStrategyV2Recovery({
+  campaignId,
+  draftId,
+  state,
+  message,
+}: {
+  campaignId: string;
+  draftId: string;
+  state: string;
+  message?: string;
+}) {
+  const retryable = canRetryCampaignStrategyV2Draft(state);
+  return (
+    <div className={styles.stack}>
+      {message ? <Badge tone="accent">{message}</Badge> : null}
+      <Card>
+        <CardHeader
+          eyebrow={`Campaign Strategy V2 · ${state}`}
+          title="Strategy setup did not finish"
+          action={<Badge tone="neutral">{state}</Badge>}
+        />
+        <div className={`${styles.cardBody} ${styles.stack}`}>
+          <p className={styles.secondaryText}>
+            The campaign and its frozen planning inputs were saved, but the strategy
+            compilation did not complete.
+          </p>
+          {retryable ? (
+            <form action={retryCampaignStrategyV2Action}>
+              <input type="hidden" name="campaignId" value={campaignId} />
+              <input type="hidden" name="strategyDraftId" value={draftId} />
+              <Button type="submit" variant="primary">
+                Retry strategy setup
+              </Button>
+            </form>
+          ) : (
+            <p>
+              This draft cannot be retried from its current state. Create a new campaign
+              or remove this incomplete campaign.
+            </p>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

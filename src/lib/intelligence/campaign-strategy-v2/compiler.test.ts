@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CampaignStrategyVersion } from "@/types/domain";
 import { compileCampaignCommercialContext } from "./context-compiler.ts";
 import { compileCampaignStrategyV2 } from "./strategy-compiler.ts";
-import { adaptV1StrategyToV2Draft } from "./v1-adapter.ts";
+import { createNativeCampaignStrategyFixture } from "./test-fixture.ts";
 
 test("context compiler freezes only selected offering knowledge and applicable rules", () => {
   const source = contextSource();
@@ -60,7 +59,13 @@ test("strategy compiler validates and canonically orders a review draft", () => 
   assert.equal(compilation.contentHash.length, 64);
   assert.equal(
     compilation.normalizedRecords.qualificationPolicy.factorDefinitions.length,
-    3,
+    4,
+  );
+  assert.equal(
+    compilation.normalizedRecords.qualificationPolicy.factorDefinitions.some(
+      ({ factorKey }) => factorKey === "target_geography",
+    ),
+    true,
   );
 });
 
@@ -172,45 +177,5 @@ function contextSource() {
 }
 
 function provisionalDraft() {
-  return adaptV1StrategyToV2Draft({
-    campaignId: "campaign-1",
-    strategyDraftId: "strategy-draft-1",
-    companyProfileVersionId: "profile-version-1",
-    offeringId: "offering-1",
-    offeringVersionId: "offering-version-1",
-    memorySnapshotId: "memory-snapshot-1",
-    geography: {
-      displayName: "Lithuania",
-      countryCodes: ["LT"],
-      workingLanguages: ["English"],
-    },
-    strategy: legacyStrategy(),
-  });
-}
-
-function legacyStrategy(): CampaignStrategyVersion {
-  return {
-    id: "legacy-1",
-    version: 1,
-    status: "ready",
-    targetGeography: "Lithuania",
-    companyTypes: ["Manufacturer"],
-    industries: ["Industrial"],
-    characteristics: ["Local operations"],
-    relevanceReasons: ["May buy"],
-    opportunityAssumptions: [],
-    qualificationCriteria: ["Has operations"],
-    positiveSignals: ["Production site"],
-    exclusions: [],
-    contactRoles: [],
-    contactDepartments: [],
-    acceptableContactRoutes: [],
-    searchLanguages: ["English"],
-    sourceCategories: ["website"],
-    searchTerms: [],
-    localizedTerms: [],
-    limitations: [],
-    targetCompanyCount: 25,
-    refinementSummary: ["Industrial buyers"],
-  };
+  return createNativeCampaignStrategyFixture();
 }

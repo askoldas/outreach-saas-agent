@@ -39,11 +39,9 @@ test("free and moving model aliases are rejected", () => {
 
 test("AI call sites request roles and do not duplicate raw production model IDs", async () => {
   const files = [
-    "company-profile-analysis.ts",
-    "strategy-generation.ts",
-    "lead-evaluation.ts",
     "draft-generation.ts",
-    "guided-interpretation.ts",
+    "campaign-brief-proposal.ts",
+    "structured-change-interpretation.ts",
   ];
   for (const file of files) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
@@ -61,27 +59,12 @@ test("no OpenRouter secret uses a public environment variable", async () => {
   assert.doesNotMatch(source, /NEXT_PUBLIC_OPENROUTER/);
 });
 
-test("qualification persists the actual model selected by OpenRouter", async () => {
-  const service = await readFile(
-    new URL("../../server/campaign-discovery/service.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(
-    service,
-    /selected_model:\s*generated\.modelCall\.actualModel\s*\?\?\s*generated\.modelCall\.requestedModel/,
-  );
-});
-
 test("current AI prompt versions match the approved structured contracts", async () => {
   const expectations = new Map([
-    ["company-profile-analysis.ts", "company-profile-website-v5-bounded-recovery"],
     ["offering-proposals.ts", "profile-offering-proposals-v1"],
     ["target-segment-proposals.ts", "campaign-target-segments-v1"],
     ["structured-change-interpretation.ts", "structured-additive-changes-v1"],
-    ["strategy-generation.ts", "campaign-strategy-v1"],
-    ["lead-evaluation.ts", "lead-evaluator-v1"],
     ["draft-generation.ts", "grounded-outreach-draft-v1"],
-    ["guided-interpretation.ts", "guided-change-v2"],
   ]);
   for (const [file, promptVersion] of expectations) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");

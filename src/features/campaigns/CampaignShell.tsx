@@ -1,12 +1,12 @@
 import Link from "next/link";
 import type { Campaign } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
-import { ContextualAiDrawer } from "@/features/guided/ContextualAiDrawer";
 import styles from "./CampaignShell.module.css";
 
 type CampaignSection =
   | "overview"
   | "market"
+  | "strategy"
   | "discovery"
   | "companies"
   | "contacts"
@@ -25,6 +25,7 @@ export function CampaignShell({
   const tabs = [
     { key: "overview", label: "Overview", href: base },
     { key: "market", label: "Market Analysis", href: `${base}/market-analysis` },
+    { key: "strategy", label: "Strategy", href: `${base}/strategy` },
     { key: "discovery", label: "Discovery", href: `${base}/discovery` },
     { key: "companies", label: "Companies", href: `${base}/leads` },
     { key: "contacts", label: "Contacts", href: `${base}/outreach?view=contacts` },
@@ -39,7 +40,6 @@ export function CampaignShell({
           <span>
             {campaign.objective} · {campaign.geography} · Updated {campaign.lastActivity}
           </span>
-          <Link href={`${base}/strategy`}>Campaign strategy</Link>
         </div>
         <Badge
           tone={
@@ -65,18 +65,6 @@ export function CampaignShell({
           </Link>
         ))}
       </nav>
-      <ContextualAiDrawer
-        context={`Campaign — ${campaign.name}`}
-        scope="campaign"
-        entityId={campaign.id}
-        baseVersion={campaign.strategyVersion ?? 0}
-        actions={[
-          "Narrow the target market",
-          "Add an exclusion",
-          "Change buyer personas",
-          "Explain the discovery strategy",
-        ]}
-      />
       {children}
     </div>
   );

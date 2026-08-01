@@ -38,6 +38,10 @@ Only decisions that govern the current implementation are retained here. Migrati
   separately; campaign adjustments never mutate Company Profile.
 - Preferred outreach language controls generated messages only. Discovery languages are
   derived independently from the target market and persisted on Campaign Strategy.
+- Multi-country discovery must create explicit query coverage for every frozen country.
+  A provider country parameter is a retrieval priority only; target-market eligibility
+  requires independent first-party, registry, official-document, or trusted-directory
+  evidence during candidate research and qualification.
 - Market adjustments are immutable Campaign Strategy revisions. Saving a revision
   atomically synchronizes the Campaign targeting fields and confirmed brief; active runs
   remain frozen and must be paused before a revision can be saved.

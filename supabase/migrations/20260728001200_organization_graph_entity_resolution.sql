@@ -274,11 +274,15 @@ begin
   ) then
     select workspace_id into expected_workspace_id from public.companies
     where id = new.organization_id;
-    if tg_table_name = 'organization_source_links' and not exists (
-      select 1 from public.provider_source_records
-      where id = new.provider_source_record_id
-        and workspace_id = expected_workspace_id
-    ) then raise exception 'Cross-workspace organization source link.'; end if;
+    if tg_table_name = 'organization_source_links' then
+      if not exists (
+        select 1 from public.provider_source_records
+        where id = new.provider_source_record_id
+          and workspace_id = expected_workspace_id
+      ) then
+        raise exception 'Cross-workspace organization source link.';
+      end if;
+    end if;
   elsif tg_table_name = 'organization_relationships' then
     select workspace_id into expected_workspace_id from public.companies
     where id = new.source_organization_id;

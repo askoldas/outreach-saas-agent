@@ -8,9 +8,12 @@ import type {
   FactorEvaluation,
   RelationshipAssessment,
 } from "./contracts.ts";
-import { STANDARD_FACTOR_LIBRARY } from "./factor-library.ts";
+import {
+  STANDARD_FACTOR_LIBRARY,
+  STANDARD_FACTOR_LIBRARY_VERSION,
+} from "./factor-library.ts";
 
-export const QUALIFICATION_RUNTIME_CONTRACT_VERSION = "candidate-qualification-v2.1";
+export const QUALIFICATION_RUNTIME_CONTRACT_VERSION = "candidate-qualification-v2.2";
 export const QUALIFICATION_RELATIONSHIP_PROMPT_VERSION =
   "candidate-relationship-classification-v2.1";
 export const QUALIFICATION_FACTOR_PROMPT_VERSION = "candidate-factor-evaluation-v2.1";
@@ -192,6 +195,32 @@ export function compileQualificationRubric(
       acceptedEvidenceTypes: [...factor.acceptedEvidenceTypes],
     };
   });
+  if (
+    !strategy.geography.countryCodes.includes("WORLDWIDE") &&
+    !factors.some(({ key }) => key === "target_geography")
+  ) {
+    factors.push({
+      key: "target_geography",
+      label: `Presence in ${strategy.geography.displayName}`,
+      definition:
+        `The organization is legally based in or demonstrably operates in ${strategy.geography.displayName} ` +
+        `(${strategy.geography.countryCodes.join(", ")}). Query targeting and incidental mentions do not establish eligibility.`,
+      purposes: ["eligibility"],
+      weight: 1,
+      criticality: "required",
+      unknownPolicy: "requires_research_if_required",
+      positiveDefinition:
+        "Reliable first-party, registry, or trusted-directory evidence establishes presence in the target market.",
+      negativeDefinition:
+        "Reliable evidence establishes that the organization has no legal or operating presence in the target market.",
+      acceptedEvidenceTypes: [
+        "company_website",
+        "official_document",
+        "legal_registry",
+        "reliable_public_source",
+      ],
+    });
+  }
   const recommendedFit =
     strategy.qualificationPolicy.qualificationThresholds.recommendedFit ?? 75;
   const minimumFitForConditional = Math.max(0, recommendedFit - 20);
@@ -217,7 +246,7 @@ export function compileQualificationRubric(
       (left, right) => left.ruleKey.localeCompare(right.ruleKey),
     ),
     thresholds,
-    factorLibraryVersion: "qualification-factors-v2.1+campaign-specialization",
+    factorLibraryVersion: `${STANDARD_FACTOR_LIBRARY_VERSION}+campaign-specialization`,
     scoringPolicyVersion: QUALIFICATION_SCORING_POLICY_VERSION,
     relationshipClassifierVersion: QUALIFICATION_RELATIONSHIP_PROMPT_VERSION,
     exclusionPolicyVersion: QUALIFICATION_EXCLUSION_POLICY_VERSION,
@@ -360,9 +389,9 @@ export function normalizeFactorEvaluations(input: {
   claims: QualificationClaim[];
   evidence: QualificationEvidence[];
 }) {
-  const output = factorOutputSchema.parse(input.raw);
+  const parsedOutput = factorOutputSchema.parse(input.raw);
   const expectedKeys = input.factors.map(({ key }) => key).sort();
-  const actualKeys = output.factors.map(({ factorKey }) => factorKey).sort();
+  const actualKeys = parsedOutput.factors.map(({ factorKey }) => factorKey).sort();
   if (
     expectedKeys.length !== actualKeys.length ||
     expectedKeys.some((key, index) => key !== actualKeys[index])
@@ -374,6 +403,32 @@ export function normalizeFactorEvaluations(input: {
   const evidenceById = new Map(
     input.evidence.map((evidence) => [evidence.id, evidence] as const),
   );
+  const output = {
+    factors: parsedOutput.factors.map((factor) => {
+      const unsupportedObservation =
+        ["positive", "negative"].includes(factor.state) &&
+        (factor.strength === 0 ||
+          factor.supportingClaimIds.length === 0 ||
+          factor.evidenceIds.length === 0);
+      if (!unsupportedObservation) return factor;
+      return {
+        ...factor,
+        state: "unknown" as const,
+        strength: 0,
+        confidence: 0,
+        supportingClaimIds: [],
+        counterClaimIds: [],
+        evidenceIds: [],
+        missingEvidence: uniqueSorted([
+          ...factor.missingEvidence,
+          "Recorded claims and evidence do not support an observed factor state.",
+        ]),
+        conciseExplanation:
+          "The recorded claims and evidence are insufficient to resolve this factor.",
+        criticalGateRecommendation: "unresolved" as const,
+      };
+    }),
+  };
   const results = output.factors
     .map(
       (
@@ -392,16 +447,6 @@ export function normalizeFactorEvaluations(input: {
           evidenceIds,
           `Factor "${factor.factorKey}" cited evidence outside its frozen context.`,
         );
-        if (
-          ["positive", "negative"].includes(factor.state) &&
-          (factor.strength === 0 ||
-            factor.supportingClaimIds.length === 0 ||
-            factor.evidenceIds.length === 0)
-        ) {
-          throw new Error(
-            `Observed factor "${factor.factorKey}" requires strength, claims, and evidence.`,
-          );
-        }
         const evidenceQuality = calculateEvidenceQuality(
           factor.evidenceIds.map((id) => evidenceById.get(id)!),
         );
@@ -501,6 +546,7 @@ export function buildFactorEvaluationMessages(input: {
         "Use the exact factor definitions and policies supplied.",
         "Do not invent evidence or treat missing evidence as negative.",
         "Use unknown for insufficient evidence and conflicting for material disagreement.",
+        "Positive or negative requires nonzero strength, at least one supplied supporting claim ID, and at least one supplied evidence ID; otherwise return unknown.",
         "Do not calculate a final fit, potential, confidence, eligibility, lane, or rank.",
         "Return exactly one record per supplied factor key in one compact JSON object.",
       ].join(" "),

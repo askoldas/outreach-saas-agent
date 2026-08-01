@@ -9,6 +9,7 @@ import {
 import type { StageResult } from "@/lib/workflow-v2";
 import type { Json } from "@/types/database.types";
 import {
+  findCandidateResearchBatch,
   finalizeCandidateResearchBatch,
   initializeCandidateResearchBatch,
   loadCampaignResearchContext,
@@ -18,11 +19,13 @@ export async function prepareCandidateResearchStage(input: {
   campaignRunId: string;
   workspaceId: string;
 }) {
+  const frozenBatch = await findCandidateResearchBatch(input);
+  if (frozenBatch) return frozenBatch;
+
   const context = await loadCampaignResearchContext(input);
   const strategy = campaignStrategyV2Schema.parse(context.strategy);
   if (
     strategy.id !== context.strategyVersionId ||
-    strategy.campaignId !== context.campaignId ||
     strategy.status !== "confirmed"
   ) {
     throw new Error("Candidate research requires the run's frozen confirmed Strategy.");

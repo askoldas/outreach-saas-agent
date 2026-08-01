@@ -32,7 +32,6 @@ test("server operational writers use the service-role client", () => {
   for (const file of [
     "../research/repository.ts",
     "../trigger/dispatch.ts",
-    "../campaign-strategy/actions.ts",
     "../outreach/repository.ts",
     "../activity/repository.ts",
   ]) {

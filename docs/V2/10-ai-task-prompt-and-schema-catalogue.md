@@ -1203,7 +1203,7 @@ const ProfileClarificationOutputSchema = z.object({
           .default([]),
         impact: z.enum(["blocking", "important", "optional"]),
         affectedPaths: z.array(z.string()),
-        skipAllowed: z.boolean(),
+        skipAllowed: z.literal(true),
       }),
     )
     .max(8),
@@ -1226,7 +1226,8 @@ Do not ask generic questions merely because a field is empty.
 Do not ask campaign-stage questions about target geography, campaign objective, campaign volume, campaign-specific exclusions, or outreach strategy.
 Do not repeat a question already answered, skipped, or resolved unless new evidence creates a clear conflict.
 Prefer a concise recommendation with selectable options over a broad open-ended question.
-Questions should normally be non-blocking. Use blocking only when no usable offering or company identity can be established safely.
+Every question is optional and must set `skipAllowed` to `true`. Impact describes
+decision importance only; it never makes an answer mandatory or blocks publication.
 Return JSON only.
 ```
 

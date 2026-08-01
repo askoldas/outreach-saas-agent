@@ -33,25 +33,6 @@ export async function getCurrentCampaignStrategy(
   return map(data as Row);
 }
 
-export async function saveCampaignStrategyVersion(
-  workspaceId: string,
-  externalId: string,
-  strategy: CampaignStrategyVersion,
-) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error: insertError } = await supabase.rpc(
-    "save_clean_campaign_strategy_version",
-    {
-      target_workspace_id: workspaceId,
-      target_campaign_external_id: externalId,
-      strategy_data: strategy,
-    },
-  );
-  if (insertError)
-    throw new Error(`Could not save Campaign Strategy: ${insertError.message}`);
-  return map(data as Row);
-}
-
 function map(row: Row): CampaignStrategyVersion {
   const value = row.strategy as CampaignStrategyVersion;
   return { ...value, id: row.id, version: row.version, status: row.status };

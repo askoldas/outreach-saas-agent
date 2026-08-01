@@ -47,7 +47,8 @@ export type ConfirmedCampaignBrief = {
   desiredQualifiedCompanies: number;
 };
 
-export const campaignBriefPromptVersion = "campaign-brief-proposal-v2-b2b-segments";
+export const campaignBriefPromptVersion =
+  "campaign-brief-proposal-v3-native-intelligence";
 
 export function parseCampaignBriefProposal(
   value: unknown,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { countryDisplayName } from "../../discovery/languages.ts";
 import { searchWeb, type SearchResult } from "../../providers/tavily.ts";
 import {
   providerDiscoveryRequestSchema,
@@ -19,12 +20,16 @@ import { normalizeWebSearchResult } from "./web-normalization.ts";
 type WebSearchTransport = (
   query: string,
   maxResults: number,
-  options?: { includeDomains?: string[]; includeRawContent?: boolean },
+  options?: {
+    country?: string;
+    includeDomains?: string[];
+    includeRawContent?: boolean;
+  },
 ) => Promise<SearchResult[]>;
 
 export class WebSearchProvider implements CompanyDiscoveryProvider {
   readonly id = "web_search";
-  readonly version = "2.0";
+  readonly version = "2.3";
   readonly #transport: WebSearchTransport;
   readonly #now: () => string;
   readonly #executionId: () => string;
@@ -96,7 +101,11 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
       try {
         return {
           query,
-          results: await this.#transport(query.query, perQuery),
+          results: await this.#transport(query.query, perQuery, {
+            ...(query.country
+              ? { country: countryDisplayName(query.country).toLowerCase() }
+              : {}),
+          }),
         };
       } catch (error) {
         return {
@@ -150,7 +159,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
 
 export const webSearchProviderCapabilities: DiscoveryProviderCapabilities = {
   providerId: "web_search",
-  providerVersion: "2.0",
+  providerVersion: "2.3",
   sourceTypes: ["web_search", "industry_directory"],
   supports: {
     countryFilter: true,

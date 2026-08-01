@@ -6,9 +6,19 @@ import {
   type ExternalOrganizationType,
 } from "../../lib/entity-resolution-v2/index.ts";
 
-export const ENTITY_RESOLUTION_RUNTIME_RULES_VERSION = "entity-resolution-v2.2";
+export const ENTITY_RESOLUTION_RUNTIME_RULES_VERSION = "entity-resolution-v2.4";
 
 const organizationWebsitePageTypes = new Set(["company_homepage", "company_subpage"]);
+const nonOrganizationPageTypes = new Set([
+  "association_member_list",
+  "content_page",
+  "directory_list",
+  "document",
+  "marketplace_listing",
+  "news_article",
+  "social_profile",
+  "unknown",
+]);
 
 export type CampaignResolutionInput = {
   canonicalDomainHint: string | null;
@@ -59,8 +69,7 @@ export function prepareResolutionCandidate(
     organizationWebsitePageTypes.has(input.sourcePageType ?? "") &&
     sourceDomain === domain &&
     websiteDomain === domain;
-  const safeOfficialDomain =
-    attributableWebsiteDomain && input.sourcePageType === "company_homepage";
+  const safeOfficialDomain = attributableWebsiteDomain;
   const canonicalDomain = safeOfficialDomain ? domain : null;
   const normalizedName =
     normalizedNameFromName ||
@@ -85,6 +94,7 @@ export function prepareResolutionCandidate(
     ...grouping,
     invalidIdentity:
       input.organizationTypeHint === "directory_listing" ||
+      nonOrganizationPageTypes.has(input.sourcePageType ?? "") ||
       (!normalizedName && !canonicalDomain),
     matchedArchetypeKey: input.matchedArchetypeKey,
     matchedSegmentKey: input.matchedSegmentKey,

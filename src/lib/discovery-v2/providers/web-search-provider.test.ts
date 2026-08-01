@@ -1,14 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CampaignStrategyVersion } from "@/types/domain";
 import type { ProviderDiscoveryRequest } from "../contracts.ts";
 import { createConfiguredDiscoveryProviderRegistry } from "../configured-provider-registry.ts";
-import { adaptV1StrategyToV2Draft } from "../../intelligence/campaign-strategy-v2/v1-adapter.ts";
+import { createNativeCampaignStrategyFixture } from "../../intelligence/campaign-strategy-v2/test-fixture.ts";
 import {
-  fingerprintWebQuery,
   generateWebDiscoveryQueries,
   normalizeWebQuery,
 } from "./web-query-generator.ts";
+import { classifyWebResult } from "./web-normalization.ts";
 import { WebSearchProvider } from "./web-search-provider.ts";
 
 test("V2 web queries are semantic, bounded, localized, and deterministic", () => {
@@ -28,16 +27,57 @@ test("V2 web queries are semantic, bounded, localized, and deterministic", () =>
   const localInput = request();
   localInput.segment.geography.localLanguages = ["Lithuanian"];
   localInput.budget.maxCalls = 10;
+  const broadQueries = generateWebDiscoveryQueries(localInput);
   assert.ok(
-    generateWebDiscoveryQueries(localInput).some(
+    broadQueries.some(
       (query) => query.family === "local_language" && /įmonė|tiekėjas/.test(query.query),
     ),
+  );
+  assert.ok(
+    broadQueries.some(
+      (query) => query.family === "archetype" && query.query.includes("official website"),
+    ),
+  );
+  assert.ok(
+    broadQueries
+      .filter((query) => query.family === "positive_signal")
+      .every((query) => query.query.includes("company manufacturer")),
+  );
+});
+
+test("multi-country discovery gives every Baltic market a localized query and filter", () => {
+  const input = request();
+  input.segment.geography = {
+    ...input.segment.geography,
+    mode: "multi_country",
+    displayName: "Baltics",
+    countryCodes: ["EE", "LV", "LT"],
+    // Older frozen strategies omitted local languages; country codes remain authoritative.
+    localLanguages: [],
+    workingLanguages: ["English"],
+  };
+  input.budget.maxCalls = 6;
+
+  const queries = generateWebDiscoveryQueries(input);
+  assert.deepEqual([...new Set(queries.map(({ country }) => country))].sort(), [
+    "EE",
+    "LT",
+    "LV",
+  ]);
+  assert.ok(queries.some(({ query }) => query.includes("Estonia")));
+  assert.ok(queries.some(({ query }) => query.includes("Latvia")));
+  assert.ok(queries.some(({ query }) => query.includes("Lithuania")));
+  assert.deepEqual(
+    queries
+      .filter(({ family }) => family === "local_language")
+      .map(({ language }) => language),
+    ["Estonian", "Latvian", "Lithuanian"],
   );
 });
 
 test("WebSearchProvider is available only through the configured registry", () => {
   const registry = createConfiguredDiscoveryProviderRegistry();
-  assert.equal(registry.get("web_search").version, "2.0");
+  assert.equal(registry.get("web_search").version, "2.3");
   assert.deepEqual(
     registry.list().map(({ id }) => id),
     ["web_search"],
@@ -47,9 +87,7 @@ test("WebSearchProvider is available only through the configured registry", () =
 test("completed equivalent queries are skipped by fingerprint", () => {
   const input = request();
   const first = generateWebDiscoveryQueries(input)[0]!;
-  input.executionContext.previousQueryFingerprints = [
-    fingerprintWebQuery(normalizeWebQuery(first.query)),
-  ];
+  input.executionContext.previousQueryFingerprints = [first.fingerprint];
   assert.ok(
     generateWebDiscoveryQueries(input).every(
       ({ fingerprint }) => fingerprint !== first.fingerprint,
@@ -109,6 +147,18 @@ test("WebSearchProvider executes a frozen query plan without regenerating it", a
   const frozen = generateWebDiscoveryQueries(input).slice(1, 2);
   await provider.search(input, { queries: frozen });
   assert.deepEqual(calls, [frozen[0]!.query]);
+});
+
+test("WebSearchProvider sends the frozen country boost to Tavily", async () => {
+  const calls: Array<{ query: string; country?: string }> = [];
+  const provider = new WebSearchProvider(async (query, _maxResults, options) => {
+    calls.push({ query, country: options?.country });
+    return [];
+  });
+  const input = request();
+  input.budget.maxCalls = 1;
+  await provider.search(input);
+  assert.equal(calls[0]?.country, "lithuania");
 });
 
 test("WebSearchProvider bounds calls and records while preserving raw provenance", async () => {
@@ -173,6 +223,166 @@ test("directory pages are retained but not treated as company candidates", async
   assert.equal(response.exhausted, true);
 });
 
+test("editorial pages are evidence, not company candidates", async () => {
+  const provider = new WebSearchProvider(
+    async () => [
+      {
+        title: "The effect of vertical integration on supply chain resilience",
+        url: "https://publisher.example/insights/vertical-integration",
+        content: "An industry article discussing several businesses.",
+        score: 0.9,
+      },
+      {
+        title: "Top 20 API manufacturers in the USA",
+        url: "https://directory.example/articles/top-api-manufacturers",
+        content: "A ranked editorial list.",
+        score: 0.8,
+      },
+    ],
+    () => "2026-07-28T10:00:00.000Z",
+    () => "execution-editorial",
+  );
+  const input = request();
+  input.budget = { maxCalls: 1, maxResults: 5 };
+  const response = await provider.search(input);
+
+  assert.equal(response.records.length, 2);
+  assert.equal(response.normalizedCandidates.length, 0);
+  assert.ok(
+    response.records.every((record) =>
+      ["content_page", "directory_list"].includes(
+        String((record.rawPayload as Record<string, unknown>).pageType),
+      ),
+    ),
+  );
+});
+
+test("editorial publications, member lists, and sourcing platforms are not companies", () => {
+  assert.equal(
+    classifyWebResult({
+      title: "FDA proposed rule | Pharma Manufacturing",
+      url: "https://www.pharmamanufacturing.com/quality-risk/supply-chain/article/example",
+      content: "Editorial coverage of an FDA proposal.",
+      score: 0.8,
+    }),
+    "content_page",
+  );
+  assert.equal(
+    classifyWebResult({
+      title: "ABPI Members list | Membership",
+      url: "https://www.abpi.org.uk/membership2/abpi-members-list",
+      content: "Association membership list.",
+      score: 0.8,
+    }),
+    "association_member_list",
+  );
+  assert.equal(
+    classifyWebResult({
+      title: "Global API Suppliers & CDMO Sourcing Platform",
+      url: "https://pharma-market.example/",
+      content: "A sourcing platform for buyers and suppliers.",
+      score: 0.8,
+    }),
+    "marketplace_listing",
+  );
+});
+
+test("content pages with an explicit host brand normalize to the host company", async () => {
+  const provider = new WebSearchProvider(
+    async () => [
+      {
+        title: "Vertical Integration – Camber Pharmaceuticals",
+        url: "https://www.camberpharma.com/vertical-integration",
+        content: "Camber Pharmaceuticals operates an integrated supply chain.",
+        score: 0.9,
+      },
+      {
+        title: "The APIs supply chain: A case study | Hovione",
+        url: "https://www.hovione.com/press-room/press-release/apis-supply-chain-case-study",
+        content: "A case study published by Hovione.",
+        score: 0.8,
+      },
+      {
+        title: "The effect of vertical integration on supply chain resilience",
+        url: "http://arno.uvt.nl/show.cgi?fid=162418",
+        content: "An academic paper.",
+        score: 0.7,
+      },
+    ],
+    () => "2026-07-30T10:00:00.000Z",
+    () => "execution-host-brand",
+  );
+  const input = request();
+  input.budget = { maxCalls: 1, maxResults: 5 };
+  const response = await provider.search(input);
+
+  assert.deepEqual(
+    response.normalizedCandidates.map(({ name, websiteUrl }) => ({
+      name,
+      websiteUrl,
+    })),
+    [
+      {
+        name: "Camber Pharmaceuticals",
+        websiteUrl: "https://www.camberpharma.com/",
+      },
+      {
+        name: "Hovione",
+        websiteUrl: "https://www.hovione.com/",
+      },
+    ],
+  );
+});
+
+test("company identity and commercial pages produce company names and root websites", async () => {
+  const provider = new WebSearchProvider(
+    async () => [
+      {
+        title: "About Us | Acme Pharma",
+        url: "https://www.acme-pharma.example/about-us",
+        content: "Acme Pharma manufactures active pharmaceutical ingredients.",
+        score: 0.9,
+      },
+      {
+        title: "API integration services",
+        url: "https://consultancy.example/services/api-integration",
+        content: "The consultancy provides API integration services.",
+        score: 0.7,
+      },
+    ],
+    () => "2026-07-28T10:00:00.000Z",
+    () => "execution-company",
+  );
+  const input = request();
+  input.budget = { maxCalls: 1, maxResults: 5 };
+  const response = await provider.search(input);
+
+  assert.equal(response.normalizedCandidates.length, 2);
+  assert.equal(response.normalizedCandidates[0]?.name, "Acme Pharma");
+  assert.equal(
+    response.normalizedCandidates[0]?.websiteUrl,
+    "https://www.acme-pharma.example/",
+  );
+  assert.equal(
+    response.normalizedCandidates[0]?.canonicalDomainHint,
+    "acme-pharma.example",
+  );
+  assert.equal(response.normalizedCandidates[1]?.name, "Consultancy");
+  assert.equal(
+    response.normalizedCandidates[1]?.websiteUrl,
+    "https://consultancy.example/",
+  );
+  assert.equal(
+    classifyWebResult({
+      title: "Acme Pharma",
+      url: "https://acme-pharma.example/en",
+      content: "",
+      score: 0.8,
+    }),
+    "company_homepage",
+  );
+});
+
 test("individual Tavily failures are bounded and classified", async () => {
   const provider = new WebSearchProvider(
     async () => {
@@ -194,21 +404,25 @@ test("individual Tavily failures are bounded and classified", async () => {
   assert.equal(response.exhausted, false);
 });
 
-function request(): ProviderDiscoveryRequest {
-  const strategy = adaptV1StrategyToV2Draft({
-    campaignId: "campaign-1",
-    strategyDraftId: "strategy-1",
-    companyProfileVersionId: "profile-1",
-    offeringId: "offering-1",
-    offeringVersionId: "offering-version-1",
-    memorySnapshotId: "memory-1",
-    geography: {
-      displayName: "Lithuania",
-      countryCodes: ["LT"],
-      workingLanguages: ["English"],
+test("Tavily plan-limit failures are non-retryable provider failures", async () => {
+  const provider = new WebSearchProvider(
+    async () => {
+      throw new Error("Tavily search failed: plan usage limit exceeded (status 432).");
     },
-    strategy: legacyStrategy(),
-  });
+    () => "2026-07-30T10:00:00.000Z",
+    () => "execution-plan-limit",
+  );
+  const input = request();
+  input.budget = { maxCalls: 1, maxResults: 5 };
+  const response = await provider.search(input);
+
+  assert.equal(response.errors[0]?.code, "provider_failure");
+  assert.equal(response.errors[0]?.retryable, false);
+  assert.match(response.errors[0]?.message ?? "", /plan usage limit exceeded/);
+});
+
+function request(): ProviderDiscoveryRequest {
+  const strategy = createNativeCampaignStrategyFixture();
   return {
     workspaceId: "workspace-1",
     campaignId: "campaign-1",
@@ -221,32 +435,5 @@ function request(): ProviderDiscoveryRequest {
       previousQueryFingerprints: [],
     },
     budget: { maxCalls: 6, maxResults: 25 },
-  };
-}
-
-function legacyStrategy(): CampaignStrategyVersion {
-  return {
-    id: "legacy-1",
-    version: 1,
-    status: "ready",
-    targetGeography: "Lithuania",
-    companyTypes: ["Manufacturer"],
-    industries: ["Industrial equipment"],
-    characteristics: ["Operates production facilities"],
-    relevanceReasons: ["May need operational software"],
-    opportunityAssumptions: ["Operations are managed locally"],
-    qualificationCriteria: ["Has an operations team"],
-    positiveSignals: ["Multiple production sites"],
-    exclusions: ["Software vendors"],
-    contactRoles: ["Operations director"],
-    contactDepartments: ["Operations"],
-    acceptableContactRoutes: ["business_email"],
-    searchLanguages: ["English"],
-    sourceCategories: ["company_website"],
-    searchTerms: ["legacy query"],
-    localizedTerms: [],
-    limitations: [],
-    targetCompanyCount: 25,
-    refinementSummary: ["Target industrial operators."],
   };
 }

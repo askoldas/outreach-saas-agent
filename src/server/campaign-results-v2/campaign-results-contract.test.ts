@@ -54,6 +54,20 @@ test("results expose evidence, identity, corrections, and accessible table seman
   assert.doesNotMatch(results, /JSON\.stringify/);
 });
 
+test("coverage rows use their persisted identity instead of a non-unique label key", () => {
+  assert.match(repository, /id: item\.id/);
+  assert.match(results, /<li key=\{item\.id\}>/);
+  assert.doesNotMatch(results, /key=\{`\$\{item\.archetype\}-\$\{item\.geography\}`\}/);
+});
+
+test("results translate frozen strategy identifiers into user-facing labels", () => {
+  assert.match(repository, /campaignStrategyV2Schema\.safeParse/);
+  assert.match(repository, /labels\.archetypes\.set\(archetype\.id, archetype\.label\)/);
+  assert.match(repository, /geography\.displayName/);
+  assert.match(repository, /archetypeLabel\(item\.archetype_key, labels\)/);
+  assert.match(repository, /archetypeLabel\(value, labels\)/);
+});
+
 test("review decisions and corrections are auditable and cannot silently rewrite evaluations", () => {
   assert.match(migration, /candidate_review_decisions_v2/);
   assert.match(migration, /candidate_corrections_v2/);

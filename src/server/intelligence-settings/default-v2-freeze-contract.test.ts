@@ -8,8 +8,8 @@ const migration = source(
   "supabase/migrations/20260729000100_default_v2_and_freeze_legacy.sql",
 );
 const rollout = source("src/lib/intelligence/rollout.ts");
-const routing = source("src/lib/intelligence/workflow-routing.ts");
-const settings = source("src/features/settings/IntelligenceRolloutReadiness.tsx");
+const dispatch = source("src/server/trigger/dispatch.ts");
+const settings = source("src/app/(app)/settings/page.tsx");
 const strategyPage = source("src/app/(app)/campaigns/[id]/strategy/page.tsx");
 
 test("WP-22 makes V2 canonical for new workspaces and records", () => {
@@ -35,11 +35,12 @@ test("WP-22 blocks new V1 writes and removes workspace switching", () => {
   assert.doesNotMatch(settings, /enableWorkspaceControlledBetaAction/);
 });
 
-test("persisted run versions still dispatch to their historical task", () => {
-  assert.match(routing, /workflowVersion === "v1"/);
-  assert.match(routing, /return "execute-campaign"/);
-  assert.match(routing, /return "execute-campaign-v2"/);
+test("historical V1 records remain readable but cannot execute", () => {
+  assert.match(dispatch, /campaignRun\.workflow_version !== "v2"/);
+  assert.match(dispatch, /Historical V1 Campaign Runs are read-only/);
+  assert.match(dispatch, /"execute-campaign-v2"/);
   assert.match(strategyPage, /getCampaignWorkflowVersion/);
   assert.match(strategyPage, /workflowVersion === "v2"/);
-  assert.doesNotMatch(strategyPage, /settings\?\.campaignWorkflow/);
+  assert.match(strategyPage, /getCurrentCampaignStrategy/);
+  assert.doesNotMatch(settings, /IntelligenceRolloutReadiness/);
 });

@@ -41,6 +41,28 @@ export function deriveDiscoveryLanguages(input: {
   return unique([...localLanguages, "English"]);
 }
 
+export function deriveCampaignDiscoveryLanguagePolicy(input: {
+  countryCodes: readonly string[];
+  primaryLanguage?: string;
+}) {
+  const primaryLanguage = input.primaryLanguage?.trim();
+  const workingLanguages = unique([
+    ...(primaryLanguage ? [primaryLanguage] : []),
+    ...deriveDiscoveryLanguages({ countryCodes: input.countryCodes }),
+  ]);
+  return {
+    localLanguages: workingLanguages.filter((language) => language !== "English"),
+    workingLanguages,
+  };
+}
+
+export function countryDisplayName(countryCode: string) {
+  const normalized = countryCode.trim().toUpperCase();
+  if (normalized === "WORLDWIDE") return "Worldwide";
+  if (!/^[A-Z]{2}$/.test(normalized)) return normalized;
+  return new Intl.DisplayNames(["en"], { type: "region" }).of(normalized) ?? normalized;
+}
+
 function unique(values: string[]) {
   return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
 }

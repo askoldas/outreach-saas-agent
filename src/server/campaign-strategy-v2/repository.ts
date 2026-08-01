@@ -2,10 +2,14 @@ import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import type { Json } from "@/types/database.types";
 import {
   campaignStrategyV2Schema,
+  parseCampaignStrategyV2DraftPayload,
   type CampaignStrategyCompilation,
+  type CampaignPlanningOffering,
+  type CampaignPlanningProfile,
   type CampaignStrategyV2,
   type CompiledCampaignCommercialContext,
 } from "@/lib/intelligence/campaign-strategy-v2";
+import { intelligenceRuleSchema } from "@/lib/intelligence/contracts/rules";
 
 export async function createCampaignStrategyV2Draft(input: {
   workspaceId: string;
@@ -16,7 +20,7 @@ export async function createCampaignStrategyV2Draft(input: {
   compiledContext: CompiledCampaignCommercialContext;
 }) {
   const { supabase: database } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await database.rpc("create_campaign_strategy_v2_draft", {
+  const { data, error } = await database.rpc("create_native_campaign_strategy_v2_draft", {
     target_workspace_id: input.workspaceId,
     target_campaign_external_id: input.campaignExternalId,
     target_profile_version_id: input.profileVersionId,
@@ -101,7 +105,63 @@ export async function getCurrentCampaignStrategyV2Draft(
     contextHash: data.compiled_context_hash,
     contentHash: data.content_hash,
     updatedAt: data.updated_at,
-    strategy: campaignStrategyV2Schema.parse(data.compiled_draft_json),
+    strategy: parseCampaignStrategyV2DraftPayload(
+      data.state,
+      data.compiled_draft_json,
+    ),
+  };
+}
+
+export async function getCampaignStrategyV2RecoveryData(input: {
+  workspaceId: string;
+  campaignExternalId: string;
+  strategyDraftId: string;
+}) {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data: campaign, error: campaignError } = await supabase
+    .from("campaigns")
+    .select("id,current_strategy_draft_id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("external_id", input.campaignExternalId)
+    .single();
+  if (campaignError) {
+    throw new Error(
+      `Could not load Campaign Strategy recovery reference: ${campaignError.message}`,
+    );
+  }
+  if (campaign.current_strategy_draft_id !== input.strategyDraftId) {
+    throw new Error("The recoverable Campaign Strategy draft is no longer current.");
+  }
+  const { data, error } = await supabase
+    .from("campaign_strategy_drafts")
+    .select(
+      "id,state,campaign_id,profile_intelligence_version_id,compiled_context_json,compiled_context_hash,campaign_input:campaign_inputs!inner(geography_json,objective_json,offering_references_json,initial_hypothesis_json,requested_volume)",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_id", campaign.id)
+    .eq("id", input.strategyDraftId)
+    .single();
+  if (error) {
+    throw new Error(`Could not load Campaign Strategy recovery data: ${error.message}`);
+  }
+  const campaignInput = Array.isArray(data.campaign_input)
+    ? data.campaign_input[0]
+    : data.campaign_input;
+  if (!campaignInput) {
+    throw new Error("The recoverable Campaign Strategy input is missing.");
+  }
+  return {
+    id: data.id,
+    state: data.state,
+    campaignId: data.campaign_id,
+    profileVersionId: data.profile_intelligence_version_id,
+    compiledContext: data.compiled_context_json,
+    compiledContextHash: data.compiled_context_hash,
+    geography: campaignInput.geography_json,
+    objective: campaignInput.objective_json,
+    offeringReferences: campaignInput.offering_references_json,
+    initialHypothesis: campaignInput.initial_hypothesis_json,
+    requestedVolume: campaignInput.requested_volume,
   };
 }
 
@@ -133,32 +193,60 @@ export async function getPublishedCampaignProfileContext(
   workspaceId: string,
   selectedOfferingStableKey: string,
 ) {
+  const profile = await getPublishedCampaignPlanningProfile(workspaceId);
+  if (!profile) {
+    throw new Error("A published Company Intelligence V3 profile is required.");
+  }
+  const offering = profile.offerings.find(
+    (candidate) => candidate.stableKey === selectedOfferingStableKey,
+  );
+  if (!offering) {
+    throw new Error(
+      "The selected offering is not available in the published V3 profile.",
+    );
+  }
+  return {
+    ...profile,
+    offering,
+    offeringId: offering.offeringId,
+    offeringStableKey: offering.stableKey,
+    offeringVersion: {
+      id: offering.offeringVersionId,
+      name: offering.name,
+      short_description: offering.shortDescription,
+      commercial_mechanics_json: offering.commercialMechanics,
+      buyer_logic_json: offering.buyerLogic,
+      relationship_options_json: offering.relationshipOptions,
+    },
+  };
+}
+
+export async function getPublishedCampaignPlanningProfile(
+  workspaceId: string,
+): Promise<CampaignPlanningProfile | null> {
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data: profile, error: profileError } = await supabase
     .from("company_profiles")
     .select("id,current_version_id")
     .eq("workspace_id", workspaceId)
-    .single();
-  if (profileError || !profile.current_version_id)
-    throw new Error("A published Company Intelligence V3 profile is required.");
+    .maybeSingle();
+  if (profileError)
+    throw new Error(`Could not load Company Intelligence: ${profileError.message}`);
+  if (!profile?.current_version_id) return null;
   const [
     { data: profileVersion, error: versionError },
-    { data: offeringEntity, error: entityError },
     { data: roles, error: rolesError },
+    { data: offeringVersions, error: offeringVersionError },
+    { data: rules, error: rulesError },
   ] = await Promise.all([
     supabase
       .from("company_profile_versions")
-      .select("id,intelligence_version,structured_profile")
+      .select(
+        "id,intelligence_version,profile_status,company_name,summary,structured_profile",
+      )
       .eq("workspace_id", workspaceId)
       .eq("id", profile.current_version_id)
       .single(),
-    supabase
-      .from("company_offerings")
-      .select("id,stable_key")
-      .eq("workspace_id", workspaceId)
-      .eq("company_profile_id", profile.id)
-      .eq("stable_key", selectedOfferingStableKey)
-      .maybeSingle(),
     supabase
       .from("company_business_roles")
       .select(
@@ -166,35 +254,188 @@ export async function getPublishedCampaignProfileContext(
       )
       .eq("workspace_id", workspaceId)
       .eq("business_model.profile_version_id", profile.current_version_id),
+    supabase
+      .from("company_offering_versions")
+      .select(
+        "id,company_offering_id,slug,name,status,offering_type,short_description,commercial_mechanics_json,buyer_logic_json,relationship_options_json,confidence",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("profile_version_id", profile.current_version_id)
+      .eq("status", "active")
+      .order("name"),
+    supabase
+      .from("commercial_rules")
+      .select(
+        "rule_key,scope,scope_id,rule_type,strength,status,source,description,applicability_json,confidence,evidence_ids",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("profile_version_id", profile.current_version_id)
+      .neq("status", "rejected")
+      .order("rule_key"),
   ]);
-  if (versionError || profileVersion.intelligence_version !== "v2") {
+  if (
+    versionError ||
+    profileVersion.intelligence_version !== "v2" ||
+    profileVersion.profile_status !== "published" ||
+    !isNativePublishedProfile(profileVersion.structured_profile)
+  ) {
     throw new Error("The current Company Profile is not a published V3 version.");
   }
-  if (entityError || !offeringEntity)
-    throw new Error(
-      "The selected offering is not available in the published V3 profile.",
-    );
   if (rolesError) throw new Error(`Could not load Company roles: ${rolesError.message}`);
-  const { data: offering, error: offeringError } = await supabase
-    .from("company_offering_versions")
-    .select(
-      "id,name,short_description,commercial_mechanics_json,buyer_logic_json,relationship_options_json",
-    )
-    .eq("workspace_id", workspaceId)
-    .eq("profile_version_id", profileVersion.id)
-    .eq("company_offering_id", offeringEntity.id)
-    .eq("status", "active")
-    .single();
-  if (offeringError)
+  if (offeringVersionError) {
     throw new Error(
-      `Could not load published offering version: ${offeringError.message}`,
+      `Could not load published offering versions: ${offeringVersionError.message}`,
     );
+  }
+  if (rulesError)
+    throw new Error(`Could not load commercial rules: ${rulesError.message}`);
+  if (!offeringVersions?.length) {
+    throw new Error("The published V3 profile has no active offering.");
+  }
+  const offeringEntityIds = offeringVersions.map(
+    (offering) => offering.company_offering_id,
+  );
+  const offeringVersionIds = offeringVersions.map((offering) => offering.id);
+  const [
+    { data: offeringEntities, error: entityError },
+    { data: archetypes, error: archetypeError },
+  ] = await Promise.all([
+    supabase
+      .from("company_offerings")
+      .select("id,stable_key")
+      .eq("workspace_id", workspaceId)
+      .eq("company_profile_id", profile.id)
+      .in("id", offeringEntityIds)
+      .is("archived_at", null),
+    supabase
+      .from("buyer_archetype_hypotheses")
+      .select(
+        "offering_version_id,archetype_key,name,relationship_type,priority,status,structured_details_json,confidence,evidence_ids",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("profile_version_id", profileVersion.id)
+      .in("offering_version_id", offeringVersionIds)
+      .order("name"),
+  ]);
+  if (entityError)
+    throw new Error(`Could not load published offerings: ${entityError.message}`);
+  if (archetypeError)
+    throw new Error(`Could not load buyer archetypes: ${archetypeError.message}`);
+  const entityById = new Map((offeringEntities ?? []).map((row) => [row.id, row]));
+  const offerings: CampaignPlanningOffering[] = offeringVersions.map((row) => {
+    const entity = entityById.get(row.company_offering_id);
+    if (!entity) {
+      throw new Error(`Published offering ${row.name} has no stable entity.`);
+    }
+    const mechanics = objectValue(row.commercial_mechanics_json);
+    const buyerLogic = objectValue(row.buyer_logic_json);
+    return {
+      stableKey: entity.stable_key,
+      offeringId: entity.id,
+      offeringVersionId: row.id,
+      slug: row.slug,
+      name: row.name,
+      offeringType: row.offering_type,
+      shortDescription: row.short_description,
+      confidence: numericValue(row.confidence),
+      commercialMechanics: {
+        buyingMotion: optionalString(mechanics.buyingMotion) ?? "unknown",
+        customerConsumptionMode:
+          optionalString(mechanics.customerConsumptionMode) ?? "unknown",
+        dependencies: stringArray(mechanics.dependencies),
+        valueProposition: stringArray(mechanics.valueProposition),
+        customerProblems: stringArray(mechanics.customerProblems),
+        expectedOutcomes: stringArray(mechanics.expectedOutcomes),
+        transactionModels: stringArray(mechanics.transactionModels),
+      },
+      buyerLogic: {
+        whyBuy: stringArray(buyerLogic.whyBuy),
+        requiredConditions: stringArray(buyerLogic.requiredConditions),
+        preferredConditions: stringArray(buyerLogic.preferredConditions),
+        likelyTriggers: stringArray(buyerLogic.likelyTriggers),
+        incompatibleConditions: stringArray(buyerLogic.incompatibleConditions),
+      },
+      relationshipOptions: arrayValue(row.relationship_options_json).map((value) => {
+        const option = objectValue(value);
+        return {
+          relationshipType: optionalString(option.relationshipType) ?? "other",
+          relevance: optionalString(option.relevance) ?? "possible",
+          rationale:
+            optionalString(option.rationale) ??
+            "Relationship compatibility requires campaign review.",
+          confidence: numericValue(option.confidence),
+        };
+      }),
+      archetypes: (archetypes ?? [])
+        .filter((archetype) => archetype.offering_version_id === row.id)
+        .map((archetype) => {
+          const details = objectValue(archetype.structured_details_json);
+          return {
+            key: archetype.archetype_key,
+            name: archetype.name,
+            relationshipType: archetype.relationship_type,
+            priority:
+              archetype.priority as CampaignPlanningOffering["archetypes"][number]["priority"],
+            status:
+              archetype.status as CampaignPlanningOffering["archetypes"][number]["status"],
+            description:
+              optionalString(details.description) ??
+              `Organizations compatible with ${row.name}.`,
+            whyCompatible: stringArray(details.whyCompatible),
+            requiredEvidence: stringArray(details.requiredEvidence),
+            positiveSignals: stringArray(details.positiveSignals),
+            negativeSignals: stringArray(details.negativeSignals),
+            likelyDecisionRoles: stringArray(details.likelyDecisionRoles),
+            confidence: numericValue(archetype.confidence),
+            evidenceIds: archetype.evidence_ids,
+          };
+        }),
+    };
+  });
+  const snapshot = objectValue(profileVersion.structured_profile);
+  const identity = objectValue(snapshot.identity);
+  const versionByIdentifier = new Map<string, string>();
+  for (const offering of offerings) {
+    versionByIdentifier.set(offering.stableKey, offering.offeringVersionId);
+    versionByIdentifier.set(offering.offeringId, offering.offeringVersionId);
+    versionByIdentifier.set(offering.offeringVersionId, offering.offeringVersionId);
+  }
   return {
     profileVersionId: profileVersion.id,
-    offeringId: offeringEntity.id,
-    offeringStableKey: offeringEntity.stable_key,
-    offeringVersion: offering,
+    companyName: profileVersion.company_name,
+    commercialSummary: profileVersion.summary,
+    primaryLanguage: optionalString(identity.primaryLanguage) ?? "English",
+    supportedLanguages: stringArray(identity.supportedLanguages),
     companyRoles: (roles ?? []).map((role) => role.role_type),
+    offerings,
+    rules: (rules ?? []).map((row) => {
+      const applicability = objectValue(row.applicability_json);
+      const identifiers = stringArray(applicability.offeringIds);
+      if (row.scope === "offering" && !identifiers.length) {
+        identifiers.push(row.scope_id);
+      }
+      return intelligenceRuleSchema.parse({
+        ruleKey: row.rule_key,
+        label: humanize(row.rule_key),
+        description: row.description,
+        ruleType: row.rule_type,
+        scope: row.scope,
+        strength: row.strength,
+        applicability: {
+          objectives: stringArray(applicability.objectives),
+          offeringIds: identifiers
+            .map((identifier) => versionByIdentifier.get(identifier))
+            .filter((identifier): identifier is string => Boolean(identifier)),
+          geographies: stringArray(applicability.geographies),
+          relationshipTypes: stringArray(applicability.relationshipTypes),
+          archetypeIds: stringArray(applicability.archetypeIds),
+        },
+        status: row.status,
+        source: row.source === "user" || row.source === "system" ? row.source : "profile",
+        evidenceIds: row.evidence_ids,
+        confidence: numericValue(row.confidence),
+      });
+    }),
   };
 }
 
@@ -206,11 +447,11 @@ function draftIdentity(value: unknown) {
   };
 }
 
-function objectValue(value: unknown): Record<string, unknown> {
+function objectValue(value: unknown): Record<string, Json | undefined> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Campaign Strategy persistence returned an invalid record.");
+    return {};
   }
-  return value as Record<string, unknown>;
+  return value as Record<string, Json | undefined>;
 }
 
 function stringValue(value: unknown, label: string) {
@@ -223,4 +464,44 @@ function numberValue(value: unknown, label: string) {
     throw new Error(`${label} is missing.`);
   }
   return value;
+}
+
+function arrayValue(value: Json | undefined): Json[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function stringArray(value: Json | undefined) {
+  if (typeof value === "string" && value.trim()) return [value.trim()];
+  return Array.isArray(value)
+    ? value
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+    : [];
+}
+
+function optionalString(value: Json | undefined) {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function numericValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0;
+}
+
+function humanize(value: string) {
+  const label = value.replaceAll(/[-_.]+/g, " ").trim();
+  return label ? label[0]!.toUpperCase() + label.slice(1) : "Commercial rule";
+}
+
+function isNativePublishedProfile(value: Json) {
+  const snapshot = objectValue(value);
+  const sourceSet = objectValue(snapshot.sourceSet);
+  const offerings = objectValue(snapshot.offerings);
+  return (
+    snapshot.schemaVersion === 3 &&
+    sourceSet.contractVersion === "company-profile-source-set/v1" &&
+    sourceSet.kind === "official_website" &&
+    Array.isArray(offerings.offerings)
+  );
 }

@@ -28,6 +28,8 @@ export default async function DiscoveryPage({
         candidateAudit: [],
         latestRun: null,
         marketAnalysis: null,
+        v2Strategy: null,
+        v2Discovery: null,
         discoveryPaths: [],
         classificationCounts: {},
         excludedCandidates: [],
@@ -35,6 +37,7 @@ export default async function DiscoveryPage({
       };
   const hasDiscovery =
     workflow.discoveryPaths.length ||
+    workflow.v2Discovery ||
     workflow.iterations.length ||
     workflow.candidateAudit.length ||
     Object.keys(workflow.classificationCounts).length;

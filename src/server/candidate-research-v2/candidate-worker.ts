@@ -22,8 +22,8 @@ import {
 } from "./repository";
 import { collectCandidateResearchSources } from "./source-service";
 
-const promptVersion = "candidate-evidence-extraction-v2.1";
-const schemaVersion = "candidate-evidence-extraction-v2.1";
+const promptVersion = "candidate-evidence-extraction-v2.2";
+const schemaVersion = "candidate-evidence-extraction-v2.2";
 
 export async function executeCandidateResearchMember(input: {
   memberId: string;

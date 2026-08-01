@@ -2,9 +2,8 @@ import { redirect } from "next/navigation";
 import { CampaignBriefForm } from "@/features/campaigns/CampaignBriefForm";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getCurrentCompanyProfile } from "@/server/company-profile/repository";
 import { getGuidedDraft } from "@/server/guided/repository";
-import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
+import { getPublishedCampaignPlanningProfile } from "@/server/campaign-strategy-v2/repository";
 
 type SearchParams = {
   error?: string;
@@ -20,11 +19,9 @@ export default async function NewCampaignPage({
   }
 
   const params = await searchParams;
-  const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile?.structuredProfile)
-    redirect("/company-profile?error=structured-profile-required");
+  const profile = await getPublishedCampaignPlanningProfile(currentWorkspace.id);
+  if (!profile) redirect("/company-profile?error=company-intelligence-required");
   const draft = await getGuidedDraft(currentWorkspace.id, "campaign", "new");
-  const settings = await getWorkspaceIntelligenceSettings(currentWorkspace.id);
 
   return (
     <>
@@ -32,12 +29,7 @@ export default async function NewCampaignPage({
         title="Create campaign"
         description={`Define a target market for ${currentWorkspace.name} and review a visible strategy before discovery begins.`}
       />
-      <CampaignBriefForm
-        error={params.error}
-        profile={profile}
-        initialDraft={draft}
-        strategyV2={settings.campaignWorkflow === "v2"}
-      />
+      <CampaignBriefForm error={params.error} profile={profile} initialDraft={draft} />
     </>
   );
 }

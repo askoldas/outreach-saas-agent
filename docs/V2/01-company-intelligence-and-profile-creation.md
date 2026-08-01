@@ -165,6 +165,13 @@ A clarification question is justified only when its answer may materially change
 - decision-role selection;
 - source planning.
 
+Clarification questions are advisory. The user may answer any useful subset, and
+unanswered questions must never block profile review or publication.
+
+The pre-review consistency audit is also advisory after the user reviews or edits the
+draft. Publication enforces current structural requirements, such as a compiled
+business model and at least one active offering, rather than a stale model verdict.
+
 ### 4.6 Profile rules are broader than campaign rules
 
 Rules created and explicitly confirmed inside the Company Profile are reusable beyond one campaign.

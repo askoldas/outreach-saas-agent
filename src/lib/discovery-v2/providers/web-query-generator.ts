@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import {
+  countryDisplayName,
+  deriveDiscoveryLanguages,
+} from "../../discovery/languages.ts";
+import {
   providerDiscoveryRequestSchema,
   type ProviderDiscoveryRequest,
 } from "../contracts.ts";
@@ -53,11 +57,21 @@ export function generateWebDiscoveryQueries(
   const request = providerDiscoveryRequestSchema.parse(rawRequest);
   const segment = request.segment;
   const geography = segment.geography.displayName;
-  const country = segment.geography.countryCodes[0];
+  const countryContexts = segment.geography.countryCodes
+    .map((countryCode) => countryCode.trim().toUpperCase())
+    .filter((countryCode) => /^[A-Z]{2}$/.test(countryCode))
+    .map((countryCode) => ({
+      countryCode,
+      displayName: countryDisplayName(countryCode),
+      localLanguage: deriveDiscoveryLanguages({ countryCodes: [countryCode] }).find(
+        (language) => language !== "English",
+      ),
+    }));
   const maximumQueries = Math.max(1, Math.min(request.budget.maxCalls ?? 6, 10));
   const candidates: Array<
     Pick<WebDiscoveryQuery, "query" | "family" | "language" | "purpose"> & {
       expectedGapId?: string;
+      country?: string;
     }
   > = [];
   const targetedActions = request.executionContext.targetedActions ?? [];
@@ -72,15 +86,43 @@ export function generateWebDiscoveryQueries(
       );
     }
   } else {
-    candidates.push({
-      query: join([segment.label, geography, "company"]),
-      family: "archetype",
-      language: segment.geography.workingLanguages[0] ?? "English",
-      purpose: `Find operating organizations matching ${segment.label}.`,
-    });
+    const geographyContexts = countryContexts.length
+      ? countryContexts
+      : [{ countryCode: undefined, displayName: geography, localLanguage: undefined }];
+    for (const context of geographyContexts) {
+      candidates.push({
+        query: join([
+          segment.label,
+          context.displayName,
+          "company manufacturer supplier official website",
+        ]),
+        family: "archetype",
+        language: segment.geography.workingLanguages[0] ?? "English",
+        country: context.countryCode,
+        purpose: `Find operating organizations matching ${segment.label} in ${context.displayName}.`,
+      });
+    }
+    for (const context of geographyContexts) {
+      if (!context.localLanguage) continue;
+      const terms = localBusinessTerms[context.localLanguage];
+      if (!terms) continue;
+      candidates.push({
+        query: join([
+          segment.label,
+          context.displayName,
+          terms[0],
+          terms[1],
+          "official website",
+        ]),
+        family: "local_language",
+        language: context.localLanguage,
+        country: context.countryCode,
+        purpose: `Find operating organizations in ${context.displayName} using established ${context.localLanguage} business terminology.`,
+      });
+    }
     for (const model of segment.businessCharacteristics.businessModels.slice(0, 2)) {
       candidates.push({
-        query: join([model, segment.label, geography, "company"]),
+        query: join([model, segment.label, geography, "companies suppliers"]),
         family: "business_model",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find organizations operating as ${model}.`,
@@ -91,7 +133,7 @@ export function generateWebDiscoveryQueries(
       ...segment.businessCharacteristics.keywords,
     ].slice(0, 2)) {
       candidates.push({
-        query: join([keyword, segment.label, geography, "company"]),
+        query: join([keyword, segment.label, geography, "companies manufacturers"]),
         family: "use_context",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find organizations in the ${keyword} commercial context.`,
@@ -99,7 +141,12 @@ export function generateWebDiscoveryQueries(
     }
     for (const signal of segment.positiveSignals.slice(0, 2)) {
       candidates.push({
-        query: join([quoted(signal.label), segment.label, geography]),
+        query: join([
+          quoted(signal.label),
+          segment.label,
+          geography,
+          "company manufacturer",
+        ]),
         family: "positive_signal",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find explicit evidence of ${signal.label}.`,
@@ -129,7 +176,14 @@ export function generateWebDiscoveryQueries(
   for (const candidate of candidates) {
     const query = candidate.query.slice(0, 240).trim();
     const normalizedQuery = normalizeWebQuery(query);
-    const fingerprint = fingerprintWebQuery(normalizedQuery);
+    const fallbackCountry = countryContexts.length
+      ? countryContexts[queries.length % countryContexts.length]
+      : undefined;
+    const country = candidate.country ?? fallbackCountry?.countryCode;
+    const fingerprint = fingerprintWebQuery(normalizedQuery, {
+      country,
+      language: candidate.language,
+    });
     if (previous.has(fingerprint) || seen.has(fingerprint)) continue;
     seen.add(fingerprint);
     queries.push(
@@ -142,7 +196,7 @@ export function generateWebDiscoveryQueries(
         fingerprint,
         family: candidate.family,
         language: candidate.language,
-        country,
+        ...(country ? { country } : {}),
         purpose: candidate.purpose,
         ...(candidate.expectedGapId
           ? { expectedGapId: candidate.expectedGapId }
@@ -295,8 +349,19 @@ export function normalizeWebQuery(query: string) {
   return query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function fingerprintWebQuery(normalizedQuery: string) {
-  return createHash("sha256").update(normalizedQuery).digest("hex");
+export function fingerprintWebQuery(
+  normalizedQuery: string,
+  context: { country?: string; language?: string } = {},
+) {
+  return createHash("sha256")
+    .update(
+      [
+        normalizedQuery,
+        `country=${context.country?.trim().toUpperCase() ?? ""}`,
+        `language=${context.language?.trim().toLowerCase() ?? ""}`,
+      ].join("|"),
+    )
+    .digest("hex");
 }
 
 function quoted(value: string) {

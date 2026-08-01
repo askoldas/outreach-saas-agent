@@ -7,7 +7,7 @@ import type {
   CampaignOfferingReferenceV2,
 } from "./schemas.ts";
 
-export const campaignContextCompilerVersion = "campaign-context/v2.0";
+export const campaignContextCompilerVersion = "campaign-context/v2.1-native";
 
 export type CampaignProfileContextSource = {
   workspaceId: string;

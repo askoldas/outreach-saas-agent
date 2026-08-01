@@ -8,7 +8,7 @@ import type {
 } from "./contracts.ts";
 import { compileCandidateResearchPlan } from "./research-plan.ts";
 
-export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION = "candidate-research-v2.1";
+export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION = "candidate-research-v2.2";
 
 export type CandidateResearchClaimState = {
   key: string;
@@ -84,6 +84,9 @@ export function prepareCampaignResearchPlans(input: {
       });
       const required = new Set(["business_model", "products_services"]);
       const optional = new Set(["operating_markets"]);
+      const requiresTargetGeography =
+        !input.strategy.geography.countryCodes.includes("WORLDWIDE");
+      if (requiresTargetGeography) required.add("target_geography");
       const reusableQuestionKeys = new Set([
         "business_model",
         "products_services",
@@ -161,7 +164,7 @@ export function prepareCampaignResearchPlans(input: {
         organizationId: candidate.organizationId,
         campaignCandidateId: candidate.campaignCandidateId,
         strategyVersionId: input.strategyVersionId,
-        requiredQuestionKeys: [...required].sort(compareText),
+        requiredQuestionKeys: prioritizeTargetGeography(required),
         optionalQuestionKeys: [...optional].sort(compareText),
         resolvedQuestionKeys,
         staleQuestionKeys,
@@ -170,6 +173,7 @@ export function prepareCampaignResearchPlans(input: {
         procurementUnknown:
           !candidate.procurementAutonomy || candidate.procurementAutonomy === "unknown",
         pageBudget: Math.min(8, Math.max(3, required.size)),
+        questionOverrides: buildQuestionOverrides(input.strategy),
       });
       const frozenQuestionKeys = new Set(plan.questions.map(({ key }) => key));
       const requestedQuestionKeys = new Set([
@@ -238,4 +242,68 @@ function highestPriority(questions: CandidateResearchQuestion[]) {
 
 function compareText(left: string, right: string) {
   return left < right ? -1 : left > right ? 1 : 0;
+}
+
+function prioritizeTargetGeography(keys: Set<string>) {
+  return [...keys].sort((left, right) => {
+    if (left === "target_geography") return -1;
+    if (right === "target_geography") return 1;
+    return compareText(left, right);
+  });
+}
+
+function buildQuestionOverrides(
+  strategy: CampaignStrategyV2,
+): NonNullable<Parameters<typeof compileCandidateResearchPlan>[0]["questionOverrides"]> {
+  const overrides: NonNullable<
+    Parameters<typeof compileCandidateResearchPlan>[0]["questionOverrides"]
+  > = {};
+  for (const archetype of strategy.archetypes) {
+    for (const question of archetype.requiredEvidenceQuestions) {
+      overrides[question.questionKey] = {
+        question: question.question,
+        purpose: "eligibility",
+        reusableScope: "campaign_only",
+        expectedEvidenceTypes: ["official_web_page", "official_document"],
+      };
+    }
+  }
+  for (const requirement of strategy.qualificationPolicy.minimumEvidenceRequirements) {
+    overrides[requirement.questionKey] = {
+      question: requirement.question,
+      purpose: "eligibility",
+      reusableScope: "campaign_only",
+      expectedEvidenceTypes: [
+        "official_web_page",
+        "official_document",
+        "legal_registry",
+        "directory_profile",
+      ],
+    };
+  }
+  for (const factor of strategy.qualificationPolicy.factorDefinitions) {
+    overrides[`factor.${factor.factorKey}`] = {
+      question: `What reliable public evidence resolves this qualification factor: ${factor.definition}`,
+      purpose: "qualification_factor",
+      reusableScope: "campaign_only",
+      expectedEvidenceTypes: ["official_web_page", "official_document"],
+    };
+  }
+  if (!strategy.geography.countryCodes.includes("WORLDWIDE")) {
+    const countryCodes = strategy.geography.countryCodes.join(", ");
+    overrides.target_geography = {
+      question:
+        `Is the organization legally based in or demonstrably operating in ${strategy.geography.displayName} (${countryCodes})? ` +
+        "A search-query match or incidental mention is not evidence of geographic eligibility.",
+      purpose: "eligibility",
+      reusableScope: "campaign_only",
+      expectedEvidenceTypes: [
+        "official_web_page",
+        "official_document",
+        "legal_registry",
+        "directory_profile",
+      ],
+    };
+  }
+  return overrides;
 }

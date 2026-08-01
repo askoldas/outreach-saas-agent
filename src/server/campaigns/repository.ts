@@ -9,7 +9,10 @@ import type {
   CampaignBriefProposal,
   ConfirmedCampaignBrief,
 } from "@/lib/campaign-workflow/contracts";
-import { campaignStrategyV2Schema } from "@/lib/intelligence/campaign-strategy-v2";
+import {
+  campaignStrategyV2Schema,
+  nativeCampaignEntryContract,
+} from "@/lib/intelligence/campaign-strategy-v2";
 
 type CampaignRow = {
   external_id: string;
@@ -122,10 +125,10 @@ export async function updateCampaignDiscoveryState(
 export async function createCampaign(workspaceId: string, input: CreateCampaignInput) {
   const { supabase } = await createAuthenticatedDatabaseClient();
   const externalId = await uniqueId(workspaceId, input.name);
-  const strategy = initialStrategy(input);
-  const { error } = await supabase.rpc("create_clean_campaign", {
+  const { error } = await supabase.rpc("create_native_campaign_v2", {
     target_workspace_id: workspaceId,
     campaign_data: {
+      entryContract: nativeCampaignEntryContract,
       externalId,
       name: input.name,
       objective: input.objective,
@@ -138,7 +141,6 @@ export async function createCampaign(workspaceId: string, input: CreateCampaignI
       selectedOfferingId: input.selectedOfferingId,
       targetDescription: JSON.stringify(input.offeringOverrides),
     },
-    initial_strategy: strategy,
   });
   if (error) throw new Error(`Could not create campaign: ${error.message}`);
   const result = await getCampaign(workspaceId, externalId);
@@ -192,19 +194,49 @@ async function hydrate(
   const ids = rows
     .map((row) => row.current_strategy_version_id)
     .filter((id): id is string => Boolean(id));
-  if (!ids.length) return [];
-  const { data, error } = await supabase
-    .from("campaign_strategy_versions")
-    .select("id,version,strategy")
-    .eq("workspace_id", workspaceId)
-    .in("id", ids);
+  const { data, error } = ids.length
+    ? await supabase
+        .from("campaign_strategy_versions")
+        .select("id,version,strategy")
+        .eq("workspace_id", workspaceId)
+        .in("id", ids)
+    : { data: [], error: null };
   if (error) throw new Error(`Could not load campaign strategies: ${error.message}`);
   const byId = new Map(((data ?? []) as StrategyRow[]).map((row) => [row.id, row]));
   return rows.map((row) =>
-    mapCampaign(row, byId.get(row.current_strategy_version_id ?? "")!),
+    mapCampaign(row, byId.get(row.current_strategy_version_id ?? "")),
   );
 }
-function mapCampaign(row: CampaignRow, strategyRow: StrategyRow): Campaign {
+function mapCampaign(row: CampaignRow, strategyRow?: StrategyRow): Campaign {
+  if (!strategyRow) {
+    return {
+      id: row.external_id,
+      name: row.name,
+      objective: row.objective,
+      geography: row.target_geography,
+      industryTerms: row.industries,
+      targetSegments: row.company_characteristics,
+      progress: 0,
+      leadCount: 0,
+      desiredLeadCount: row.target_volume,
+      awaitingReview: 0,
+      status: row.status === "active" ? "running" : (row.status as CampaignStatus),
+      lastActivity: row.updated_at,
+      preferredOutreachLanguage: row.preferred_outreach_language,
+      discoveryLanguages: [row.preferred_outreach_language],
+      warnings: [],
+      latestDiscoveryReport: null,
+      strategyVersion: 0,
+      strategy: {
+        terms: [],
+        localizedTerms: [],
+        sources: [],
+        criteria: [],
+        exclusions: [],
+        limitations: ["Campaign strategy is awaiting review."],
+      },
+    };
+  }
   const parsedV2 = campaignStrategyV2Schema.safeParse(strategyRow.strategy);
   if (parsedV2.success) {
     const strategy = parsedV2.data;
@@ -270,36 +302,6 @@ function mapCampaign(row: CampaignRow, strategyRow: StrategyRow): Campaign {
       exclusions: strategy.exclusions,
       limitations: strategy.limitations,
     },
-  };
-}
-function initialStrategy(input: CreateCampaignInput): CampaignStrategyVersion {
-  return {
-    id: null,
-    version: 0,
-    status: "ready",
-    targetGeography: input.geography,
-    companyTypes: input.targetSegments,
-    industries: input.industryTerms,
-    characteristics: [],
-    relevanceReasons: [input.objective],
-    opportunityAssumptions: ["Commercial relevance requires evidence during research"],
-    qualificationCriteria: input.qualificationCriteria,
-    positiveSignals: [],
-    exclusions: input.exclusions,
-    contactRoles: ["Relevant decision-maker"],
-    contactDepartments: ["Purchasing", "Partnerships"],
-    acceptableContactRoutes: [
-      "Named business contact",
-      "Department email",
-      "General business route",
-    ],
-    searchLanguages: input.discoveryLanguages,
-    sourceCategories: input.sourceCategories,
-    searchTerms: input.terms,
-    localizedTerms: input.localizedTerms,
-    limitations: ["New campaign has not run discovery yet."],
-    targetCompanyCount: input.desiredLeadCount,
-    refinementSummary: ["Initial strategy created from campaign brief."],
   };
 }
 async function uniqueId(workspaceId: string, name: string) {

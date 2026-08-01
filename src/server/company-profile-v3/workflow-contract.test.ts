@@ -5,6 +5,10 @@ import test from "node:test";
 const parent = readFileSync("src/trigger/create-company-intelligence-v3.ts", "utf8");
 const child = readFileSync("src/trigger/run-company-profile-v3-stage.ts", "utf8");
 const service = readFileSync("src/server/company-profile-v3/stage-service.ts", "utf8");
+const sourceService = readFileSync(
+  "src/server/company-profile-v3/source-service.ts",
+  "utf8",
+);
 const repository = readFileSync("src/server/company-profile-v3/repository.ts", "utf8");
 
 test("V3 profile orchestration uses durable sequential child stages", () => {
@@ -20,19 +24,48 @@ test("V3 profile orchestration uses durable sequential child stages", () => {
 test("stage execution freezes versions, reuses completed outputs, and audits AI", () => {
   assert.match(service, /\.eq\("idempotency_key", idempotencyKey\)/);
   assert.match(service, /existing\?\.status === "completed"/);
-  assert.match(service, /definition\.outputSchema\.parse/);
+  assert.match(service, /validateStructuredOutput/);
+  assert.match(service, /generateValidatedProfileStageOutput/);
+  assert.match(service, /isUnsupportedStructuredOutput/);
+  assert.match(service, /jsonMode: true/);
+  assert.match(service, /structuredOutputFallbackUsed/);
+  assert.match(service, /completion_truncated/);
+  assert.match(service, /expandedCompletionBudget/);
+  assert.match(service, /compact retry/);
+  assert.match(service, /truncationRetryUsed/);
+  assert.match(service, /profileUnderAudit/);
+  assert.match(service, /input\.taskId === "profile\.consistency_audit"/);
+  assert.match(service, /assembleProfileUnderAudit/);
+  assert.match(service, /InvalidProfileStageOutputError/);
   assert.match(service, /\.from\("ai_requests"\)/);
   assert.match(service, /contextCompilerVersion/);
   assert.match(service, /promptContentHash/);
   assert.match(service, /\.from\("evidence_items"\)/);
+  assert.match(service, /ensureNativeCompanyProfileEvidence/);
+  assert.match(service, /assertIntelligenceExternalCallsAllowed\("model"\)/);
   assert.match(service, /compileProfileV3Draft/);
   assert.match(service, /compile_company_profile_v3_draft/);
 });
 
-test("V3 dispatch is guarded by environment and workspace rollout", () => {
+test("V3 dispatch starts from the workspace website without a V1 profile adapter", () => {
   assert.match(repository, /getWorkspaceIntelligenceSettings/);
   assert.match(repository, /settings\.profileVersion !== "v2"/);
-  assert.match(repository, /create_company_profile_v3_draft/);
+  assert.match(repository, /createNativeCompanyProfileSeed/);
+  assert.match(repository, /create_native_company_profile_v3_draft/);
+  assert.match(repository, /target_input_hash: inputHash/);
+  assert.doesNotMatch(repository, /adaptV2ProfileToV3Draft/);
+  assert.doesNotMatch(repository, /from "@\/server\/company-profile\/repository"/);
   assert.match(repository, /create-company-intelligence-v3/);
   assert.match(service, /resolveWorkspaceIntelligenceSettings/);
+});
+
+test("native profile source collection persists bounded first-party evidence", () => {
+  assert.match(sourceService, /company_profile_source_collection/);
+  assert.match(sourceService, /assertIntelligenceExternalCallsAllowed\("provider"\)/);
+  assert.match(sourceService, /searchWeb/);
+  assert.match(sourceService, /extractWebPages/);
+  assert.match(sourceService, /subject_type: "company_profile_draft"/);
+  assert.match(sourceService, /provider_execution_id: execution\.id/);
+  assert.match(sourceService, /maximumPages = 5/);
+  assert.match(sourceService, /maximumPageLength = 8_000/);
 });

@@ -1,79 +1,88 @@
 import { z } from "zod";
 import { intelligenceClaimSchema } from "../contracts/claims.ts";
-import { intelligenceRuleSchema } from "../contracts/rules.ts";
+import { profileIntelligenceRuleSchema } from "../contracts/rules.ts";
 import type { PromptDefinition } from "../runtime/task-registry.ts";
 
 const versions = {
-  contextCompilerVersion: "profile-v3-context-v1",
-  promptVersion: "profile-v3-prompts-v1",
+  contextCompilerVersion: "profile-v3-context-v2",
 } as const;
 
 export const profileFactExtractionOutputSchema = z
   .object({
-    facts: z.array(
-      z
-        .object({
-          factId: z.string().min(1),
-          factFamily: z.string().min(1),
-          fieldHint: z.string().min(1),
-          subject: z.string().min(1),
-          predicate: z.string().min(1),
-          value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]),
-          epistemicStatus: z.enum(["explicit_fact", "evidence_backed_inference"]),
-          confidence: z.number().min(0).max(1),
-          evidenceIds: z.array(z.string()).min(1),
-          conciseRationale: z.string().max(400).optional(),
-        })
-        .strict(),
-    ),
-    sourceConflicts: z.array(
-      z
-        .object({
-          conflictKey: z.string(),
-          description: z.string(),
-          evidenceIds: z.array(z.string()).min(2),
-        })
-        .strict(),
-    ),
-    sourceLimitations: z.array(z.string()),
+    facts: z
+      .array(
+        z
+          .object({
+            factId: z.string().min(1),
+            factFamily: z.string().min(1),
+            fieldHint: z.string().min(1),
+            subject: z.string().min(1),
+            predicate: z.string().min(1),
+            value: z.union([z.string(), z.number(), z.boolean(), z.array(z.string())]),
+            epistemicStatus: z.enum(["explicit_fact", "evidence_backed_inference"]),
+            confidence: z.number().min(0).max(1),
+            evidenceIds: z.array(z.string()).min(1),
+            conciseRationale: z.string().max(400).optional(),
+          })
+          .strict(),
+      )
+      .max(80),
+    sourceConflicts: z
+      .array(
+        z
+          .object({
+            conflictKey: z.string(),
+            description: z.string(),
+            evidenceIds: z.array(z.string()).min(2),
+          })
+          .strict(),
+      )
+      .max(12),
+    sourceLimitations: z.array(z.string()).max(12),
   })
   .strict();
 
 export const profileCommercialSynthesisOutputSchema = z
   .object({
-    primaryRoles: z.array(
-      z.object({
-        role: z.string().min(1),
-        importance: z.enum(["primary", "secondary"]),
-        confidence: z.number().min(0).max(1),
-        evidenceIds: z.array(z.string()),
-      }),
-    ),
-    valueChainPosition: z.array(z.string()),
-    revenueMechanics: z.array(
-      z.object({
-        mechanism: z.string(),
-        status: z.enum(["evidence_backed_inference", "hypothesis", "unknown"]),
-        confidence: z.number().min(0).max(1),
-        evidenceIds: z.array(z.string()),
-      }),
-    ),
-    transactionModels: z.array(z.string()),
-    deliveryModels: z.array(z.string()),
-    customerConsumptionModes: z.array(
-      z.enum([
-        "use",
-        "resell",
-        "integrate",
-        "distribute",
-        "outsource",
-        "license",
-        "unknown",
-      ]),
-    ),
-    channelModels: z.array(z.string()),
-    commercialConstraints: z.array(intelligenceClaimSchema),
-    unresolvedCommercialQuestions: z.array(z.string()),
+    primaryRoles: z
+      .array(
+        z.object({
+          role: z.string().min(1).max(120),
+          importance: z.enum(["primary", "secondary"]),
+          confidence: z.number().min(0).max(1),
+          evidenceIds: z.array(z.string()).max(20),
+        }),
+      )
+      .max(6),
+    valueChainPosition: z.array(z.string().max(240)).max(12),
+    revenueMechanics: z
+      .array(
+        z.object({
+          mechanism: z.string().max(320),
+          status: z.enum(["evidence_backed_inference", "hypothesis", "unknown"]),
+          confidence: z.number().min(0).max(1),
+          evidenceIds: z.array(z.string()).max(20),
+        }),
+      )
+      .max(10),
+    transactionModels: z.array(z.string().max(160)).max(10),
+    deliveryModels: z.array(z.string().max(160)).max(10),
+    customerConsumptionModes: z
+      .array(
+        z.enum([
+          "use",
+          "resell",
+          "integrate",
+          "distribute",
+          "outsource",
+          "license",
+          "unknown",
+        ]),
+      )
+      .max(7),
+    channelModels: z.array(z.string().max(160)).max(10),
+    commercialConstraints: z.array(intelligenceClaimSchema).max(12),
+    unresolvedCommercialQuestions: z.array(z.string().max(320)).max(12),
     conciseCommercialSummary: z.string().max(1800),
   })
   .strict();
@@ -165,7 +174,7 @@ export const profileBuyerLogicOutputSchema = z
         confidence: z.number().min(0).max(1),
       }),
     ),
-    proposedOfferingRules: z.array(intelligenceRuleSchema),
+    proposedOfferingRules: z.array(profileIntelligenceRuleSchema),
     unresolvedQuestions: z.array(z.string()),
   })
   .strict();
@@ -205,7 +214,7 @@ export const profileClarificationOutputSchema = z
             .default([]),
           impact: z.enum(["blocking", "important", "optional"]),
           affectedPaths: z.array(z.string()),
-          skipAllowed: z.boolean(),
+          skipAllowed: z.literal(true),
         }),
       )
       .max(8),
@@ -267,7 +276,7 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
   ),
   definition(
     "profile.commercial_synthesis",
-    "profile-commercial-synthesis-schema-v1",
+    "profile-commercial-synthesis-schema-v2",
     "profile_commercial_reasoning",
     profileCommercialSynthesisOutputSchema,
     "Interpret how the company creates, delivers, and captures value.",
@@ -281,24 +290,24 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
   ),
   definition(
     "profile.buyer_logic",
-    "profile-buyer-logic-schema-v2",
+    "profile-buyer-logic-schema-v3",
     "profile_commercial_reasoning",
     profileBuyerLogicOutputSchema,
-    "Build offering-specific buyer and relationship hypotheses.",
+    "Build reusable buyer and relationship hypotheses. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
   ),
   definition(
     "profile.clarification",
-    "profile-clarification-schema-v1",
+    "profile-clarification-schema-v2",
     "profile_consistency",
     profileClarificationOutputSchema,
-    "Generate only high-impact, concise, normally skippable questions.",
+    "Generate only high-impact, concise, optional questions. Every question must set skipAllowed to true; unanswered questions never block review or publication.",
   ),
   definition(
     "profile.consistency_audit",
     "profile-consistency-schema-v1",
     "profile_consistency",
     profileConsistencyOutputSchema,
-    "Audit internal consistency and evidence discipline without rewriting.",
+    "Audit profileUnderAudit and supplied evidence without rewriting. Treat draftSnapshot as a seed, not the assembled result. Do not report offerings, business model, buyer logic, rules, or evidence as missing when they exist in profileUnderAudit, previousStageOutputs, or supplied evidence. Clarification questions are advisory and unanswered questions alone must never produce an invalid or needs_input recommendation.",
   ),
 ];
 
@@ -309,22 +318,47 @@ function definition(
   outputSchema: z.ZodType,
   instruction: string,
 ): PromptDefinition<unknown, unknown> {
+  const outputJsonSchema = z.toJSONSchema(outputSchema) as Record<string, unknown>;
+  const promptRevision =
+    taskId === "profile.buyer_logic"
+      ? "v4"
+      : taskId === "profile.commercial_synthesis"
+        ? "v3"
+        : taskId === "profile.clarification"
+          ? "v3"
+          : taskId === "profile.consistency_audit"
+            ? "v3"
+        : "v2";
   return {
     taskId,
-    promptVersion: `${taskId.replaceAll(".", "-")}-${taskId === "profile.buyer_logic" ? "v2" : "v1"}`,
+    promptVersion: `${taskId.replaceAll(".", "-")}-${promptRevision}`,
     schemaVersion,
     contextCompilerVersion: versions.contextCompilerVersion,
     modelRole,
     title: taskId,
     description: instruction,
     buildMessages: (input) => [
-      { role: "system", content: `${sharedSystemInstruction} ${instruction}` },
+      {
+        role: "system",
+        content: `${sharedSystemInstruction} ${instruction} Exact output JSON Schema: ${JSON.stringify(outputJsonSchema)}`,
+      },
       { role: "user", content: JSON.stringify(input) },
     ],
     outputSchema,
-    maxCompletionTokens: taskId === "profile.fact_extraction" ? 5_000 : 4_000,
+    maxCompletionTokens: completionBudget(taskId),
     reasoningClass: taskId === "profile.fact_extraction" ? "minimal" : "standard",
     allowsRepair: true,
     allowsFallback: true,
   };
+}
+
+function completionBudget(taskId: string) {
+  if (taskId === "profile.commercial_synthesis") return 7_000;
+  if (
+    taskId === "profile.fact_extraction" ||
+    taskId === "profile.offering_decomposition" ||
+    taskId === "profile.buyer_logic"
+  )
+    return 6_000;
+  return 4_000;
 }

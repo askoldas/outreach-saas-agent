@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { deriveDiscoveryLanguages } from "./languages.ts";
+import {
+  countryDisplayName,
+  deriveCampaignDiscoveryLanguagePolicy,
+  deriveDiscoveryLanguages,
+} from "./languages.ts";
 
 test("discovery languages come from target countries with an English fallback", () => {
   assert.deepEqual(deriveDiscoveryLanguages({ countryCodes: ["LT"] }), [
@@ -20,4 +24,20 @@ test("discovery language derivation does not accept an outreach language", () =>
     "German",
     "English",
   ]);
+});
+
+test("campaign language policy preserves every Baltic local language", () => {
+  assert.deepEqual(
+    deriveCampaignDiscoveryLanguagePolicy({
+      countryCodes: ["EE", "LV", "LT"],
+      primaryLanguage: "English",
+    }),
+    {
+      localLanguages: ["Estonian", "Latvian", "Lithuanian"],
+      workingLanguages: ["English", "Estonian", "Latvian", "Lithuanian"],
+    },
+  );
+  assert.equal(countryDisplayName("EE"), "Estonia");
+  assert.equal(countryDisplayName("LV"), "Latvia");
+  assert.equal(countryDisplayName("LT"), "Lithuania");
 });

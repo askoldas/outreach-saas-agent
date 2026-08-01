@@ -59,25 +59,6 @@ export async function getCurrentCompanyProfile(
   return mapVersion(data as VersionRow);
 }
 
-export async function saveCompanyProfileVersion(
-  workspaceId: string,
-  profile: CompanyProfile,
-) {
-  if (!profile.structuredProfile)
-    throw new Error("Structured Company Profile data is required.");
-  const structured = parseStructuredCompanyProfile(profile.structuredProfile);
-  const { supabase } = await createAuthenticatedDatabaseClient();
-  const { data, error } = await supabase.rpc("save_clean_company_profile_version", {
-    target_workspace_id: workspaceId,
-    profile_data: structured,
-    facts_data: profile.extractedFacts,
-    questions_data: profile.reviewQuestions,
-    provenance_value: profile.provenance,
-  });
-  if (error) throw new Error(`Could not save Company Profile: ${error.message}`);
-  return mapVersion(data as VersionRow);
-}
-
 function mapVersion(row: VersionRow): CompanyProfile {
   if (row.intelligence_version === "v2") return mapV3CompatibilityVersion(row);
   const structured = parseStructuredCompanyProfile(row.structured_profile);

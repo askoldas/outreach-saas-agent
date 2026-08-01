@@ -1,7 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type { CampaignStrategyVersion } from "@/types/domain";
-import { adaptV1StrategyToV2Draft } from "../intelligence/campaign-strategy-v2/v1-adapter.ts";
+import { createNativeCampaignStrategyFixture } from "../intelligence/campaign-strategy-v2/test-fixture.ts";
 import { calculateDiscoveryCoverage, type DiscoveryCoverageMetrics } from "./coverage.ts";
 import { analyzeDiscoveryGaps } from "./gaps.ts";
 import { compileDiscoveryPlanV2 } from "./planning.ts";
@@ -206,21 +205,7 @@ function planInput() {
 }
 
 function confirmedStrategy() {
-  const strategy = adaptV1StrategyToV2Draft({
-    campaignId: "campaign-1",
-    strategyDraftId: "strategy-1",
-    companyProfileVersionId: "profile-1",
-    offeringId: "offering-1",
-    offeringVersionId: "offering-version-1",
-    memorySnapshotId: "memory-1",
-    geography: {
-      displayName: "Lithuania",
-      countryCodes: ["LT"],
-      workingLanguages: ["English"],
-    },
-    strategy: legacyStrategy(),
-  });
-  delete strategy.legacyImport;
+  const strategy = createNativeCampaignStrategyFixture();
   strategy.status = "confirmed";
   strategy.objective.userConfirmed = true;
   strategy.geography.userConfirmed = true;
@@ -255,32 +240,5 @@ function metrics(
     providerExhausted: false,
     updatedAt: "2026-07-28T10:00:00.000Z",
     ...overrides,
-  };
-}
-
-function legacyStrategy(): CampaignStrategyVersion {
-  return {
-    id: "legacy-1",
-    version: 1,
-    status: "ready",
-    targetGeography: "Lithuania",
-    companyTypes: ["Manufacturer"],
-    industries: ["Industrial equipment"],
-    characteristics: ["Operates production facilities"],
-    relevanceReasons: ["May need operational software"],
-    opportunityAssumptions: ["Operations are managed locally"],
-    qualificationCriteria: ["Has an operations team"],
-    positiveSignals: ["Multiple production sites"],
-    exclusions: ["Software vendors"],
-    contactRoles: ["Operations director"],
-    contactDepartments: ["Operations"],
-    acceptableContactRoutes: ["business_email"],
-    searchLanguages: ["English"],
-    sourceCategories: ["company_website"],
-    searchTerms: ["legacy query"],
-    localizedTerms: [],
-    limitations: [],
-    targetCompanyCount: 25,
-    refinementSummary: ["Target industrial operators."],
   };
 }

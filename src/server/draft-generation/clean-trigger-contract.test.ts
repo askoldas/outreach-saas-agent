@@ -15,7 +15,7 @@ const trigger = readFileSync(
 test("draft generation dispatches selected clean Campaign contacts through Trigger", () => {
   const section = research.slice(
     research.indexOf("export async function enqueueCampaignDraftGenerationRun"),
-    research.indexOf("export async function enqueueCompanyProfileAnalysisRun"),
+    research.indexOf("export async function getCampaignResearchProgress"),
   );
   assert.match(section, /\.from\("campaign_contacts"\)/);
   assert.match(section, /\.from\("provider_executions"\)/);

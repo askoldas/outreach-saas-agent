@@ -11,13 +11,8 @@ import {
 } from "./repository";
 import { createActivityEvent } from "@/server/activity/repository";
 import { completeGuidedDraft } from "@/server/guided/repository";
-import {
-  enqueueCampaignDiscoveryRun,
-  resumePausedCampaignRun,
-  stopActiveCampaignRun,
-} from "@/server/research/repository";
+import { enqueueCampaignDiscoveryRun } from "@/server/research/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
-import { getCurrentCompanyProfile } from "@/server/company-profile/repository";
 import { generateCampaignBriefProposal } from "@/lib/ai/campaign-brief-proposal";
 import {
   campaignBriefPromptVersion,
@@ -25,9 +20,8 @@ import {
   parseCampaignBriefProposal,
 } from "@/lib/campaign-workflow/contracts";
 import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
-import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
-import { getCurrentCampaignStrategy } from "@/server/campaign-strategy/repository";
 import { createInitialCampaignStrategyV2 } from "@/server/campaign-strategy-v2/service";
+import { getPublishedCampaignPlanningProfile } from "@/server/campaign-strategy-v2/repository";
 import { controlActiveCampaignWorkflowV2 } from "@/server/workflow-v2/control-service";
 
 type UpdateCampaignStatusInput = {
@@ -50,17 +44,17 @@ export async function proposeCampaignBriefAction(input: {
   if (!countryCodes.length && !regionLabel) {
     throw new Error("Choose at least one country or region first.");
   }
-  const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile.id || !profile.structuredProfile) {
+  const profile = await getPublishedCampaignPlanningProfile(currentWorkspace.id);
+  if (!profile) {
     throw new Error("Publish the Company Profile before planning a campaign.");
   }
   const result = await generateCampaignBriefProposal({
     geography: { countryCodes, ...(regionLabel ? { regionLabel } : {}) },
-    profile: profile.structuredProfile,
+    profile,
   });
   return {
     proposal: result.proposal,
-    profileVersionId: profile.id,
+    profileVersionId: profile.profileVersionId,
     promptVersion: result.promptVersion,
     requestedModel: result.modelCall.requestedModel,
     actualModel: result.modelCall.actualModel ?? result.modelCall.requestedModel,
@@ -135,22 +129,11 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
           : "resume",
     workspaceId: currentWorkspace.id,
   });
-  const stopped =
-    !v2Control && input.status === "completed"
-      ? await stopActiveCampaignRun({
-          campaignId: input.campaignId,
-          workspaceId: currentWorkspace.id,
-        })
-      : null;
-  if (!v2Control)
-    await updateCampaignStatus(currentWorkspace.id, input.campaignId, input.status);
-  const resumed =
-    !v2Control && input.status === "running"
-      ? await resumePausedCampaignRun({
-          campaignId: input.campaignId,
-          workspaceId: currentWorkspace.id,
-        })
-      : null;
+  if (!v2Control) {
+    throw new Error(
+      "No active V2 Campaign Run is available for this control. Historical V1 runs are read-only.",
+    );
+  }
   await createActivityEvent(currentWorkspace.id, {
     description: `Campaign ${input.campaignId} moved to ${input.status}.`,
     entityExternalId: input.campaignId,
@@ -163,21 +146,12 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
   revalidatePath("/dashboard");
 
   return {
-    message: v2Control
-      ? input.status === "running"
+    message:
+      input.status === "running"
         ? "Campaign resume queued"
         : input.status === "paused"
           ? "Campaign pause requested"
-          : "Campaign stopped"
-      : input.status === "running"
-        ? resumed
-          ? "Campaign run resumed"
-          : "Campaign running"
-        : input.status === "paused"
-          ? "Campaign paused"
-          : stopped?.runId
-            ? `Campaign stopped${stopped.cancelledTriggerRuns ? `; ${stopped.cancelledTriggerRuns} Trigger run${stopped.cancelledTriggerRuns === 1 ? "" : "s"} cancelled` : ""}`
-            : "Campaign stopped",
+          : "Campaign stopped",
   };
 }
 
@@ -189,12 +163,12 @@ export async function createCampaignAction(formData: FormData) {
   }
 
   const name = getString(formData, "name");
-  const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile.id || !profile.structuredProfile) {
-    redirect("/company-profile?error=structured-profile-required");
+  const profile = await getPublishedCampaignPlanningProfile(currentWorkspace.id);
+  if (!profile) {
+    redirect("/company-profile?error=company-intelligence-required");
   }
   const validOfferingIds = new Set(
-    profile.structuredProfile.offerings.map((offering) => offering.id),
+    profile.offerings.map((offering) => offering.stableKey),
   );
   const proposal = parseCampaignBriefProposal(
     getJson(formData, "briefProposal"),
@@ -283,7 +257,7 @@ export async function createCampaignAction(formData: FormData) {
     },
   });
   await saveCampaignBrief(currentWorkspace.id, campaign.id, {
-    profileVersionId: profile.id,
+    profileVersionId: profile.profileVersionId,
     proposal,
     confirmedBrief,
     promptVersion:
@@ -301,40 +275,18 @@ export async function createCampaignAction(formData: FormData) {
   });
   await completeGuidedDraft(currentWorkspace.id, "campaign", "new");
 
-  const settings = await getWorkspaceIntelligenceSettings(currentWorkspace.id);
-  if (settings.campaignWorkflow === "v2") {
-    const legacyStrategy = await getCurrentCampaignStrategy(
-      currentWorkspace.id,
-      campaign.id,
-    );
-    if (!legacyStrategy) throw new Error("Initial Campaign Strategy is missing.");
-    const { strategyDraftId } = await createInitialCampaignStrategyV2({
-      workspaceId: currentWorkspace.id,
-      campaign,
-      confirmedBrief,
-      legacyStrategy,
-      objectiveCode: getString(formData, "campaignObjective") || "direct_buyer",
-    });
-    revalidatePath("/campaigns");
-    revalidatePath(`/campaigns/${campaign.id}/strategy`);
-    redirect(
-      `/campaigns/${campaign.id}/strategy?message=${encodeURIComponent(
-        `Strategy draft ${strategyDraftId.slice(0, 8)} is ready for review.`,
-      )}`,
-    );
-  }
-
-  const { runId } = await enqueueCampaignDiscoveryRun({
-    campaignId: campaign.id,
-    desiredLeadCount: campaign.desiredLeadCount,
+  const { strategyDraftId } = await createInitialCampaignStrategyV2({
     workspaceId: currentWorkspace.id,
+    campaign,
+    confirmedBrief,
+    objectiveCode: getString(formData, "campaignObjective") || "direct_buyer",
   });
-  await updateCampaignStatus(currentWorkspace.id, campaign.id, "running");
-
   revalidatePath("/campaigns");
-  revalidatePath("/dashboard");
+  revalidatePath(`/campaigns/${campaign.id}/strategy`);
   redirect(
-    `/campaigns/${campaign.id}?message=${encodeURIComponent(`Campaign started in run ${runId}.`)}`,
+    `/campaigns/${campaign.id}/strategy?message=${encodeURIComponent(
+      `Strategy draft ${strategyDraftId.slice(0, 8)} is ready for review.`,
+    )}`,
   );
 }
 

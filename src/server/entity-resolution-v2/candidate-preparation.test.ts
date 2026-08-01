@@ -54,16 +54,36 @@ test("registry and directory hosts never become canonical domains", () => {
   assert.equal(prepared.groupKey, "name_country:acme:LT");
 });
 
-test("company subpages group by host without claiming a verified canonical domain", () => {
+test("curated company identity subpages retain the official company website", () => {
   const prepared = prepareResolutionCandidate({
     ...baseInput,
     sourcePageType: "company_subpage",
     sourceUrl: "https://acme.lt/about",
     websiteUrl: "https://acme.lt/about",
   });
-  assert.equal(prepared.safeOfficialDomain, false);
-  assert.equal(prepared.canonicalDomain, null);
+  assert.equal(prepared.safeOfficialDomain, true);
+  assert.equal(prepared.canonicalDomain, "acme.lt");
   assert.equal(prepared.groupKey, "domain:acme.lt");
+});
+
+test("content and unknown pages cannot become organizations", () => {
+  for (const sourcePageType of [
+    "content_page",
+    "news_article",
+    "document",
+    "unknown",
+  ]) {
+    assert.equal(
+      prepareResolutionCandidate({
+        ...baseInput,
+        name: "Top API manufacturers in the USA",
+        sourcePageType,
+        sourceUrl: "https://publisher.example/articles/top-api-manufacturers",
+        websiteUrl: "https://publisher.example/",
+      }).invalidIdentity,
+      true,
+    );
+  }
 });
 
 test("different hinted entity types remain explicit", () => {

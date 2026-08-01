@@ -44,25 +44,22 @@ test("profile workflow stops at a terminal child failure and does not finalize",
   assert.equal(finalized, false);
 });
 
-test("non-skippable blocking clarification always gates review readiness", () => {
+test("clarification needs never gate review readiness", () => {
   assert.equal(
     resolveProfileV3DraftState({
       publishRecommendation: "ready",
-      clarificationQuestions: [{ impact: "blocking", skipAllowed: false }],
     }),
-    "needs_input",
+    "ready_for_review",
   );
   assert.equal(
     resolveProfileV3DraftState({
-      publishRecommendation: "ready_with_warnings",
-      clarificationQuestions: [{ impact: "important", skipAllowed: true }],
+      publishRecommendation: "needs_input",
     }),
     "ready_for_review",
   );
   assert.equal(
     resolveProfileV3DraftState({
       publishRecommendation: "invalid",
-      clarificationQuestions: [],
     }),
     "needs_input",
   );

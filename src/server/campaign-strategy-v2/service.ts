@@ -1,14 +1,26 @@
-import type { ConfirmedCampaignBrief } from "@/lib/campaign-workflow/contracts";
 import {
-  adaptV1StrategyToV2Draft,
+  parseConfirmedCampaignBrief,
+  type ConfirmedCampaignBrief,
+} from "@/lib/campaign-workflow/contracts";
+import {
+  buildNativeCampaignStrategyV2,
+  campaignGeographyV2Schema,
+  campaignObjectiveV2Schema,
+  canRetryCampaignStrategyV2Draft,
   compileCampaignCommercialContext,
   compileCampaignStrategyV2,
   hashCanonical,
+  nativeCampaignStrategyEntryContract,
+  resolveCampaignObjective,
 } from "@/lib/intelligence/campaign-strategy-v2";
-import type { Campaign, CampaignStrategyVersion } from "@/types/domain";
+import { intelligenceRuleSchema } from "@/lib/intelligence/contracts/rules";
+import type { Campaign } from "@/types/domain";
 import type { Json } from "@/types/database.types";
+import { deriveCampaignDiscoveryLanguagePolicy } from "@/lib/discovery/languages";
 import {
   createCampaignStrategyV2Draft,
+  getCampaignStrategyV2RecoveryData,
+  getPublishedCampaignPlanningProfile,
   getPublishedCampaignProfileContext,
   persistCampaignStrategyV2Compilation,
 } from "./repository";
@@ -17,15 +29,19 @@ export async function createInitialCampaignStrategyV2(input: {
   workspaceId: string;
   campaign: Campaign;
   confirmedBrief: ConfirmedCampaignBrief;
-  legacyStrategy: CampaignStrategyVersion;
   objectiveCode: string;
 }) {
   const stableKey = input.confirmedBrief.offering.profileOfferingIds[0];
   if (!stableKey) throw new Error("A published offering must be selected.");
   const profile = await getPublishedCampaignProfileContext(input.workspaceId, stableKey);
+  const discoveryLanguagePolicy = deriveCampaignDiscoveryLanguagePolicy({
+    countryCodes: input.confirmedBrief.geography.countryCodes,
+    primaryLanguage: input.confirmedBrief.geography.primaryLanguage,
+  });
   const geography = {
-    mode:
-      input.confirmedBrief.geography.countryCodes.length === 1
+    mode: input.confirmedBrief.geography.countryCodes.includes("WORLDWIDE")
+      ? ("region" as const)
+      : input.confirmedBrief.geography.countryCodes.length === 1
         ? ("country" as const)
         : ("multi_country" as const),
     displayName:
@@ -36,20 +52,22 @@ export async function createInitialCampaignStrategyV2(input: {
     includedCities: [],
     excludedRegions: [],
     excludedCities: [],
-    localLanguages: [],
-    workingLanguages: [input.confirmedBrief.geography.primaryLanguage || "English"],
+    localLanguages: discoveryLanguagePolicy.localLanguages,
+    workingLanguages: discoveryLanguagePolicy.workingLanguages,
     userConfirmed: true,
   };
-  const objectiveCode = resolveObjective(input.objectiveCode);
+  const objectiveCode = resolveCampaignObjective(input.objectiveCode);
   const objective = {
     code: objectiveCode,
-    label: objectiveLabel(objectiveCode),
+    label: `Find ${objectiveCode.replaceAll("_", " ")}`,
     description: input.confirmedBrief.targetClient.summary,
     targetRelationshipTypes: [objectiveCode],
-    normallyExcludedRelationshipTypes: ["competitor" as const, "supplier" as const],
+    normallyExcludedRelationshipTypes: (["competitor", "supplier"] as const).filter(
+      (relationship) => relationship !== objectiveCode,
+    ),
     userConfirmed: true,
   };
-  const mechanics = objectValue(profile.offeringVersion.commercial_mechanics_json);
+  const offering = profile.offering;
   const context = compileCampaignCommercialContext({
     workspaceId: input.workspaceId,
     profileVersionId: profile.profileVersionId,
@@ -57,7 +75,7 @@ export async function createInitialCampaignStrategyV2(input: {
       {
         companyProfileVersionId: profile.profileVersionId,
         offeringId: profile.offeringId,
-        offeringVersionId: profile.offeringVersion.id,
+        offeringVersionId: offering.offeringVersionId,
       },
     ],
     objective,
@@ -65,31 +83,42 @@ export async function createInitialCampaignStrategyV2(input: {
     companyRoles: profile.companyRoles,
     offerings: [
       {
-        offeringVersionId: profile.offeringVersion.id,
-        summary: profile.offeringVersion.short_description,
-        valueDelivered: stringArray(mechanics.valueProposition),
-        transactionModels: stringArray(mechanics.transactionModels),
-        buyerUseModes: ["use"],
+        offeringVersionId: offering.offeringVersionId,
+        summary: offering.shortDescription,
+        valueDelivered: [
+          ...offering.commercialMechanics.valueProposition,
+          ...offering.commercialMechanics.expectedOutcomes,
+        ],
+        transactionModels: offering.commercialMechanics.transactionModels.length
+          ? offering.commercialMechanics.transactionModels
+          : [offering.commercialMechanics.buyingMotion],
+        buyerUseModes: [offering.commercialMechanics.customerConsumptionMode],
       },
     ],
-    buyerHypotheses: [
-      {
-        offeringVersionId: profile.offeringVersion.id,
+    buyerHypotheses: offering.archetypes
+      .filter(
+        (archetype) =>
+          archetype.status !== "user_rejected" &&
+          archetype.status !== "superseded" &&
+          archetype.priority !== "avoid",
+      )
+      .map((archetype) => ({
+        offeringVersionId: offering.offeringVersionId,
         relationshipType: objectiveCode,
-        summary: input.confirmedBrief.targetClient.summary,
-      },
-    ],
-    rules: [],
+        summary: `${archetype.name}: ${archetype.description}`,
+      })),
+    rules: profile.rules,
     claims: [],
   });
   const campaignInput = {
+    entryContract: nativeCampaignStrategyEntryContract,
     geography,
     objective,
     offeringReferences: [
       {
         companyProfileVersionId: profile.profileVersionId,
         offeringId: profile.offeringId,
-        offeringVersionId: profile.offeringVersion.id,
+        offeringVersionId: offering.offeringVersionId,
       },
     ],
     constraints: input.confirmedBrief.targetClient.requiredCriteria,
@@ -107,53 +136,19 @@ export async function createInitialCampaignStrategyV2(input: {
     inputHash: hashCanonical(campaignInput),
     compiledContext: context,
   });
-  const draft = adaptV1StrategyToV2Draft({
+  const draft = buildNativeCampaignStrategyV2({
     campaignId: input.campaign.id,
     strategyDraftId: persisted.id,
-    companyProfileVersionId: profile.profileVersionId,
-    offeringId: profile.offeringId,
-    offeringVersionId: profile.offeringVersion.id,
-    memorySnapshotId: `${input.campaign.id}.memory.pending`,
-    geography: {
-      displayName: geography.displayName,
-      countryCodes: geography.countryCodes,
-      workingLanguages: geography.workingLanguages,
-    },
-    strategy: input.legacyStrategy,
-  });
-  delete draft.legacyImport;
-  draft.objective = objective;
-  draft.geography = geography;
-  draft.strategySummary = input.confirmedBrief.targetClient.summary;
-  draft.unresolvedQuestions = [];
-  draft.archetypes = draft.archetypes.map((archetype) => ({
-    ...archetype,
-    relationshipType: objectiveCode,
-    userConfirmed: true,
-  }));
-  draft.campaignRules = draft.campaignRules.map((rule) => ({
-    ...rule,
-    applicability: {
-      ...rule.applicability,
-      objectives: [objectiveCode],
-      relationshipTypes: [objectiveCode],
-    },
-  }));
-  draft.qualificationPolicy = {
-    ...draft.qualificationPolicy,
-    relationshipTaxonomy: [
-      objectiveCode,
-      ...draft.qualificationPolicy.relationshipTaxonomy.filter(
-        (relationship) => relationship !== objectiveCode,
-      ),
+    profileVersionId: profile.profileVersionId,
+    offering,
+    confirmedBrief: input.confirmedBrief,
+    objectiveCode,
+    geography,
+    applicableProfileRules: [
+      ...context.applicableProfileRules,
+      ...context.applicableOfferingRules,
     ],
-    eligibilityRules: draft.campaignRules,
-  };
-  draft.discoverySegments = draft.discoverySegments.map((segment) => ({
-    ...segment,
-    relationshipType: objectiveCode,
-    exclusionRules: draft.campaignRules,
-  }));
+  });
   const compilation = compileCampaignStrategyV2({
     draft,
     compiledContextHash: context.contextHash,
@@ -166,31 +161,96 @@ export async function createInitialCampaignStrategyV2(input: {
   return { strategyDraftId: persisted.id };
 }
 
-function resolveObjective(value: string) {
-  const supported = [
-    "direct_buyer",
-    "distributor",
-    "reseller",
-    "channel_partner",
-    "implementation_partner",
-    "referral_partner",
-    "supplier",
-    "strategic_partner",
-  ] as const;
-  return supported.find((candidate) => candidate === value) ?? "direct_buyer";
+export async function resumeInitialCampaignStrategyV2(input: {
+  workspaceId: string;
+  campaignExternalId: string;
+  strategyDraftId: string;
+}) {
+  const recovery = await getCampaignStrategyV2RecoveryData(input);
+  if (!canRetryCampaignStrategyV2Draft(recovery.state)) {
+    throw new Error(`Campaign Strategy draft cannot be retried from ${recovery.state}.`);
+  }
+  const profile = await getPublishedCampaignPlanningProfile(input.workspaceId);
+  if (!profile || profile.profileVersionId !== recovery.profileVersionId) {
+    throw new Error(
+      "The Company Intelligence version used by this campaign is no longer published.",
+    );
+  }
+  const offeringReference = jsonObject(jsonArray(recovery.offeringReferences)[0]);
+  const offeringVersionId = jsonString(offeringReference.offeringVersionId);
+  const offering = profile.offerings.find(
+    (candidate) => candidate.offeringVersionId === offeringVersionId,
+  );
+  if (!offering) {
+    throw new Error("The offering used by this campaign is no longer available.");
+  }
+  const geography = campaignGeographyV2Schema.parse(recovery.geography);
+  const objective = campaignObjectiveV2Schema.parse(recovery.objective);
+  const hypothesis = jsonObject(recovery.initialHypothesis);
+  const confirmedBrief = parseConfirmedCampaignBrief(
+    {
+      geography: {
+        countryCodes: geography.countryCodes,
+        regionLabel: geography.displayName,
+        primaryLanguage: geography.workingLanguages[0] ?? "English",
+      },
+      offering: {
+        profileOfferingIds: [offering.stableKey],
+        title: offering.name,
+        summary: offering.shortDescription,
+        valueProposition:
+          offering.commercialMechanics.valueProposition.join(" ") ||
+          offering.shortDescription,
+        rationale: "Recovered from the campaign's frozen offering selection.",
+      },
+      targetClient: hypothesis.targetClient,
+      targetSegments: hypothesis.targetSegments,
+      desiredQualifiedCompanies: recovery.requestedVolume,
+    },
+    new Set([offering.stableKey]),
+  );
+  const storedContext = jsonObject(recovery.compiledContext);
+  if (
+    !recovery.compiledContextHash ||
+    jsonString(storedContext.contextHash) !== recovery.compiledContextHash
+  ) {
+    throw new Error("The frozen Campaign Strategy context is incomplete.");
+  }
+  const applicableRules = [
+    ...jsonArray(storedContext.applicableProfileRules),
+    ...jsonArray(storedContext.applicableOfferingRules),
+  ].map((rule) => intelligenceRuleSchema.parse(rule));
+  const draft = buildNativeCampaignStrategyV2({
+    campaignId: input.campaignExternalId,
+    strategyDraftId: recovery.id,
+    profileVersionId: recovery.profileVersionId,
+    offering,
+    confirmedBrief,
+    objectiveCode: objective.code,
+    geography,
+    applicableProfileRules: applicableRules,
+  });
+  const compilation = compileCampaignStrategyV2({
+    draft,
+    compiledContextHash: recovery.compiledContextHash,
+  });
+  await persistCampaignStrategyV2Compilation({
+    workspaceId: input.workspaceId,
+    strategyDraftId: recovery.id,
+    compilation,
+  });
+  return { strategyDraftId: recovery.id };
 }
 
-function objectiveLabel(value: ReturnType<typeof resolveObjective>) {
-  return `Find ${value.replaceAll("_", " ")}`;
+function jsonObject(value: Json | undefined): Record<string, Json | undefined> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value as Record<string, Json | undefined>;
 }
 
-function objectValue(value: Json) {
-  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+function jsonArray(value: Json | undefined): Json[] {
+  return Array.isArray(value) ? value : [];
 }
 
-function stringArray(value: Json | undefined) {
-  if (typeof value === "string" && value.trim()) return [value.trim()];
-  return Array.isArray(value)
-    ? value.filter((item): item is string => typeof item === "string" && Boolean(item))
-    : [];
+function jsonString(value: Json | undefined) {
+  return typeof value === "string" ? value : "";
 }

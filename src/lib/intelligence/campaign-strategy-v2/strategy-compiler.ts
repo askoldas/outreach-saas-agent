@@ -1,7 +1,7 @@
 import { campaignStrategyV2Schema, type CampaignStrategyV2 } from "./schemas.ts";
 import { hashCanonical } from "./context-compiler.ts";
 
-export const campaignStrategyCompilerVersion = "campaign-strategy/v2.0";
+export const campaignStrategyCompilerVersion = "campaign-strategy/v2.1-native";
 
 export type CampaignStrategyCompilation = {
   strategy: CampaignStrategyV2;

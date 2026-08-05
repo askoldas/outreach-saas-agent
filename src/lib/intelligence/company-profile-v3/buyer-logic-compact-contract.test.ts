@@ -5,51 +5,57 @@ import {
   profileV3TaskDefinitions,
 } from "./task-contracts.ts";
 
-test("buyer logic reserves enough output budget while using minimal reasoning", () => {
-  const definition = profileV3TaskDefinitions.find(
-    (candidate) => candidate.taskId === "profile.buyer_logic",
-  );
+test(
+  "buyer logic reserves enough output budget while using minimal reasoning",
+  () => {
+    const definition = profileV3TaskDefinitions.find(
+      (candidate) => candidate.taskId === "profile.buyer_logic",
+    );
 
-  assert.ok(definition);
-  assert.equal(definition.maxCompletionTokens, 6_000);
-  assert.equal(definition.reasoningClass, "minimal");
-  assert.equal(
-    definition.schemaVersion,
-    "profile-buyer-logic-schema-v7-compact-sharded",
-  );
-  assert.match(definition.promptVersion, /-v8$/);
-});
+    assert.ok(definition);
+    assert.equal(definition.maxCompletionTokens, 6_000);
+    assert.equal(definition.reasoningClass, "minimal");
+    assert.equal(
+      definition.schemaVersion,
+      "profile-buyer-logic-schema-v7-compact-sharded",
+    );
+    assert.match(definition.promptVersion, /-v8$/);
+  },
+);
 
-test("buyer logic shard rejects output that grows beyond the compact contract", () => {
-  const base = buyerOutput();
-  assert.doesNotThrow(() => profileBuyerLogicShardOutputSchema.parse(base));
+test(
+  "buyer logic shard rejects output that grows beyond the compact contract",
+  () => {
+    const base = buyerOutput();
+    assert.doesNotThrow(() => profileBuyerLogicShardOutputSchema.parse(base));
 
-  assert.throws(() =>
-    profileBuyerLogicShardOutputSchema.parse({
-      ...base,
-      offeringBuyerLogic: [
-        {
-          ...base.offeringBuyerLogic[0],
-          whyBuy: ["one", "two", "three", "four", "five"],
-        },
-      ],
-    }),
-  );
+    assert.throws(() =>
+      profileBuyerLogicShardOutputSchema.parse({
+        ...base,
+        offeringBuyerLogic: [
+          {
+            ...base.offeringBuyerLogic[0],
+            whyBuy: ["one", "two", "three", "four", "five"],
+          },
+        ],
+      }),
+    );
 
-  assert.throws(() =>
-    profileBuyerLogicShardOutputSchema.parse({
-      ...base,
-      archetypes: [archetype("one"), archetype("two"), archetype("three")],
-    }),
-  );
+    assert.throws(() =>
+      profileBuyerLogicShardOutputSchema.parse({
+        ...base,
+        archetypes: [archetype("one"), archetype("two"), archetype("three")],
+      }),
+    );
 
-  assert.throws(() =>
-    profileBuyerLogicShardOutputSchema.parse({
-      ...base,
-      proposedOfferingRules: [rule("one"), rule("two")],
-    }),
-  );
-});
+    assert.throws(() =>
+      profileBuyerLogicShardOutputSchema.parse({
+        ...base,
+        proposedOfferingRules: [rule("one"), rule("two")],
+      }),
+    );
+  },
+);
 
 function buyerOutput() {
   return {

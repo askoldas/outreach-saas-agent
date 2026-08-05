@@ -25,3 +25,10 @@ test("attempt recorder persists success and failure diagnostics with service rol
   assert.match(repository, /error_code/);
   assert.match(repository, /model_route_version/);
 });
+
+test("optional attempt telemetry cannot fail the primary Intelligence task", () => {
+  assert.match(repository, /strict\?: boolean/);
+  assert.match(repository, /const \{ strict = false/);
+  assert.match(repository, /if \(strict\) throw error/);
+  assert.match(repository, /console\.error/);
+});

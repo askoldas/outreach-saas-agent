@@ -5,6 +5,7 @@ import test from "node:test";
 const form = readFileSync("src/features/campaigns/CampaignBriefForm.tsx", "utf8");
 const actions = readFileSync("src/server/campaigns/actions.ts", "utf8");
 const proposalTask = readFileSync("src/lib/ai/campaign-brief-proposal.ts", "utf8");
+const targetCards = readFileSync("src/features/guided/SuggestionCards.tsx", "utf8");
 const newCampaignPage = readFileSync("src/app/(app)/campaigns/new/page.tsx", "utf8");
 const profilePage = readFileSync("src/app/(app)/company-profile/page.tsx", "utf8");
 const strategyPage = readFileSync(
@@ -42,6 +43,16 @@ test("incompatible generated relationships cannot reach Strategy creation", () =
   assert.match(proposalTask, /Generate the target organizations again/);
   assert.match(form, /incompatibleSelectedRelationship/);
   assert.match(form, /Generate target organizations again/);
+});
+
+test("low-discoverability targets require refinement before confirmation", () => {
+  assert.match(form, /assessCampaignTargetDiscoverability/);
+  assert.match(form, /segment\.discoverability !== "low"/);
+  assert.match(form, /Some targets need refinement/);
+  assert.match(form, /Generate another suggestion/);
+  assert.match(form, /disabled=\{segment\.discoverability === "low"\}/);
+  assert.match(targetCards, /Refine target before including/);
+  assert.match(targetCards, /discoverability/);
 });
 
 test("native campaign creation creates a review draft without a V1 strategy or auto-start", () => {

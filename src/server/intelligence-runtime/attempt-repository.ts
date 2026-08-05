@@ -1,14 +1,31 @@
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { IntelligenceAttemptRecord } from "@/lib/intelligence/runtime/execute-ai-task";
 
-export function createIntelligenceAttemptRecorder(input: {
+type IntelligenceAttemptRecorderInput = {
   workspaceId: string;
   cacheKey?: string;
   frozenInputHash?: string;
   metadata?: Record<string, unknown>;
-}) {
-  return (attempt: IntelligenceAttemptRecord) =>
-    recordIntelligenceAttempt({ ...input, attempt });
+  strict?: boolean;
+};
+
+export function createIntelligenceAttemptRecorder(
+  input: IntelligenceAttemptRecorderInput,
+) {
+  const { strict = false, ...recordInput } = input;
+  return async (attempt: IntelligenceAttemptRecord) => {
+    try {
+      await recordIntelligenceAttempt({ ...recordInput, attempt });
+    } catch (error) {
+      if (strict) throw error;
+      console.error("Could not record optional Intelligence AI attempt telemetry.", {
+        attempt: attempt.attempt,
+        taskId: attempt.taskId,
+        workspaceId: input.workspaceId,
+        error: errorMessage(error),
+      });
+    }
+  };
 }
 
 export async function recordIntelligenceAttempt(input: {
@@ -57,4 +74,8 @@ export async function recordIntelligenceAttempt(input: {
       completed_at: input.attempt.completedAt,
     });
   if (error) throw new Error(`Could not record Intelligence AI attempt: ${error.message}`);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unknown attempt telemetry error.";
 }

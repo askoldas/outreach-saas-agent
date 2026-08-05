@@ -116,28 +116,39 @@ test("commercial synthesis compacts verbose role descriptions into bounded label
   assert.equal(parsed.primaryRoles[0]!.role.endsWith(" "), false);
 });
 
-test("profile buyer rules expose only durable profile scopes", () => {
+test("profile buyer rules expose only durable, compact profile scopes", () => {
   const definition = profileV3TaskDefinitions.find(
     ({ taskId }) => taskId === "profile.buyer_logic",
   );
   assert.ok(definition);
-  assert.equal(definition.schemaVersion, "profile-buyer-logic-schema-v6-sharded");
-  assert.match(definition.promptVersion, /-v7$/);
+  assert.equal(
+    definition.schemaVersion,
+    "profile-buyer-logic-schema-v7-compact-sharded",
+  );
+  assert.match(definition.promptVersion, /-v8$/);
   const schema = JSON.stringify(z.toJSONSchema(definition.outputSchema));
   assert.match(schema, /"scope":\{"type":"string","enum":\["workspace","offering"\]\}/);
   assert.doesNotMatch(schema, /"scope"[\s\S]*?"candidate"/);
   assert.match(definition.description, /never campaign or candidate scope/i);
   assert.match(definition.description, /one exact supplied offeringKey/i);
-  assert.match(definition.description, /exactly one offeringBuyerLogic/i);
+  assert.match(definition.description, /at most two distinct high-value archetypes/i);
+  assert.match(definition.description, /at most one rule/i);
+  assert.match(definition.description, /prefer an empty array over speculation/i);
   assert.match(schema, /"offeringBuyerLogic"/);
   assert.match(schema, /"likelyDecisionRoles"/);
   assert.match(schema, /"positiveEvidenceSignals"/);
-  assert.match(schema, /"archetypes"[\s\S]*?"maxItems":36/);
-  assert.equal(definition.maxCompletionTokens, 4_000);
-  const shardSchema = JSON.stringify(z.toJSONSchema(profileBuyerLogicShardOutputSchema));
-  assert.match(shardSchema, /"offeringBuyerLogic"[\s\S]*?"minItems":1[\s\S]*?"maxItems":1/);
-  assert.match(shardSchema, /"archetypes"[\s\S]*?"maxItems":3/);
-  assert.match(shardSchema, /"proposedOfferingRules"[\s\S]*?"maxItems":2/);
+  assert.match(schema, /"archetypes"[\s\S]*?"maxItems":24/);
+  assert.equal(definition.maxCompletionTokens, 6_000);
+  assert.equal(definition.reasoningClass, "minimal");
+
+  const shardSchema = z.toJSONSchema(profileBuyerLogicShardOutputSchema) as {
+    properties?: Record<string, { minItems?: number; maxItems?: number }>;
+  };
+  assert.equal(shardSchema.properties?.offeringBuyerLogic?.minItems, 1);
+  assert.equal(shardSchema.properties?.offeringBuyerLogic?.maxItems, 1);
+  assert.equal(shardSchema.properties?.archetypes?.maxItems, 2);
+  assert.equal(shardSchema.properties?.proposedOfferingRules?.maxItems, 1);
+  assert.equal(shardSchema.properties?.unresolvedQuestions?.maxItems, 3);
 });
 
 test("profile clarification questions are always optional", () => {

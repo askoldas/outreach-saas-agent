@@ -25,7 +25,11 @@ export const createCompanyIntelligenceV3Task = task<
 >({
   id: "create-company-intelligence-v3",
   retry: {
-    maxAttempts: 1,
+    maxAttempts: 3,
+    minTimeoutInMs: 5_000,
+    maxTimeoutInMs: 30_000,
+    factor: 2,
+    randomize: true,
   },
   onFailure: async ({ payload, error }) =>
     failProfileV3Draft({

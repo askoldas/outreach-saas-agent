@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assessCampaignTargetDiscoverability,
   assertCampaignTargetIsDiscoverable,
   parseTargetSegments,
   type TargetSegment,
@@ -73,4 +74,29 @@ test("broad manufacturers retain several coherent target routes", () => {
   ]);
   assert.equal(segments.length, 3);
   assert.equal(new Set(segments.map((segment) => segment.id)).size, 3);
+});
+
+test("a low AI label is preserved until the target is explicitly refined", () => {
+  const [parsed] = parseTargetSegments([target({ discoverability: "low" })]);
+  assert.equal(parsed?.discoverability, "low");
+  assert.equal(assessCampaignTargetDiscoverability(target()), "high");
+});
+
+test("a broad suggested target remains available for refinement but cannot be confirmed", () => {
+  const broad = target({
+    organizationTypes: ["Organizations"],
+    industries: [],
+    geographies: ["Latvia"],
+    characteristics: [],
+    buyingSignals: [],
+    discoverability: "high",
+  });
+  const [suggested] = parseTargetSegments([broad]);
+  assert.equal(suggested?.discoverability, "high");
+  assert.equal(assessCampaignTargetDiscoverability(suggested!), "low");
+
+  assert.throws(
+    () => parseTargetSegments([{ ...broad, status: "confirmed" }]),
+    /must be searchable/,
+  );
 });

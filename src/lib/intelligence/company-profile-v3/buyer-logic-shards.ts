@@ -4,6 +4,8 @@ import {
   profileOfferingDecompositionOutputSchema,
 } from "./task-contracts.ts";
 
+const maxMergedUnresolvedQuestions = 12;
+
 export function buyerLogicShardContexts(context: unknown) {
   const source = objectValue(context);
   const previous = Array.isArray(source.previousStageOutputs)
@@ -62,7 +64,7 @@ export function mergeBuyerLogicShardOutputs(
     proposedOfferingRules: [...rules.values()],
     unresolvedQuestions: [
       ...new Set(outputs.flatMap((item) => item.unresolvedQuestions)),
-    ],
+    ].slice(0, maxMergedUnresolvedQuestions),
   });
 }
 

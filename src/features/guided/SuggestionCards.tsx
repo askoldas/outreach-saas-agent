@@ -120,10 +120,14 @@ export function TargetSuggestionCard({
   segment,
   selected,
   onToggle,
+  disabled = false,
+  disabledReason,
 }: {
   segment: TargetSegment;
   selected: boolean;
   onToggle: () => void;
+  disabled?: boolean;
+  disabledReason?: string;
 }) {
   return (
     <article className={styles.card} data-selected={selected}>
@@ -138,6 +142,9 @@ export function TargetSuggestionCard({
           </Badge>
           <Badge tone={segment.confidence === "low" ? "warning" : "blue"}>
             {segment.confidence} confidence
+          </Badge>
+          <Badge tone={segment.discoverability === "low" ? "warning" : "blue"}>
+            {segment.discoverability} discoverability
           </Badge>
         </div>
       </div>
@@ -155,6 +162,7 @@ export function TargetSuggestionCard({
           <dd>{segment.likelyBuyerRoles.join(", ") || "Needs confirmation"}</dd>
         </div>
       </dl>
+      {disabledReason ? <p>{disabledReason}</p> : null}
       <details>
         <summary>View why suggested and discovery feasibility</summary>
         <p>{segment.rationale}</p>
@@ -167,8 +175,17 @@ export function TargetSuggestionCard({
           </ul>
         ) : null}
       </details>
-      <Button type="button" variant={selected ? "ghost" : "primary"} onClick={onToggle}>
-        {selected ? "Remove from Campaign" : "Include target"}
+      <Button
+        type="button"
+        variant={selected ? "ghost" : "primary"}
+        onClick={onToggle}
+        disabled={disabled && !selected}
+      >
+        {selected
+          ? "Remove from Campaign"
+          : disabled
+            ? "Refine target before including"
+            : "Include target"}
       </Button>
     </article>
   );

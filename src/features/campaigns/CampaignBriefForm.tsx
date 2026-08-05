@@ -9,9 +9,10 @@ import type {
   CampaignBriefProposal,
   ConfirmedCampaignBrief,
 } from "@/lib/campaign-workflow/contracts";
-import type {
-  B2BRelationshipType,
-  TargetSegment,
+import {
+  assessCampaignTargetDiscoverability,
+  type B2BRelationshipType,
+  type TargetSegment,
 } from "@/lib/campaign-workflow/target-segments";
 import type {
   CampaignPlanningOffering,
@@ -116,7 +117,41 @@ export function CampaignBriefForm({
   const [pending, startTransition] = useTransition();
 
   const geographyLabel = regionLabel || countryCodes.join(", ");
-  const incompatibleSelectedRelationship = proposal?.targetSegments.find(
+  const editableTargetSegments = useMemo(() => {
+    if (!proposal) return [];
+    return proposal.targetSegments.map((segment, index) => {
+      const editedSegment: TargetSegment = {
+        ...segment,
+        ...(index === 0
+          ? {
+              organizationTypes: split(companyTypes),
+              industries: split(industries),
+              characteristics: split(characteristics),
+              buyingSignals: split(positiveSignals),
+              likelyBuyerRoles: split(roles),
+              exclusions: split(exclusions),
+              summary: targetSummary,
+            }
+          : {}),
+        geographies: countryCodes,
+      };
+      return {
+        ...editedSegment,
+        discoverability: assessCampaignTargetDiscoverability(editedSegment),
+      };
+    });
+  }, [
+    proposal,
+    companyTypes,
+    industries,
+    characteristics,
+    positiveSignals,
+    roles,
+    exclusions,
+    targetSummary,
+    countryCodes,
+  ]);
+  const incompatibleSelectedRelationship = editableTargetSegments.find(
     (segment) =>
       selectedTargetSegmentIds.includes(segment.id) &&
       !isObjectiveRelationshipCompatible(
@@ -124,17 +159,26 @@ export function CampaignBriefForm({
         segment.relationshipType,
       ),
   )?.relationshipType;
+  const selectedLowDiscoverabilityTarget = editableTargetSegments.find(
+    (segment) =>
+      selectedTargetSegmentIds.includes(segment.id) && segment.discoverability === "low",
+  );
+  const lowDiscoverabilityTargets = editableTargetSegments.filter(
+    (segment) => segment.discoverability === "low",
+  );
   const targetClientIssue = !targetSummary.trim()
     ? "Add a target-client summary to continue."
     : !split(companyTypes).length
       ? "Add at least one company type to continue."
       : !selectedTargetSegmentIds.length
         ? "Include at least one organization target to continue."
-        : incompatibleSelectedRelationship
-          ? `The selected ${incompatibleSelectedRelationship.replaceAll("_", " ")} target is incompatible with the ${campaignObjective.replaceAll("_", " ")} objective. Generate target organizations again.`
-          : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
-            ? "Answer the clarification above to continue."
-            : "";
+        : selectedLowDiscoverabilityTarget
+          ? `“${selectedLowDiscoverabilityTarget.name}” is too broad or lacks enough searchable signals. Refine the target before continuing.`
+          : incompatibleSelectedRelationship
+            ? `The selected ${incompatibleSelectedRelationship.replaceAll("_", " ")} target is incompatible with the ${campaignObjective.replaceAll("_", " ")} objective. Generate target organizations again.`
+            : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
+              ? "Answer the clarification above to continue."
+              : "";
   const confirmedBrief = useMemo<ConfirmedCampaignBrief | null>(() => {
     if (!proposal) return null;
     return {
@@ -163,26 +207,15 @@ export function CampaignBriefForm({
         recommendedDecisionMakerRoles: split(roles),
         summary: targetSummary,
       },
-      targetSegments: proposal.targetSegments.map((segment, index) => ({
+      targetSegments: editableTargetSegments.map((segment) => ({
         ...segment,
-        ...(index === 0
-          ? {
-              organizationTypes: split(companyTypes),
-              industries: split(industries),
-              characteristics: split(characteristics),
-              buyingSignals: split(positiveSignals),
-              likelyBuyerRoles: split(roles),
-              exclusions: split(exclusions),
-              summary: targetSummary,
-            }
-          : {}),
-        geographies: countryCodes,
         status: selectedTargetSegmentIds.includes(segment.id) ? "confirmed" : "rejected",
       })),
       desiredQualifiedCompanies,
     };
   }, [
     proposal,
+    editableTargetSegments,
     selectedTargetSegmentIds,
     selectedOfferingId,
     countryCodes,
@@ -277,7 +310,10 @@ export function CampaignBriefForm({
     setSelectedOfferingId(next.offering.profileOfferingIds[0] ?? "");
     setSelectedTargetSegmentIds(
       next.targetSegments
-        .filter((segment) => segment.status !== "rejected")
+        .filter(
+          (segment) =>
+            segment.status !== "rejected" && segment.discoverability !== "low",
+        )
         .map((segment) => segment.id),
     );
     setClarificationAnswer("");
@@ -301,6 +337,15 @@ export function CampaignBriefForm({
   }
 
   function toggleTargetSegment(segmentId: string) {
+    const segment = editableTargetSegments.find((candidate) => candidate.id === segmentId);
+    const selected = selectedTargetSegmentIds.includes(segmentId);
+    if (!selected && segment?.discoverability === "low") {
+      setProposalError(
+        `“${segment.name}” cannot be included yet. Refine its organization type and discovery signals, or generate another suggestion.`,
+      );
+      return;
+    }
+    setProposalError("");
     setSelectedTargetSegmentIds((current) =>
       current.includes(segmentId)
         ? current.filter((id) => id !== segmentId)
@@ -492,22 +537,53 @@ export function CampaignBriefForm({
               Profile.
             </p>
           </div>
+          {lowDiscoverabilityTargets.length ? (
+            <div className={styles.proposal}>
+              <strong>Some targets need refinement</strong>
+              <p>
+                Low-discoverability targets are not selected automatically. Add a concrete
+                organization type and useful discovery signals below, or generate another
+                suggestion.
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={generateProposal}
+              >
+                Generate another suggestion
+              </Button>
+            </div>
+          ) : null}
           <div className={styles.options}>
-            {proposal.targetSegments.map((segment) => (
+            {editableTargetSegments.map((segment) => (
               <TargetSuggestionCard
                 key={segment.id}
                 segment={segment}
                 selected={selectedTargetSegmentIds.includes(segment.id)}
+                disabled={segment.discoverability === "low"}
+                disabledReason={
+                  segment.discoverability === "low"
+                    ? "This target is too broad or lacks concrete discovery signals. Refine it in Advanced targeting before including it."
+                    : undefined
+                }
                 onToggle={() => toggleTargetSegment(segment.id)}
               />
             ))}
           </div>
-          <details className={styles.proposal}>
-            <summary>Advanced targeting</summary>
+          <details
+            className={styles.proposal}
+            open={lowDiscoverabilityTargets.length > 0 ? true : undefined}
+          >
+            <summary>
+              {lowDiscoverabilityTargets.length
+                ? "Improve target discoverability"
+                : "Advanced targeting"}
+            </summary>
             <div className={shared.stack}>
               <p>
-                Refine discovery signals and exclusions only when the recommended target
-                needs additional constraints.
+                Refine organization types, industries, business characteristics and buying
+                signals when the recommended target needs to become more searchable.
               </p>
               <Field
                 label="Summary"

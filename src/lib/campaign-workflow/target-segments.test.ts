@@ -76,11 +76,9 @@ test("broad manufacturers retain several coherent target routes", () => {
   assert.equal(new Set(segments.map((segment) => segment.id)).size, 3);
 });
 
-test("discoverability is recalculated instead of trusting a stale AI label", () => {
-  const [parsed] = parseTargetSegments([
-    target({ discoverability: "low" }),
-  ]);
-  assert.equal(parsed?.discoverability, "high");
+test("a low AI label is preserved until the target is explicitly refined", () => {
+  const [parsed] = parseTargetSegments([target({ discoverability: "low" })]);
+  assert.equal(parsed?.discoverability, "low");
   assert.equal(assessCampaignTargetDiscoverability(target()), "high");
 });
 
@@ -94,7 +92,8 @@ test("a broad suggested target remains available for refinement but cannot be co
     discoverability: "high",
   });
   const [suggested] = parseTargetSegments([broad]);
-  assert.equal(suggested?.discoverability, "low");
+  assert.equal(suggested?.discoverability, "high");
+  assert.equal(assessCampaignTargetDiscoverability(suggested!), "low");
 
   assert.throws(
     () => parseTargetSegments([{ ...broad, status: "confirmed" }]),

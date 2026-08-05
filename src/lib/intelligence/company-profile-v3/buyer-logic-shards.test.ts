@@ -23,26 +23,17 @@ test("buyer logic creates one compact context per completed offering", () => {
     ],
   });
 
-  assert.deepEqual(
-    shards.map((shard) => shard.offeringKey),
-    ["one", "two"],
-  );
+  assert.deepEqual(shards.map((shard) => shard.offeringKey), ["one", "two"]);
   for (const shard of shards) {
     const previous = shard.context.previousStageOutputs;
     assert.equal(previous.length, 2);
-    assert.equal(
-      previous.some((stage) => stage.taskId === "profile.fact_extraction"),
-      false,
-    );
+    assert.equal(previous.some((stage) => stage.taskId === "profile.fact_extraction"), false);
     const decomposition = previous.find(
       (stage) => stage.taskId === "profile.offering_decomposition",
     );
     assert.deepEqual(
-      (
-        decomposition?.output as {
-          offerings: Array<{ offeringKey: string }>;
-        }
-      ).offerings.map((item) => item.offeringKey),
+      (decomposition?.output as { offerings: Array<{ offeringKey: string }> }).offerings
+        .map((item) => item.offeringKey),
       [shard.offeringKey],
     );
   }
@@ -57,10 +48,11 @@ test("buyer logic merges exact offering shards and rejects cross-offering output
     merged.offeringBuyerLogic.map((logic) => logic.offeringKey),
     ["one", "two"],
   );
-  assert.throws(() =>
-    mergeBuyerLogicShardOutputs([
+  assert.throws(
+    () => mergeBuyerLogicShardOutputs([
       { offeringKey: "one", output: buyerOutput("two") },
     ]),
+    /outside offering one/,
   );
 });
 
@@ -86,21 +78,19 @@ function offering(offeringKey: string) {
 
 function buyerOutput(offeringKey: string) {
   return {
-    offeringBuyerLogic: [
-      {
-        offeringKey,
-        whyBuy: ["Solve a defined problem"],
-        requiredConditions: [],
-        preferredConditions: [],
-        likelyTriggers: [],
-        incompatibleConditions: [],
-        likelyDecisionRoles: [],
-        positiveEvidenceSignals: [],
-        negativeEvidenceSignals: [],
-        evidenceIds: [],
-        confidence: 0.7,
-      },
-    ],
+    offeringBuyerLogic: [{
+      offeringKey,
+      whyBuy: ["Solve a defined problem"],
+      requiredConditions: [],
+      preferredConditions: [],
+      likelyTriggers: [],
+      incompatibleConditions: [],
+      likelyDecisionRoles: [],
+      positiveEvidenceSignals: [],
+      negativeEvidenceSignals: [],
+      evidenceIds: [],
+      confidence: 0.7,
+    }],
     archetypes: [],
     proposedOfferingRules: [],
     unresolvedQuestions: [],

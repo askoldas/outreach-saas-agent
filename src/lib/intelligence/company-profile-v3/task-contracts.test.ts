@@ -140,11 +140,15 @@ test("profile buyer rules expose only durable, compact profile scopes", () => {
   assert.match(schema, /"archetypes"[\s\S]*?"maxItems":24/);
   assert.equal(definition.maxCompletionTokens, 6_000);
   assert.equal(definition.reasoningClass, "minimal");
-  const shardSchema = JSON.stringify(z.toJSONSchema(profileBuyerLogicShardOutputSchema));
-  assert.match(shardSchema, /"offeringBuyerLogic"[\s\S]*?"minItems":1[\s\S]*?"maxItems":1/);
-  assert.match(shardSchema, /"archetypes"[\s\S]*?"maxItems":2/);
-  assert.match(shardSchema, /"proposedOfferingRules"[\s\S]*?"maxItems":1/);
-  assert.match(shardSchema, /"unresolvedQuestions"[\s\S]*?"maxItems":3/);
+
+  const shardSchema = z.toJSONSchema(profileBuyerLogicShardOutputSchema) as {
+    properties?: Record<string, { minItems?: number; maxItems?: number }>;
+  };
+  assert.equal(shardSchema.properties?.offeringBuyerLogic?.minItems, 1);
+  assert.equal(shardSchema.properties?.offeringBuyerLogic?.maxItems, 1);
+  assert.equal(shardSchema.properties?.archetypes?.maxItems, 2);
+  assert.equal(shardSchema.properties?.proposedOfferingRules?.maxItems, 1);
+  assert.equal(shardSchema.properties?.unresolvedQuestions?.maxItems, 3);
 });
 
 test("profile clarification questions are always optional", () => {

@@ -13,7 +13,10 @@ test("buyer logic reserves enough output budget while using minimal reasoning", 
   assert.ok(definition);
   assert.equal(definition.maxCompletionTokens, 6_000);
   assert.equal(definition.reasoningClass, "minimal");
-  assert.equal(definition.schemaVersion, "profile-buyer-logic-schema-v7-compact-sharded");
+  assert.equal(
+    definition.schemaVersion,
+    "profile-buyer-logic-schema-v7-compact-sharded",
+  );
   assert.match(definition.promptVersion, /-v8$/);
 });
 

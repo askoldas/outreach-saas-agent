@@ -53,6 +53,23 @@ const consumerOnlyTerms = [
   "households",
 ];
 
+const genericOrganizationLabels = new Set([
+  "business",
+  "businesses",
+  "buyer",
+  "buyers",
+  "company",
+  "companies",
+  "customer",
+  "customers",
+  "organization",
+  "organizations",
+  "partner",
+  "partners",
+  "target companies",
+  "target organizations",
+]);
+
 export function parseTargetSegments(value: unknown): TargetSegment[] {
   if (!Array.isArray(value)) {
     throw new Error("Campaign proposal returned invalid target segments.");
@@ -66,6 +83,39 @@ export function parseTargetSegments(value: unknown): TargetSegment[] {
     throw new Error("Campaign proposal returned duplicate target segment IDs.");
   }
   return segments;
+}
+
+export function assessCampaignTargetDiscoverability(
+  segment: Pick<
+    TargetSegment,
+    | "organizationTypes"
+    | "industries"
+    | "companySize"
+    | "geographies"
+    | "characteristics"
+    | "buyingSignals"
+  >,
+): TargetSegment["discoverability"] {
+  const organizationTypes = segment.organizationTypes.map(normalize).filter(Boolean);
+  if (!organizationTypes.length || organizationTypes.every(isConsumerOnlyLabel)) {
+    return "low";
+  }
+
+  const hasSpecificOrganizationType = organizationTypes.some(isSpecificOrganizationLabel);
+  const hasCompanySize = Boolean(
+    segment.companySize?.minimumEmployees || segment.companySize?.maximumEmployees,
+  );
+  const score =
+    (hasSpecificOrganizationType ? 2 : 0) +
+    (segment.industries.some(hasText) ? 1 : 0) +
+    (segment.characteristics.some(hasText) ? 1 : 0) +
+    (segment.buyingSignals.some(hasText) ? 1 : 0) +
+    (segment.geographies.some(hasText) ? 1 : 0) +
+    (hasCompanySize ? 1 : 0);
+
+  if (score >= 4) return "high";
+  if (score >= 2) return "medium";
+  return "low";
 }
 
 export function assertCampaignTargetIsDiscoverable(segment: TargetSegment) {
@@ -86,13 +136,16 @@ export function assertCampaignTargetIsDiscoverable(segment: TargetSegment) {
   ) {
     throw new Error("Consumer alone cannot be a Campaign target industry.");
   }
-  if (segment.discoverability === "low" && segment.status === "confirmed") {
+  if (
+    assessCampaignTargetDiscoverability(segment) === "low" &&
+    segment.status === "confirmed"
+  ) {
     throw new Error("A confirmed Campaign target must be searchable.");
   }
 }
 
 export function isConsumerOnlyLabel(value: string) {
-  const normalized = value.trim().toLowerCase();
+  const normalized = normalize(value);
   return consumerOnlyTerms.some(
     (term) => normalized === term || normalized.startsWith(`${term} `),
   );
@@ -154,8 +207,27 @@ function parseTargetSegment(value: unknown): TargetSegment {
       "status",
     ),
   };
-  assertCampaignTargetIsDiscoverable(segment);
-  return segment;
+  const normalizedSegment: TargetSegment = {
+    ...segment,
+    discoverability: assessCampaignTargetDiscoverability(segment),
+  };
+  assertCampaignTargetIsDiscoverable(normalizedSegment);
+  return normalizedSegment;
+}
+
+function isSpecificOrganizationLabel(value: string) {
+  if (genericOrganizationLabels.has(value)) return false;
+  return !/^(organizations?|companies|businesses) (commercially compatible|that could|interested in|relevant to|for the selected)/.test(
+    value,
+  );
+}
+
+function hasText(value: string) {
+  return Boolean(value.trim());
+}
+
+function normalize(value: string) {
+  return value.trim().toLowerCase();
 }
 
 function record(value: unknown, field: string): Record<string, unknown> {

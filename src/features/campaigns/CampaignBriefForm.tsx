@@ -573,7 +573,7 @@ export function CampaignBriefForm({
           </div>
           <details
             className={styles.proposal}
-            defaultOpen={lowDiscoverabilityTargets.length > 0}
+            open={lowDiscoverabilityTargets.length > 0 ? true : undefined}
           >
             <summary>
               {lowDiscoverabilityTargets.length

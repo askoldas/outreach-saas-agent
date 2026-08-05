@@ -38,7 +38,7 @@ import { loadEnabledDiscoveryProviderIds } from "./stage-context";
 const maximumInitialProviderCalls = 12;
 const maximumInitialSegments = 6;
 const maximumResultsPerSegment = 25;
-const normalizationVersion = "web-search-normalization-v2.0";
+const normalizationVersion = "web-search-normalization-v3.0-preclassified";
 const initialPassNumber = 1;
 
 export async function executeInitialDiscoveryStage(input: {
@@ -301,8 +301,10 @@ export async function executeInitialDiscoveryStage(input: {
   });
   const coverageCells = coverageResults.map(({ coverage }) => coverage);
   const discoveryGaps = coverageResults.flatMap(({ gaps }) => gaps);
-  const uniqueCandidateHintCount = new Set(
-    outcomes.flatMap(({ coverageFacts }) => coverageFacts.candidateIdentityHints),
+  const uniquePlausibleCandidateHintCount = new Set(
+    outcomes.flatMap(
+      ({ coverageFacts }) => coverageFacts.plausibleCandidateIdentityHints,
+    ),
   ).size;
   const requestedCandidateCount =
     context.strategy.coverageTarget.minimumUniqueCandidates ??
@@ -321,7 +323,7 @@ export async function executeInitialDiscoveryStage(input: {
     cells: coverageCells,
     gaps: discoveryGaps,
     requestedCandidateCount,
-    currentCandidateCount: uniqueCandidateHintCount,
+    currentPlausibleCandidateCount: uniquePlausibleCandidateHintCount,
     remainingCalls: remainingCallBudget,
     deadlineReached: deadlineReached(
       plan.budgetPolicy.deadlineAt,
@@ -336,11 +338,7 @@ export async function executeInitialDiscoveryStage(input: {
   });
   if (fatalProviderFailure) {
     const providerErrors = [
-      ...new Set(
-        outcomes.flatMap(({ errors }) =>
-          providerErrorMessages(errors),
-        ),
-      ),
+      ...new Set(outcomes.flatMap(({ errors }) => providerErrorMessages(errors))),
     ].slice(0, 3);
     if (providerErrors.length) {
       decision.rationale = `No provider returned source records. ${providerErrors.join(
@@ -370,7 +368,7 @@ export async function executeInitialDiscoveryStage(input: {
     },
   );
   const coverageSummary = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     passNumber: initialPassNumber,
     cells: coverageCells,
     gaps: discoveryGaps,
@@ -380,9 +378,12 @@ export async function executeInitialDiscoveryStage(input: {
     providerCalls: providerCallCount,
     providerRecordsRetrieved: providerRecordCount,
     normalizedProviderCandidates: normalizedCandidateCount,
-    uniqueCandidateGroups: uniqueCandidateHintCount,
+    uniqueCandidateGroups: uniquePlausibleCandidateHintCount,
+    candidatesPrefiltered: outcomes.reduce(
+      (total, { coverageFacts }) => total + coverageFacts.plausibleCandidateCount,
+      0,
+    ),
     canonicalOrganizations: 0,
-    candidatesPrefiltered: 0,
     candidatesResearched: 0,
     candidatesEvaluated: 0,
     eligibleCandidates: 0,
@@ -397,7 +398,7 @@ export async function executeInitialDiscoveryStage(input: {
     ),
     duplicatesOrMergedEntities: Math.max(
       0,
-      normalizedCandidateCount - uniqueCandidateHintCount,
+      normalizedCandidateCount - uniquePlausibleCandidateHintCount,
     ),
   };
   await finalizeDiscoveryPass({
@@ -425,7 +426,7 @@ export async function executeInitialDiscoveryStage(input: {
       providerCallCount,
       providerRecordCount,
       normalizedCandidateCount,
-      uniqueCandidateHintCount,
+      uniqueCandidateHintCount: uniquePlausibleCandidateHintCount,
       continuationDecision: decision,
       stageScope: "initial_semantic_breadth",
     },
@@ -493,6 +494,13 @@ export function buildCoverageMetrics(input: {
     invalidRecordCount: 0,
     languagesAttempted: [],
     normalizedCandidates: 0,
+    validOrganizationPages: 0,
+    sourceOnlyRecordCount: 0,
+    plausibleCandidateCount: 0,
+    plausibleCandidateIdentityHints: [],
+    uniquePlausibleCandidateHints: 0,
+    relationshipCompatibleCandidateCount: 0,
+    geographyPlausibleCandidateCount: 0,
     providerCalls: 0,
     providerExhausted: false,
     providerFailureCount: 0,
@@ -528,6 +536,12 @@ export function buildCoverageMetrics(input: {
     ].sort(),
     rawRecords: facts.rawRecords,
     normalizedCandidates: facts.normalizedCandidates,
+    validOrganizationPages: facts.validOrganizationPages,
+    sourceOnlyRecordCount: facts.sourceOnlyRecordCount,
+    plausibleCandidateCount: facts.plausibleCandidateCount,
+    uniquePlausibleCandidateHints: facts.uniquePlausibleCandidateHints,
+    relationshipCompatibleCandidateCount: facts.relationshipCompatibleCandidateCount,
+    geographyPlausibleCandidateCount: facts.geographyPlausibleCandidateCount,
     uniqueCandidateHints: facts.uniqueCandidateHints,
     invalidRecordCount: facts.invalidRecordCount,
     sourceTypesAttempted: facts.sourceTypesAttempted,

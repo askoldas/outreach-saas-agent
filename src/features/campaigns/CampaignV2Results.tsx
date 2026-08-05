@@ -102,6 +102,10 @@ export function CampaignV2Results({
         <p className={styles.muted}>
           Canonical V2 ranking for Run {results.runId.slice(0, 8)} · {results.runStatus}
         </p>
+        <p className={styles.muted}>
+          Applied memory snapshot:{" "}
+          {results.appliedMemorySnapshotId?.slice(0, 8) ?? "none"}
+        </p>
       </div>
 
       <div className={styles.summary}>
@@ -217,11 +221,7 @@ export function CampaignV2Results({
                       #{candidate.rank} {candidate.name}
                     </strong>
                     {candidate.websiteUrl ? (
-                      <a
-                        href={candidate.websiteUrl}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
+                      <a href={candidate.websiteUrl} rel="noreferrer" target="_blank">
                         {candidate.domain ?? candidate.websiteUrl}
                       </a>
                     ) : (
@@ -266,6 +266,35 @@ export function CampaignV2Results({
                     <div className={styles.detailGrid}>
                       <section>
                         <h3>Assessment</h3>
+                        <p>
+                          <strong>Why discovered:</strong>{" "}
+                          {candidate.provenance.discoveryPurpose ?? "Provider match"}
+                        </p>
+                        <p>
+                          <strong>Query / source path:</strong>{" "}
+                          {candidate.provenance.discoveryQuery ??
+                            "Query text unavailable"}
+                          {candidate.provenance.provider
+                            ? ` · ${candidate.provenance.provider}`
+                            : ""}
+                          {candidate.provenance.sourceType
+                            ? ` · ${candidate.provenance.sourceType}`
+                            : ""}
+                        </p>
+                        <p>
+                          <strong>Preclassification:</strong>{" "}
+                          {candidate.provenance.preclassificationDisposition ??
+                            "not recorded"}
+                          {candidate.provenance.preclassificationConfidence !== null
+                            ? ` · ${formatScore(candidate.provenance.preclassificationConfidence)} confidence`
+                            : ""}
+                        </p>
+                        {candidate.provenance.preclassificationReasons.length ? (
+                          <p className={styles.muted}>
+                            Reasons:{" "}
+                            {candidate.provenance.preclassificationReasons.join(", ")}
+                          </p>
+                        ) : null}
                         <p>{candidate.explanation}</p>
                         <p>
                           <strong>Eligibility:</strong> {candidate.eligibility}
@@ -277,6 +306,17 @@ export function CampaignV2Results({
                         <p>
                           <strong>Identity:</strong> {candidate.identityReviewState} ·{" "}
                           {formatScore(candidate.identityConfidence)}
+                        </p>
+                        <p>
+                          <strong>Resolved identity:</strong> {candidate.name}
+                          {candidate.domain ? ` · ${candidate.domain}` : ""}
+                        </p>
+                        <p>
+                          <strong>First-party evidence:</strong>{" "}
+                          {candidate.provenance.firstParty
+                            ? (candidate.provenance.sourceTitle ??
+                              "Confirmed source page")
+                            : "No first-party discovery source recorded"}
                         </p>
                       </section>
                       <section>

@@ -9,6 +9,8 @@ import {
   loadProviderResult,
   storeProviderResult,
 } from "@/server/execution/provider-result-cache";
+import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
+import { recordIntelligenceCacheHit } from "@/server/intelligence-runtime/event-repository";
 
 type GeneratedDraft = Awaited<ReturnType<typeof generateGroundedDraft>>;
 
@@ -58,8 +60,26 @@ export async function executeDraftGeneration(providerExecutionId: string) {
       providerExecutionId,
       requestHash,
     );
+    if (generated) {
+      await recordIntelligenceCacheHit({
+        workspaceId: execution.workspace_id,
+        taskId: "outreach.grounded_draft",
+        cacheKey: `${providerExecutionId}:primary:${requestHash}`,
+        metadata: { providerExecutionId, campaignCompanyId, campaignContactId },
+      });
+    }
     if (!generated) {
-      generated = await generateGroundedDraft(input.context);
+      generated = await generateGroundedDraft(input.context, {
+        recordAttempt: createIntelligenceAttemptRecorder({
+          workspaceId: execution.workspace_id,
+          frozenInputHash: requestHash,
+          metadata: {
+            providerExecutionId: execution.id,
+            campaignCompanyId,
+            campaignContactId,
+          },
+        }),
+      });
       await storeProviderResult(providerExecutionId, requestHash, generated);
     }
     const completedAt = new Date().toISOString();
@@ -112,7 +132,7 @@ export async function executeDraftGeneration(providerExecutionId: string) {
           : null,
         fallback_used: generated.modelCall.fallbackUsed,
         prompt_version: draftPromptVersion,
-        schema_version: "outreach-draft-v1",
+        schema_version: "outreach-draft/v2",
         request_hash: requestHash,
         status: "completed",
         input_units: generated.modelCall.inputTokens,

@@ -15,12 +15,26 @@ export type PersistedProviderCandidateFact = {
   provider_source_record_id: string;
 };
 
+export type PersistedProviderPreclassificationFact = {
+  disposition: "candidate" | "source_only" | "reject" | "needs_review";
+  objective_compatibility: "compatible" | "incompatible" | "unknown";
+  geography_plausible: boolean | null;
+  provider_source_record_id: string;
+};
+
 export type PersistedProviderCoverageSummary = {
   candidateIdentityHints: string[];
   invalidRecordCount: number;
+  plausibleCandidateIdentityHints?: string[];
+  plausibleCandidateCount?: number;
+  geographyPlausibleCandidateCount?: number;
   queryResultCounts: Record<string, number>;
+  relationshipCompatibleCandidateCount?: number;
+  sourceOnlyRecordCount?: number;
   sourceTypes: string[];
   uniqueCandidateHintCount: number;
+  uniquePlausibleCandidateHintCount?: number;
+  validOrganizationPageCount?: number;
 };
 
 export type SettledDiscoveryQueryAuditRecord = Omit<WebDiscoveryQuery, "status"> & {
@@ -33,19 +47,27 @@ export type ProviderExecutionCoverageFacts = {
   invalidRecordCount: number;
   languagesAttempted: string[];
   normalizedCandidates: number;
+  plausibleCandidateCount: number;
+  geographyPlausibleCandidateCount: number;
+  plausibleCandidateIdentityHints: string[];
   providerCalls: number;
   providerExhausted: boolean;
   providerFailureCount: number;
   queriesExecuted: number;
   queryFamiliesAttempted: string[];
   rawRecords: number;
+  relationshipCompatibleCandidateCount: number;
+  sourceOnlyRecordCount: number;
   sourceTypesAttempted: string[];
   uniqueCandidateHints: number;
+  uniquePlausibleCandidateHints: number;
+  validOrganizationPages: number;
 };
 
 export function summarizePersistedProviderCoverage(input: {
   sources: PersistedProviderSourceFact[];
   candidates: PersistedProviderCandidateFact[];
+  classifications?: PersistedProviderPreclassificationFact[];
 }): PersistedProviderCoverageSummary {
   const queryResultCounts: Record<string, number> = {};
   for (const source of input.sources) {
@@ -57,14 +79,54 @@ export function summarizePersistedProviderCoverage(input: {
       .map(candidateIdentityHint)
       .filter((value): value is string => Boolean(value)),
   );
+  const classificationBySourceId = new Map(
+    (input.classifications ?? []).map((classification) => [
+      classification.provider_source_record_id,
+      classification,
+    ]),
+  );
+  const plausibleCandidates = input.candidates.filter(({ provider_source_record_id }) =>
+    ["candidate", "needs_review"].includes(
+      classificationBySourceId.get(provider_source_record_id)?.disposition ?? "",
+    ),
+  );
+  const plausibleCandidateIdentityHints = sortedUnique(
+    plausibleCandidates
+      .map(candidateIdentityHint)
+      .filter((value): value is string => Boolean(value)),
+  );
+  const plausibleSourceIds = new Set(
+    plausibleCandidates.map(({ provider_source_record_id }) => provider_source_record_id),
+  );
   return {
     candidateIdentityHints,
     invalidRecordCount: input.sources.filter(
       ({ ingestion_status }) => ingestion_status === "failed_normalization",
     ).length,
+    plausibleCandidateIdentityHints,
+    plausibleCandidateCount: plausibleCandidates.length,
+    geographyPlausibleCandidateCount: (input.classifications ?? []).filter(
+      ({ provider_source_record_id, disposition, geography_plausible }) =>
+        plausibleSourceIds.has(provider_source_record_id) &&
+        ["candidate", "needs_review"].includes(disposition) &&
+        geography_plausible === true,
+    ).length,
     queryResultCounts: orderedRecord(queryResultCounts),
     sourceTypes: sortedUnique(input.sources.map(({ source_type }) => source_type)),
+    relationshipCompatibleCandidateCount: (input.classifications ?? []).filter(
+      ({ provider_source_record_id, disposition, objective_compatibility }) =>
+        plausibleSourceIds.has(provider_source_record_id) &&
+        ["candidate", "needs_review"].includes(disposition) &&
+        objective_compatibility === "compatible",
+    ).length,
+    sourceOnlyRecordCount: (input.classifications ?? []).filter(
+      ({ disposition }) => disposition === "source_only",
+    ).length,
     uniqueCandidateHintCount: candidateIdentityHints.length,
+    uniquePlausibleCandidateHintCount: plausibleCandidateIdentityHints.length,
+    validOrganizationPageCount: (input.classifications ?? []).filter(
+      ({ disposition }) => disposition !== "source_only",
+    ).length,
   };
 }
 
@@ -114,14 +176,26 @@ export function reconstructSettledProviderExecution(input: {
       invalidRecordCount: input.execution.coverage.invalidRecordCount,
       languagesAttempted: sortedUnique(attemptedQueries.map(({ language }) => language)),
       normalizedCandidates: nonnegativeInteger(input.execution.normalizedCandidateCount),
+      plausibleCandidateCount: input.execution.coverage.plausibleCandidateCount ?? 0,
+      geographyPlausibleCandidateCount:
+        input.execution.coverage.geographyPlausibleCandidateCount ?? 0,
+      plausibleCandidateIdentityHints: [
+        ...(input.execution.coverage.plausibleCandidateIdentityHints ?? []),
+      ],
       providerCalls,
       providerExhausted: input.execution.exhausted,
       providerFailureCount: jsonArray(input.execution.errors).length,
       queriesExecuted: attemptedQueries.length,
       queryFamiliesAttempted: sortedUnique(attemptedQueries.map(({ family }) => family)),
       rawRecords: nonnegativeInteger(input.execution.providerRecordCount),
+      relationshipCompatibleCandidateCount:
+        input.execution.coverage.relationshipCompatibleCandidateCount ?? 0,
+      sourceOnlyRecordCount: input.execution.coverage.sourceOnlyRecordCount ?? 0,
       sourceTypesAttempted: [...input.execution.coverage.sourceTypes],
       uniqueCandidateHints: input.execution.coverage.uniqueCandidateHintCount,
+      uniquePlausibleCandidateHints:
+        input.execution.coverage.uniquePlausibleCandidateHintCount ?? 0,
+      validOrganizationPages: input.execution.coverage.validOrganizationPageCount ?? 0,
     },
   };
 }

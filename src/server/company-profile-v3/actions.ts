@@ -78,6 +78,62 @@ export async function reviewCompanyProfileV3OfferingAction(formData: FormData) {
   revalidatePath("/company-profile");
 }
 
+export async function updateCompanyProfileV3OfferingAction(formData: FormData) {
+  const context = await reviewContext(formData);
+  const entityId = text(formData, "entityId");
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  const { data: offering, error: loadError } = await supabase
+    .from("company_offering_versions")
+    .select("commercial_mechanics_json,buyer_logic_json")
+    .eq("workspace_id", context.workspaceId)
+    .eq("profile_draft_id", context.draftId)
+    .eq("id", entityId)
+    .single();
+  if (loadError) throw new Error(`Could not load V3 offering: ${loadError.message}`);
+  const mechanics = jsonObject(offering.commercial_mechanics_json);
+  const buyerLogic = jsonObject(offering.buyer_logic_json);
+  const whyBuy = lines(formData, "whyBuy");
+  if (!whyBuy.length) {
+    throw new Error("An active offering requires at least one usable buyer rationale.");
+  }
+  const { error } = await supabase
+    .from("company_offering_versions")
+    .update({
+      name: requiredText(formData, "name"),
+      offering_type: requiredText(formData, "offeringType"),
+      short_description: requiredText(formData, "shortDescription"),
+      commercial_mechanics_json: {
+        ...mechanics,
+        buyingMotion: requiredText(formData, "buyingMotion"),
+        customerConsumptionMode: requiredText(formData, "customerConsumptionMode"),
+        valueProposition: lines(formData, "valueProposition"),
+        customerProblems: lines(formData, "customerProblems"),
+        expectedOutcomes: lines(formData, "expectedOutcomes"),
+      },
+      buyer_logic_json: {
+        ...buyerLogic,
+        whyBuy,
+        requiredConditions: lines(formData, "requiredConditions"),
+        preferredConditions: lines(formData, "preferredConditions"),
+        likelyTriggers: lines(formData, "likelyTriggers"),
+        incompatibleConditions: lines(formData, "incompatibleConditions"),
+        likelyDecisionRoles: lines(formData, "likelyDecisionRoles"),
+        procurementPattern: text(formData, "procurementPattern") || null,
+        positiveEvidenceSignals: lines(formData, "positiveEvidenceSignals"),
+        negativeEvidenceSignals: lines(formData, "negativeEvidenceSignals"),
+      },
+    })
+    .eq("workspace_id", context.workspaceId)
+    .eq("profile_draft_id", context.draftId)
+    .eq("id", entityId);
+  if (error) throw new Error(`Could not update V3 offering: ${error.message}`);
+  await recordDecision(context, "offering_intelligence_updated", {
+    entityId,
+    affectedFields: ["boundary", "commercialMechanics", "buyerLogic"],
+  });
+  revalidatePath("/company-profile");
+}
+
 export async function reviewCompanyProfileV3ArchetypeAction(formData: FormData) {
   const context = await reviewContext(formData);
   const intent = text(formData, "intent");
@@ -146,6 +202,17 @@ export async function updateCompanyProfileV3CoreAction(formData: FormData) {
     target_customer_usage_mode: text(formData, "customerUsageMode"),
   });
   if (error) redirect("/company-profile?error=v3-core-update-failed");
+  await recordDecision(context, "profile_core_updated", {
+    affectedFields: [
+      "publicName",
+      "canonicalDomain",
+      "commercialSummary",
+      "primaryRole",
+      "revenueModel",
+      "transactionModel",
+      "customerUsageMode",
+    ],
+  });
   revalidatePath("/company-profile");
   redirect("/company-profile?message=v3-core-updated");
 }
@@ -187,6 +254,27 @@ async function recordDecision(
 
 function text(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
+}
+
+function requiredText(formData: FormData, key: string) {
+  const value = text(formData, key);
+  if (!value) throw new Error(`${key} is required.`);
+  return value;
+}
+
+function lines(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      text(formData, key)
+        .split(/\r?\n/)
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ).slice(0, 40);
+}
+
+function jsonObject(value: Json): Record<string, Json | undefined> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
 function companyIntelligenceStartErrorCode(error: unknown) {

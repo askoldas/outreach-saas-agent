@@ -39,10 +39,9 @@ test("legacy AI candidate rules without one matching offering remain proposed at
 
   const parsed = profileBuyerLogicOutputSchema.parse(normalized);
   assert.equal(parsed.proposedOfferingRules[0]?.scope, "workspace");
-  assert.deepEqual(
-    parsed.proposedOfferingRules[0]?.applicability.relationshipTypes,
-    ["direct_buyer"],
-  );
+  assert.deepEqual(parsed.proposedOfferingRules[0]?.applicability.relationshipTypes, [
+    "direct_buyer",
+  ]);
 });
 
 test("non-AI invalid scopes are not silently promoted into profile rules", () => {
@@ -54,17 +53,23 @@ test("non-AI invalid scopes are not silently promoted into profile rules", () =>
   assert.throws(() => profileBuyerLogicOutputSchema.parse(normalized));
 });
 
-function buyerLogicWithRule(
-  overrides: Record<string, unknown>,
-): Record<string, unknown> {
+function buyerLogicWithRule(overrides: Record<string, unknown>): Record<string, unknown> {
   return {
-    purchaseLogic: {
-      whyBuy: [],
-      requiredConditions: [],
-      preferredConditions: [],
-      likelyTriggers: [],
-      incompatibleConditions: [],
-    },
+    offeringBuyerLogic: [
+      {
+        offeringKey: "core-products",
+        whyBuy: ["Meet a commercial need"],
+        requiredConditions: [],
+        preferredConditions: [],
+        likelyTriggers: [],
+        incompatibleConditions: [],
+        likelyDecisionRoles: [],
+        positiveEvidenceSignals: [],
+        negativeEvidenceSignals: [],
+        evidenceIds: [],
+        confidence: 0.6,
+      },
+    ],
     archetypes: [],
     proposedOfferingRules: [
       {

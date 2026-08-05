@@ -1,5 +1,6 @@
 import {
   intelligenceMemorySchema,
+  memoryEffectSchema,
   type IntelligenceMemory,
 } from "@/lib/intelligence/contracts/memory";
 import {
@@ -9,6 +10,7 @@ import {
 } from "@/lib/intelligence/campaign-strategy-v2";
 import {
   excludedMemorySchema,
+  compileMemoryEffects,
   memoryRetrievalContextSchema,
   resolveApplicableMemories,
   type MemoryRetrievalContext,
@@ -26,7 +28,7 @@ const memoryConflictSchema = z
   })
   .strict();
 
-const campaignMemorySnapshotPayloadSchema = z
+const legacyCampaignMemorySnapshotPayloadSchema = z
   .object({
     schemaVersion: z.literal(2),
     context: memoryRetrievalContextSchema,
@@ -36,6 +38,30 @@ const campaignMemorySnapshotPayloadSchema = z
     conflicts: z.array(memoryConflictSchema),
   })
   .strict();
+
+const campaignMemorySnapshotPayloadSchema = z.discriminatedUnion("schemaVersion", [
+  legacyCampaignMemorySnapshotPayloadSchema,
+  z
+    .object({
+      schemaVersion: z.literal(3),
+      context: memoryRetrievalContextSchema,
+      applied: z.array(intelligenceMemorySchema),
+      overridden: z.array(intelligenceMemorySchema),
+      appliedMemoryIds: z.array(z.string().min(1)),
+      overriddenMemoryIds: z.array(z.string().min(1)),
+      excluded: z.array(excludedMemorySchema),
+      conflicts: z.array(memoryConflictSchema),
+      effectCompilerVersion: z.string().min(1),
+      compilationTrace: z.array(
+        z.object({
+          memoryId: z.string().min(1),
+          effectType: z.string().min(1),
+          changedLayers: z.array(z.string().min(1)),
+        }),
+      ),
+    })
+    .strict(),
+]);
 
 const frozenMemorySnapshotRowSchema = z.object({
   id: z.string().min(1),
@@ -89,13 +115,25 @@ export async function prepareSemanticDiscoveryContext(input: {
   if (error) throw new Error(`Could not load V2 campaign Memory: ${error.message}`);
 
   const retrievalContext = buildCampaignMemoryRetrievalContext(context);
+  const evidenceIdsByMemoryId = await loadMemoryEvidenceIds(
+    input.workspaceId,
+    (rows ?? []).map(({ id }) => id),
+  );
   const resolved = resolveApplicableMemories(
-    (rows ?? []).map(mapPersistedMemory),
+    (rows ?? []).map((row) =>
+      mapPersistedMemory(row, evidenceIdsByMemoryId.get(row.id) ?? []),
+    ),
     retrievalContext,
   );
+  const compiled = compileMemoryEffects({
+    strategy: context.strategy,
+    memories: resolved.applied,
+  });
   const snapshot = campaignMemorySnapshotPayloadSchema.parse({
-    schemaVersion: 2,
+    schemaVersion: 3,
     context: retrievalContext,
+    applied: resolved.applied,
+    overridden: resolved.overridden,
     appliedMemoryIds: resolved.applied.map(({ id }) => id),
     overriddenMemoryIds: resolved.overridden.map(({ id }) => id),
     excluded: resolved.excluded,
@@ -105,6 +143,8 @@ export async function prepareSemanticDiscoveryContext(input: {
         compareText(left.overriddenId, right.overriddenId) ||
         compareText(left.reason, right.reason),
     ),
+    effectCompilerVersion: compiled.compilerVersion,
+    compilationTrace: compiled.trace,
   });
   const contentHash = hashCanonical(snapshot);
   const memorySnapshot = await freezeCampaignRunMemorySnapshot({
@@ -133,14 +173,25 @@ async function finalizeSemanticContext(
     workspaceId: context.workspaceId,
   });
 
-  const strategy = canonicalizeStrategyForDiscovery({
+  const canonicalStrategy = canonicalizeStrategyForDiscovery({
     campaignId: context.campaignInternalId,
     memorySnapshotId: memorySnapshot.id,
     strategy: context.strategy,
     strategyVersionId: context.strategyVersionId,
     strategyVersionNumber: context.strategyVersionNumber,
   });
-  return { ...context, memorySnapshot, strategy };
+  const compiled = compileMemoryEffects({
+    strategy: canonicalStrategy,
+    memories:
+      memorySnapshot.snapshot.schemaVersion === 3 ? memorySnapshot.snapshot.applied : [],
+  });
+  return {
+    ...context,
+    memorySnapshot,
+    strategy: compiled.strategy,
+    memoryEntityResolutionEffects: compiled.entityResolutionEffects,
+    memoryCompilationTrace: compiled.trace,
+  };
 }
 
 export function buildCampaignMemoryRetrievalContext(
@@ -317,7 +368,11 @@ async function recordMemoryApplications(input: {
   if (error) throw new Error(`Could not audit V2 Memory application: ${error.message}`);
 }
 
-function mapPersistedMemory(row: PersistedMemoryRow): IntelligenceMemory {
+function mapPersistedMemory(
+  row: PersistedMemoryRow,
+  evidenceIds: string[],
+): IntelligenceMemory {
+  const effect = memoryEffectSchema.safeParse(row.structured_value_json);
   return intelligenceMemorySchema.parse({
     id: row.id,
     workspaceId: row.workspace_id,
@@ -326,6 +381,7 @@ function mapPersistedMemory(row: PersistedMemoryRow): IntelligenceMemory {
     scopeId: row.scope_id,
     kind: row.memory_type,
     statement: row.statement,
+    ...(effect.success ? { effect: effect.data } : {}),
     applicability: row.applicability_json,
     applicabilityStatus: row.applicability_known ? "known" : "unknown",
     strength: row.strength,
@@ -335,7 +391,12 @@ function mapPersistedMemory(row: PersistedMemoryRow): IntelligenceMemory {
     ...(row.origin_campaign_id ? { originCampaignId: row.origin_campaign_id } : {}),
     ...(row.origin_run_id ? { originRunId: row.origin_run_id } : {}),
     ...(row.origin_candidate_id ? { originCandidateId: row.origin_candidate_id } : {}),
-    evidenceIds: [],
+    originType: row.origin_type,
+    ...(row.origin_id ? { originId: row.origin_id } : {}),
+    ...(row.supersedes_memory_id ? { supersedesMemoryId: row.supersedes_memory_id } : {}),
+    ...(row.created_by_user_id ? { createdByUserId: row.created_by_user_id } : {}),
+    recordVersion: canonicalTimestamp(row.updated_at),
+    evidenceIds,
     createdAt: canonicalTimestamp(row.created_at),
     updatedAt: canonicalTimestamp(row.updated_at),
     ...(row.last_applied_at
@@ -343,6 +404,25 @@ function mapPersistedMemory(row: PersistedMemoryRow): IntelligenceMemory {
       : {}),
     ...(row.expires_at ? { expiresAt: canonicalTimestamp(row.expires_at) } : {}),
   });
+}
+
+async function loadMemoryEvidenceIds(workspaceId: string, memoryIds: string[]) {
+  const result = new Map<string, string[]>();
+  if (!memoryIds.length) return result;
+  const supabase = createServiceRoleClient();
+  const { data, error } = await supabase
+    .from("memory_evidence_links")
+    .select("memory_id,evidence_id")
+    .eq("workspace_id", workspaceId)
+    .in("memory_id", memoryIds)
+    .not("evidence_id", "is", null);
+  if (error) throw new Error(`Could not load V2 Memory evidence: ${error.message}`);
+  for (const row of data ?? []) {
+    if (!row.evidence_id) continue;
+    result.set(row.memory_id, [...(result.get(row.memory_id) ?? []), row.evidence_id]);
+  }
+  for (const [memoryId, values] of result) result.set(memoryId, sortedUnique(values));
+  return result;
 }
 
 function sortedUnique(values: string[]) {

@@ -60,9 +60,9 @@ const QUESTION_CATALOG: Record<
 };
 
 const PURPOSE_PAGES: Record<ResearchPurpose, WebsitePageKind[]> = {
-  identity: ["home", "about", "locations", "legal", "contact"],
-  business_model: ["home", "products_services", "about", "wholesale_b2b"],
-  relationship: ["about", "brands_partners", "investor_relations", "legal"],
+  identity: ["locations", "contact", "about", "legal", "home"],
+  business_model: ["products_services", "wholesale_b2b", "about", "home"],
+  relationship: ["brands_partners", "about", "investor_relations", "legal"],
   procurement: ["supplier_procurement", "careers", "about", "contact"],
   freshness: ["news", "home", "products_services"],
   conflict_resolution: ["legal", "about", "contact"],
@@ -70,6 +70,20 @@ const PURPOSE_PAGES: Record<ResearchPurpose, WebsitePageKind[]> = {
   qualification_factor: ["products_services", "about", "news"],
   commercial_potential: ["products_services", "locations", "news"],
 };
+
+export function preferredPageKindsForQuestion(
+  question: Pick<CandidateResearchQuestion, "key" | "purpose">,
+): WebsitePageKind[] {
+  if (question.key === "products_services") return ["products_services"];
+  if (question.key === "operating_markets") return ["locations", "contact"];
+  if (question.key === "procurement_authority") {
+    return ["supplier_procurement", "careers", "contact"];
+  }
+  if (/partner|distribution|relationship/.test(question.key)) {
+    return ["brands_partners", "wholesale_b2b", "about"];
+  }
+  return PURPOSE_PAGES[question.purpose];
+}
 
 function buildQuestion(
   key: string,
@@ -183,9 +197,7 @@ export function compileCandidateResearchPlan(
         left.key.localeCompare(right.key),
     )
     .slice(0, 12);
-  const preferredPages = [
-    ...new Set(ordered.flatMap((question) => PURPOSE_PAGES[question.purpose])),
-  ];
+  const preferredPages = [...new Set(ordered.flatMap(preferredPageKindsForQuestion))];
   const pageBudget = Math.max(1, Math.min(input.pageBudget ?? 8, 15));
 
   return {

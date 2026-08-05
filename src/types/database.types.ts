@@ -10076,6 +10076,114 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_candidate_preclassifications_v2: {
+        Row: {
+          campaign_id: string
+          campaign_strategy_version_id: string
+          classifier_version: string
+          confidence: number
+          created_at: string
+          disposition: string
+          geography_plausible: boolean | null
+          id: string
+          input_hash: string
+          matched_archetype_key: string
+          matched_segment_key: string
+          negative_signals_json: Json
+          objective_compatibility: string
+          positive_signals_json: Json
+          probable_organization_type: string
+          probable_relationship_types_json: Json
+          provider_execution_id: string
+          provider_source_record_id: string
+          reason_codes_json: Json
+          source_evidence_ids_json: Json
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          campaign_strategy_version_id: string
+          classifier_version: string
+          confidence: number
+          created_at?: string
+          disposition: string
+          geography_plausible?: boolean | null
+          id?: string
+          input_hash: string
+          matched_archetype_key: string
+          matched_segment_key: string
+          negative_signals_json?: Json
+          objective_compatibility: string
+          positive_signals_json?: Json
+          probable_organization_type: string
+          probable_relationship_types_json?: Json
+          provider_execution_id: string
+          provider_source_record_id: string
+          reason_codes_json: Json
+          source_evidence_ids_json: Json
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          campaign_strategy_version_id?: string
+          classifier_version?: string
+          confidence?: number
+          created_at?: string
+          disposition?: string
+          geography_plausible?: boolean | null
+          id?: string
+          input_hash?: string
+          matched_archetype_key?: string
+          matched_segment_key?: string
+          negative_signals_json?: Json
+          objective_compatibility?: string
+          positive_signals_json?: Json
+          probable_organization_type?: string
+          probable_relationship_types_json?: Json
+          provider_execution_id?: string
+          provider_source_record_id?: string
+          reason_codes_json?: Json
+          source_evidence_ids_json?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_candidate_preclassif_campaign_strategy_version_id_fkey"
+            columns: ["campaign_strategy_version_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_strategy_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_candidate_preclassifica_provider_source_record_id_fkey"
+            columns: ["provider_source_record_id"]
+            isOneToOne: false
+            referencedRelation: "provider_source_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_candidate_preclassification_provider_execution_id_fkey"
+            columns: ["provider_execution_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_provider_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_candidate_preclassifications_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_candidate_preclassifications_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       provider_executions: {
         Row: {
           actual_cost: number
@@ -11253,7 +11361,19 @@ export type Database = {
         Args: { target_workspace_id: string }
         Returns: undefined
       }
+      clear_workspace_data_before_entity_resolution_order_v2: {
+        Args: { target_workspace_id: string }
+        Returns: undefined
+      }
+      clear_workspace_data_before_evidence_provider_order_v2: {
+        Args: { target_workspace_id: string }
+        Returns: undefined
+      }
       clear_workspace_data_before_qualification_runtime_v2: {
+        Args: { target_workspace_id: string }
+        Returns: undefined
+      }
+      clear_workspace_data_before_ranking_qualification_order_v2: {
         Args: { target_workspace_id: string }
         Returns: undefined
       }
@@ -12149,6 +12269,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      persist_provider_candidate_preclassifications_v2: {
+        Args: {
+          target_classifications: Json
+          target_execution_id: string
+          target_workspace_id: string
+        }
+        Returns: number
+      }
       propose_candidate_correction_v2: {
         Args: {
           target_campaign_candidate_id: string
@@ -12317,6 +12445,16 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      resolve_campaign_entities_before_retry_safe_reuse_v2: {
+        Args: {
+          target_campaign_run_id: string
+          target_candidates: Json
+          target_input_hash: string
+          target_rules_version: string
+          target_workspace_id: string
+        }
+        Returns: Json
       }
       resolve_campaign_entities_v2: {
         Args: {

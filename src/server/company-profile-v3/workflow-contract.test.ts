@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import {
+  assertProfileStageDependencies,
+  profileV3StageDependencies,
+} from "../../lib/intelligence/company-profile-v3/workflow.ts";
 
 const parent = readFileSync("src/trigger/create-company-intelligence-v3.ts", "utf8");
-const child = readFileSync("src/trigger/run-company-profile-v3-stage.ts", "utf8");
 const service = readFileSync("src/server/company-profile-v3/stage-service.ts", "utf8");
 const sourceService = readFileSync(
   "src/server/company-profile-v3/source-service.ts",
@@ -11,32 +14,28 @@ const sourceService = readFileSync(
 );
 const repository = readFileSync("src/server/company-profile-v3/repository.ts", "utf8");
 
-test("V3 profile orchestration uses durable sequential child stages", () => {
+test("V3 profile orchestration uses one Trigger run with durable sequential stages", () => {
   assert.match(parent, /id: "create-company-intelligence-v3"/);
   assert.match(parent, /profileV3StageIds/);
-  assert.match(parent, /runCompanyProfileV3StageTask\.triggerAndWait/);
-  assert.match(parent, /if \(!child\.ok\)/);
+  assert.match(parent, /executeProfileV3Stage/);
+  assert.doesNotMatch(parent, /triggerAndWait/);
   assert.match(parent, /onFailure/);
   assert.match(parent, /failProfileV3Draft/);
-  assert.match(child, /id: "run-company-profile-v3-stage"/);
 });
 
 test("stage execution freezes versions, reuses completed outputs, and audits AI", () => {
   assert.match(service, /\.eq\("idempotency_key", idempotencyKey\)/);
   assert.match(service, /existing\?\.status === "completed"/);
-  assert.match(service, /validateStructuredOutput/);
+  assert.match(service, /executeValidatedAiTask/);
+  assert.match(service, /IntelligenceTaskRegistry/);
+  assert.match(service, /IntelligenceSchemaRegistry/);
+  assert.match(service, /createIntelligenceAttemptRecorder/);
   assert.match(service, /generateValidatedProfileStageOutput/);
-  assert.match(service, /isUnsupportedStructuredOutput/);
-  assert.match(service, /jsonMode: true/);
   assert.match(service, /structuredOutputFallbackUsed/);
-  assert.match(service, /completion_truncated/);
-  assert.match(service, /expandedCompletionBudget/);
-  assert.match(service, /compact retry/);
   assert.match(service, /truncationRetryUsed/);
   assert.match(service, /profileUnderAudit/);
   assert.match(service, /input\.taskId === "profile\.consistency_audit"/);
   assert.match(service, /assembleProfileUnderAudit/);
-  assert.match(service, /InvalidProfileStageOutputError/);
   assert.match(service, /\.from\("ai_requests"\)/);
   assert.match(service, /contextCompilerVersion/);
   assert.match(service, /promptContentHash/);
@@ -45,6 +44,31 @@ test("stage execution freezes versions, reuses completed outputs, and audits AI"
   assert.match(service, /assertIntelligenceExternalCallsAllowed\("model"\)/);
   assert.match(service, /compileProfileV3Draft/);
   assert.match(service, /compile_company_profile_v3_draft/);
+});
+
+test("every profile stage enforces its complete ordered dependency chain", () => {
+  assert.deepEqual(profileV3StageDependencies["profile.consistency_audit"], [
+    "profile.fact_extraction",
+    "profile.commercial_synthesis",
+    "profile.offering_decomposition",
+    "profile.buyer_logic",
+    "profile.clarification",
+  ]);
+  assert.throws(
+    () => assertProfileStageDependencies("profile.buyer_logic", [
+      { taskId: "profile.fact_extraction" },
+      { taskId: "profile.commercial_synthesis" },
+    ]),
+    /profile\.offering_decomposition/,
+  );
+  assert.doesNotThrow(() => assertProfileStageDependencies(
+    "profile.buyer_logic",
+    [
+      { taskId: "profile.fact_extraction" },
+      { taskId: "profile.commercial_synthesis" },
+      { taskId: "profile.offering_decomposition" },
+    ],
+  ));
 });
 
 test("V3 dispatch starts from the workspace website without a V1 profile adapter", () => {

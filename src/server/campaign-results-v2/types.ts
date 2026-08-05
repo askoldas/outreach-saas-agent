@@ -36,6 +36,17 @@ export type CampaignResultCandidate = {
   name: string;
   organizationType: string;
   potential: number | null;
+  provenance: {
+    discoveryPurpose: string | null;
+    discoveryQuery: string | null;
+    firstParty: boolean;
+    preclassificationConfidence: number | null;
+    preclassificationDisposition: string | null;
+    preclassificationReasons: string[];
+    provider: string | null;
+    sourceTitle: string | null;
+    sourceType: string | null;
+  };
   rank: number;
   relationship: string;
   relationshipConfidence: number | null;
@@ -48,6 +59,7 @@ export type CampaignResultCandidate = {
 };
 
 export type CampaignV2Results = {
+  appliedMemorySnapshotId: string | null;
   anomalies: Array<{
     blocking: boolean;
     explanation: string;

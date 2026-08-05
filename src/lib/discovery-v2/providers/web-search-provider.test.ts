@@ -3,10 +3,7 @@ import test from "node:test";
 import type { ProviderDiscoveryRequest } from "../contracts.ts";
 import { createConfiguredDiscoveryProviderRegistry } from "../configured-provider-registry.ts";
 import { createNativeCampaignStrategyFixture } from "../../intelligence/campaign-strategy-v2/test-fixture.ts";
-import {
-  generateWebDiscoveryQueries,
-  normalizeWebQuery,
-} from "./web-query-generator.ts";
+import { generateWebDiscoveryQueries, normalizeWebQuery } from "./web-query-generator.ts";
 import { classifyWebResult } from "./web-normalization.ts";
 import { WebSearchProvider } from "./web-search-provider.ts";
 
@@ -30,7 +27,8 @@ test("V2 web queries are semantic, bounded, localized, and deterministic", () =>
   const broadQueries = generateWebDiscoveryQueries(localInput);
   assert.ok(
     broadQueries.some(
-      (query) => query.family === "local_language" && /įmonė|tiekėjas/.test(query.query),
+      (query) =>
+        query.family === "local_language" && /pirkėjas|naudotojas/.test(query.query),
     ),
   );
   assert.ok(
@@ -39,10 +37,89 @@ test("V2 web queries are semantic, bounded, localized, and deterministic", () =>
     ),
   );
   assert.ok(
-    broadQueries
-      .filter((query) => query.family === "positive_signal")
-      .every((query) => query.query.includes("company manufacturer")),
+    broadQueries.every(
+      (query) => !/\b(?:supplier|manufacturer|distributor|reseller)\b/i.test(query.query),
+    ),
   );
+  assert.ok(broadQueries.every((query) => query.expectedInformationGain));
+});
+
+test("relationship vocabulary changes materially by Campaign objective", () => {
+  const buyer = request();
+  buyer.budget.maxCalls = 10;
+  const buyerQueries = generateWebDiscoveryQueries(buyer);
+  const distributor = request();
+  distributor.segment = {
+    ...distributor.segment,
+    relationshipType: "distributor",
+    useModes: ["distribute"],
+  };
+  distributor.budget.maxCalls = 10;
+  const distributorQueries = generateWebDiscoveryQueries(distributor);
+  assert.ok(
+    distributorQueries.some((query) =>
+      /\b(?:distributor|wholesaler|importer)\b/i.test(query.query),
+    ),
+  );
+  assert.notDeepEqual(
+    buyerQueries.map((query) => query.normalizedQuery),
+    distributorQueries.map((query) => query.normalizedQuery),
+  );
+});
+
+test("supplier Campaigns may use supplier and manufacturer vocabulary", () => {
+  const input = request();
+  input.segment = {
+    ...input.segment,
+    relationshipType: "supplier",
+    useModes: ["use"],
+  };
+  input.budget.maxCalls = 10;
+  assert.ok(
+    generateWebDiscoveryQueries(input).some((query) =>
+      /\b(?:supplier|manufacturer)\b/i.test(query.query),
+    ),
+  );
+});
+
+test("local-language role vocabulary follows the relationship", () => {
+  const input = request();
+  input.segment = {
+    ...input.segment,
+    relationshipType: "distributor",
+    useModes: ["distribute"],
+    geography: {
+      ...input.segment.geography,
+      localLanguages: ["German"],
+      workingLanguages: ["German", "English"],
+    },
+  };
+  input.budget.maxCalls = 10;
+  assert.ok(
+    generateWebDiscoveryQueries(input).some(
+      (query) =>
+        query.family === "local_language" &&
+        /Händler|Großhändler|Importeur/.test(query.query),
+    ),
+  );
+});
+
+test("seed expansion is not issued without real seed organizations", () => {
+  const input = request();
+  input.executionContext = {
+    ...input.executionContext,
+    passNumber: 2,
+    targetedActions: [
+      {
+        gapId: "seed-gap",
+        type: "expand_from_seed",
+        reason: "Try known entities.",
+        expectedImprovement: "More candidates.",
+        maxCalls: 1,
+      },
+    ],
+  };
+  assert.deepEqual(generateWebDiscoveryQueries(input), []);
 });
 
 test("multi-country discovery gives every Baltic market a localized query and filter", () => {
@@ -77,7 +154,7 @@ test("multi-country discovery gives every Baltic market a localized query and fi
 
 test("WebSearchProvider is available only through the configured registry", () => {
   const registry = createConfiguredDiscoveryProviderRegistry();
-  assert.equal(registry.get("web_search").version, "2.3");
+  assert.equal(registry.get("web_search").version, "2.4");
   assert.deepEqual(
     registry.list().map(({ id }) => id),
     ["web_search"],
@@ -124,6 +201,9 @@ test("targeted gap actions produce bounded non-duplicate frozen queries", () => 
     ),
   );
   assert.ok(targeted.every(({ family }) => family === "directory"));
+  for (const query of targeted) {
+    assert.deepEqual(query.excludedDomains, ["acme.example"]);
+  }
   assert.ok(
     targeted.every(
       ({ fingerprint }) => !initial.some((query) => query.fingerprint === fingerprint),
@@ -161,6 +241,23 @@ test("WebSearchProvider sends the frozen country boost to Tavily", async () => {
   assert.equal(calls[0]?.country, "lithuania");
 });
 
+test("WebSearchProvider sends frozen excluded domains to Tavily", async () => {
+  const calls: Array<{ excludeDomains?: string[] }> = [];
+  const provider = new WebSearchProvider(async (_query, _maxResults, options) => {
+    calls.push({ excludeDomains: options?.excludeDomains });
+    return [];
+  });
+  const input = request();
+  input.executionContext.excludedCanonicalKeys = [
+    "domain:acme.example",
+    "https://www.previous.example/path",
+    "organization:not-a-domain",
+  ];
+  input.budget.maxCalls = 1;
+  await provider.search(input);
+  assert.deepEqual(calls[0]?.excludeDomains, ["acme.example", "previous.example"]);
+});
+
 test("WebSearchProvider bounds calls and records while preserving raw provenance", async () => {
   const calls: string[] = [];
   const provider = new WebSearchProvider(
@@ -196,9 +293,12 @@ test("WebSearchProvider bounds calls and records while preserving raw provenance
   assert.ok(
     response.records.some(({ sourceType }) => sourceType === "industry_directory"),
   );
-  assert.equal(response.normalizedCandidates.length, 2);
+  assert.equal(response.normalizedCandidates.length, 0);
+  assert.equal(response.classifications.length, response.records.length);
   assert.ok(
-    response.normalizedCandidates.every((candidate) => !("finalFitScore" in candidate)),
+    response.classifications.every(({ disposition }) =>
+      ["reject", "source_only"].includes(disposition),
+    ),
   );
 });
 
@@ -334,7 +434,7 @@ test("content pages with an explicit host brand normalize to the host company", 
   );
 });
 
-test("company identity and commercial pages produce company names and root websites", async () => {
+test("commercial pages are preclassified before becoming organization candidates", async () => {
   const provider = new WebSearchProvider(
     async () => [
       {
@@ -346,7 +446,7 @@ test("company identity and commercial pages produce company names and root websi
       {
         title: "API integration services",
         url: "https://consultancy.example/services/api-integration",
-        content: "The consultancy provides API integration services.",
+        content: "Provides API integration services.",
         score: 0.7,
       },
     ],
@@ -357,21 +457,15 @@ test("company identity and commercial pages produce company names and root websi
   input.budget = { maxCalls: 1, maxResults: 5 };
   const response = await provider.search(input);
 
-  assert.equal(response.normalizedCandidates.length, 2);
-  assert.equal(response.normalizedCandidates[0]?.name, "Acme Pharma");
+  assert.equal(response.normalizedCandidates.length, 1);
+  assert.equal(response.normalizedCandidates[0]?.name, "Consultancy");
   assert.equal(
     response.normalizedCandidates[0]?.websiteUrl,
-    "https://www.acme-pharma.example/",
-  );
-  assert.equal(
-    response.normalizedCandidates[0]?.canonicalDomainHint,
-    "acme-pharma.example",
-  );
-  assert.equal(response.normalizedCandidates[1]?.name, "Consultancy");
-  assert.equal(
-    response.normalizedCandidates[1]?.websiteUrl,
     "https://consultancy.example/",
   );
+  assert.equal(response.classifications[0]?.disposition, "reject");
+  assert.equal(response.classifications[0]?.objectiveCompatibility, "incompatible");
+  assert.equal(response.classifications[1]?.disposition, "needs_review");
   assert.equal(
     classifyWebResult({
       title: "Acme Pharma",

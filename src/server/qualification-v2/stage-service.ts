@@ -14,17 +14,18 @@ import {
   initializeQualificationBatch,
   loadCampaignQualificationContext,
 } from "./repository";
+import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
 
 export async function prepareQualificationStage(input: {
   campaignRunId: string;
   workspaceId: string;
 }) {
-  const context = await loadCampaignQualificationContext(input);
-  const strategy = campaignStrategyV2Schema.parse(context.strategy);
-  if (
-    strategy.id !== context.strategyVersionId ||
-    strategy.status !== "confirmed"
-  ) {
+  const [context, semanticContext] = await Promise.all([
+    loadCampaignQualificationContext(input),
+    prepareSemanticDiscoveryContext(input),
+  ]);
+  const strategy = campaignStrategyV2Schema.parse(semanticContext.strategy);
+  if (strategy.id !== context.strategyVersionId || strategy.status !== "confirmed") {
     throw new Error("Qualification requires the run's frozen confirmed Strategy.");
   }
   const rubric = compileQualificationRubric(strategy);

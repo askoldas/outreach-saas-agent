@@ -3,11 +3,45 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
 import type { executeCampaignV2Task } from "@/trigger/execute-campaign-v2";
 import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
+import type { compileCampaignStrategyV2Task } from "@/trigger/compile-campaign-strategy-v2";
+import {
+  failCampaignStrategyV2Draft,
+  markCampaignStrategyV2Building,
+} from "@/server/campaign-strategy-v2/repository";
 
 const staleDispatchMs = 2 * 60 * 1_000;
 
 async function createOperationalDatabaseClient() {
   return { supabase: createServiceRoleClient() };
+}
+
+export async function dispatchCampaignStrategyV2Compilation(input: {
+  workspaceId: string;
+  campaignExternalId: string;
+  strategyDraftId: string;
+  idempotencyKey?: string;
+}) {
+  await markCampaignStrategyV2Building(input);
+  try {
+    const handle = await tasks.trigger<typeof compileCampaignStrategyV2Task>(
+      "compile-campaign-strategy-v2",
+      input,
+      {
+        idempotencyKey:
+          input.idempotencyKey ??
+          `campaign-strategy-v2:${input.strategyDraftId}:initial-v1`,
+        tags: [
+          `workspace:${input.workspaceId}`,
+          `campaign:${input.campaignExternalId}`,
+          `strategy_draft:${input.strategyDraftId}`,
+        ],
+      },
+    );
+    return handle.id;
+  } catch (error) {
+    await failCampaignStrategyV2Draft({ ...input, error });
+    throw error;
+  }
 }
 
 export async function cancelTriggerRuns(triggerRunIds: string[]) {

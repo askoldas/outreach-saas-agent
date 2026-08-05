@@ -3,7 +3,11 @@ import { parseCompleteJsonObject } from "../../ai/structured-json.ts";
 
 export type StructuredOutputValidation =
   | { success: true; data: unknown }
-  | { success: false; issue: string };
+  | {
+      success: false;
+      kind: "invalid_json" | "schema_validation";
+      issue: string;
+    };
 
 export function validateStructuredOutput(
   schema: z.ZodType,
@@ -13,6 +17,7 @@ export function validateStructuredOutput(
   if (parsed === undefined) {
     return {
       success: false,
+      kind: "invalid_json",
       issue: "The response did not contain one complete JSON object.",
     };
   }
@@ -20,6 +25,7 @@ export function validateStructuredOutput(
   if (result.success) return { success: true, data: result.data };
   return {
     success: false,
+    kind: "schema_validation",
     issue: result.error.issues
       .slice(0, 20)
       .map(

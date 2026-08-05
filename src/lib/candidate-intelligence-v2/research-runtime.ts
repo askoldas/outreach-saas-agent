@@ -8,7 +8,8 @@ import type {
 } from "./contracts.ts";
 import { compileCandidateResearchPlan } from "./research-plan.ts";
 
-export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION = "candidate-research-v2.2";
+export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION =
+  "candidate-research-v2.3-multipage";
 
 export type CandidateResearchClaimState = {
   key: string;
@@ -191,7 +192,7 @@ export function prepareCampaignResearchPlans(input: {
         discoverySourceIds: [...new Set(candidate.discoverySourceIds)].sort(compareText),
         preferredPages: plan.preferredPages,
         maximumDiscoverySources: 3,
-        maximumFirstPartyFetches: 1,
+        maximumFirstPartyFetches: plan.pageBudget,
         deferredQuestionKeys: [...requestedQuestionKeys]
           .filter((key) => !frozenQuestionKeys.has(key))
           .sort(compareText),

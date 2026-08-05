@@ -12,6 +12,15 @@ const results = source("src/features/campaigns/CampaignV2Results.tsx");
 const page = source("src/app/(app)/campaigns/[id]/leads/page.tsx");
 
 test("V2 results are selected by immutable run and workspace boundaries", () => {
+  assert.match(repository, /\.from\("campaigns"\)\s*\.select\("id"\)/);
+  assert.match(
+    repository,
+    /\.from\("discovery_runs_v2"\)\s*\.select\("id,discovery_plan_id"\)/,
+  );
+  assert.match(
+    repository,
+    /\.from\("discovery_plans_v2"\)\s*\.select\("memory_snapshot_id"\)/,
+  );
   assert.match(repository, /\.eq\("workspace_id", workspaceId\)/);
   assert.match(repository, /\.eq\("campaign_run_id", run\.id\)/);
   assert.match(repository, /candidate_rank_snapshots/);
@@ -52,6 +61,23 @@ test("results expose evidence, identity, corrections, and accessible table seman
   assert.match(results, /scope="col"/);
   assert.match(results, /aria-label="Result lanes"/);
   assert.doesNotMatch(results, /JSON\.stringify/);
+});
+
+test("results expose decision provenance without hidden reasoning", () => {
+  for (const label of [
+    "Applied memory snapshot",
+    "Why discovered",
+    "Query / source path",
+    "Preclassification",
+    "Resolved identity",
+    "First-party evidence",
+  ]) {
+    assert.match(results, new RegExp(label));
+  }
+  assert.match(repository, /discovery_queries_v2/);
+  assert.match(repository, /provider_candidate_preclassifications_v2/);
+  assert.match(repository, /query_or_filter_fingerprint/);
+  assert.doesNotMatch(results, /chain.of.thought/i);
 });
 
 test("coverage rows use their persisted identity instead of a non-unique label key", () => {

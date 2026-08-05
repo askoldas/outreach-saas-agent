@@ -20,6 +20,11 @@ test("persisted provider rows reconstruct query yields and unique identity hints
       candidate("source-2", "Acme duplicate", null, "acme.example"),
       candidate("source-3", "Beta GmbH", "beta gmbh", null),
     ],
+    classifications: [
+      classification("source-1", "candidate", "compatible", true),
+      classification("source-2", "reject", "incompatible", true),
+      classification("source-3", "source_only", "unknown", null),
+    ],
   });
 
   assert.deepEqual(coverage.queryResultCounts, {
@@ -33,6 +38,9 @@ test("persisted provider rows reconstruct query yields and unique identity hints
   ]);
   assert.equal(coverage.invalidRecordCount, 1);
   assert.equal(coverage.uniqueCandidateHintCount, 2);
+  assert.deepEqual(coverage.plausibleCandidateIdentityHints, ["domain:acme.example"]);
+  assert.equal(coverage.uniquePlausibleCandidateHintCount, 1);
+  assert.equal(coverage.sourceOnlyRecordCount, 1);
 });
 
 test("identity hints can be deduplicated across provider executions", () => {
@@ -110,14 +118,21 @@ test("settled query audit and coverage facts use persisted evidence on replay", 
     invalidRecordCount: 0,
     languagesAttempted: ["English", "Lithuanian"],
     normalizedCandidates: 2,
+    plausibleCandidateCount: 0,
+    geographyPlausibleCandidateCount: 0,
+    plausibleCandidateIdentityHints: [],
     providerCalls: 2,
     providerExhausted: true,
     providerFailureCount: 1,
     queriesExecuted: 2,
     queryFamiliesAttempted: ["archetype", "local_language"],
     rawRecords: 3,
+    relationshipCompatibleCandidateCount: 0,
+    sourceOnlyRecordCount: 0,
     sourceTypesAttempted: ["web_search"],
     uniqueCandidateHints: 2,
+    uniquePlausibleCandidateHints: 0,
+    validOrganizationPages: 0,
   });
 });
 
@@ -168,6 +183,20 @@ function source(
     ingestion_status: ingestionStatus,
     query_or_filter_fingerprint: fingerprint,
     source_type: sourceType,
+  };
+}
+
+function classification(
+  sourceId: string,
+  disposition: "candidate" | "source_only" | "reject" | "needs_review",
+  objectiveCompatibility: "compatible" | "incompatible" | "unknown",
+  geographyPlausible: boolean | null,
+) {
+  return {
+    provider_source_record_id: sourceId,
+    disposition,
+    objective_compatibility: objectiveCompatibility,
+    geography_plausible: geographyPlausible,
   };
 }
 

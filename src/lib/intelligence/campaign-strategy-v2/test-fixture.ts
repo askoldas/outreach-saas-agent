@@ -46,11 +46,17 @@ function offering(): CampaignPlanningOffering {
       transactionModels: ["subscription"],
     },
     buyerLogic: {
+      offeringKey: "operations-platform",
       whyBuy: ["Improve industrial operations"],
       requiredConditions: ["Operates production facilities"],
       preferredConditions: ["Multiple production sites"],
       likelyTriggers: ["Operational modernization"],
       incompatibleConditions: ["Software vendor"],
+      likelyDecisionRoles: ["Operations director"],
+      positiveEvidenceSignals: ["Operates production facilities"],
+      negativeEvidenceSignals: ["Sells competing software"],
+      evidenceIds: [],
+      confidence: 0.85,
     },
     relationshipOptions: [
       {

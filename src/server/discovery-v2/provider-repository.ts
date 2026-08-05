@@ -3,6 +3,8 @@ import type {
   ProviderDiscoveryRequest,
   ProviderDiscoveryResponse,
 } from "@/lib/discovery-v2";
+import { CANDIDATE_PRECLASSIFICATION_PROMPT_VERSION } from "@/lib/discovery-v2/candidate-preclassification-model";
+import type { AiCallResult } from "@/lib/providers/openrouter";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 import {
@@ -28,6 +30,45 @@ export type PersistedProviderExecutionSummary = {
   usage: Json;
   warnings: Json;
 };
+
+export async function recordCandidatePreclassificationModelCall(input: {
+  workspaceId: string;
+  campaignId: string;
+  segmentId: string;
+  requestHash: string;
+  call: AiCallResult<string>;
+}) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("ai_requests").insert({
+    workspace_id: input.workspaceId,
+    role: "search_result_classification",
+    provider: "openrouter",
+    selected_model: input.call.requestedModel,
+    fallback_model: input.call.fallbackUsed
+      ? (input.call.actualModel ?? input.call.requestedModel)
+      : null,
+    fallback_used: input.call.fallbackUsed,
+    prompt_version: CANDIDATE_PRECLASSIFICATION_PROMPT_VERSION,
+    schema_version: "candidate-preclassification-schema/v1.0",
+    request_hash: input.requestHash,
+    status: "completed",
+    input_units: input.call.inputTokens ?? null,
+    output_units: input.call.outputTokens ?? null,
+    actual_cost: input.call.providerReportedCost ?? 0,
+    currency: input.call.providerCurrency ?? "USD",
+    metadata: {
+      actualModel: input.call.actualModel,
+      campaignId: input.campaignId,
+      latencyMs: input.call.latencyMs,
+      providerRequestId: input.call.providerRequestId,
+      segmentId: input.segmentId,
+    },
+    completed_at: new Date().toISOString(),
+  });
+  if (error) {
+    throw new Error(`Could not audit candidate preclassification: ${error.message}`);
+  }
+}
 
 export async function findPersistedProviderExecution(input: {
   workspaceId: string;
@@ -78,12 +119,25 @@ export async function findPersistedProviderExecution(input: {
       candidates.push(...(data ?? []));
     }
   }
+  const { data: classifications, error: classificationError } = await supabase
+    .from("provider_candidate_preclassifications_v2")
+    .select(
+      "provider_source_record_id,disposition,objective_compatibility,geography_plausible",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .eq("provider_execution_id", execution.id);
+  if (classificationError) {
+    throw new Error(
+      `Could not inspect cached candidate preclassifications: ${classificationError.message}`,
+    );
+  }
   return {
     cached: true,
     completedAt: new Date(execution.completed_at ?? execution.started_at).toISOString(),
     coverage: summarizePersistedProviderCoverage({
       sources: sources ?? [],
       candidates,
+      classifications: classifications ?? [],
     }),
     errors: execution.errors_json,
     exhausted: execution.exhausted === true,
@@ -134,7 +188,25 @@ export async function persistProviderResponse(input: {
   if (!data || typeof data !== "object" || Array.isArray(data)) {
     throw new Error("Discovery provider persistence returned an invalid execution.");
   }
-  return data as Record<string, unknown>;
+  const execution = data as Record<string, unknown>;
+  const executionId = String(execution.id ?? "");
+  if (!executionId) {
+    throw new Error("Discovery provider persistence omitted its execution ID.");
+  }
+  const { error: classificationError } = await database.rpc(
+    "persist_provider_candidate_preclassifications_v2",
+    {
+      target_workspace_id: input.workspaceId,
+      target_execution_id: executionId,
+      target_classifications: input.response.classifications as unknown as Json,
+    },
+  );
+  if (classificationError) {
+    throw new Error(
+      `Could not persist candidate preclassifications: ${classificationError.message}`,
+    );
+  }
+  return execution;
 }
 
 function batches<T>(values: T[], size: number) {

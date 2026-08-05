@@ -72,6 +72,24 @@ export function calculatePotential(
   return calculateWeightedScore(definitions, evaluations, "commercial_potential");
 }
 
+export function suppressFitWhenEvidenceIsInsufficient(
+  fit: ScoreCalculation,
+  evidenceCoverage: number,
+  minimumEvidenceCoverage: number,
+): ScoreCalculation {
+  if (evidenceCoverage >= minimumEvidenceCoverage) return fit;
+  return {
+    ...fit,
+    score: null,
+    rawWeightedMean: null,
+    includedFactorKeys: [],
+    excludedFactorKeys: [
+      ...new Set([...fit.excludedFactorKeys, ...fit.includedFactorKeys]),
+    ].sort(),
+    trace: [],
+  };
+}
+
 export function calculateConfidence(input: {
   definitions: FactorDefinition[];
   evaluations: FactorEvaluation[];
@@ -124,6 +142,12 @@ export function calculateConfidence(input: {
     return definition.criticality === "required" && (!state || state === "unknown");
   });
   if (requiredUnknown) caps.push({ key: "unresolved_required_factor", value: 0.6 });
+  const requiredConflict = applicable.some(
+    (definition) =>
+      definition.criticality === "required" &&
+      byKey.get(definition.key)?.state === "conflicting",
+  );
+  if (requiredConflict) caps.push({ key: "conflicting_required_factor", value: 0.5 });
   score = Math.min(score, ...caps.map((cap) => cap.value));
   return {
     score: Math.round(Math.max(0, Math.min(1, score)) * 100),

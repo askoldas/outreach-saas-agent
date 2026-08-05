@@ -14,6 +14,7 @@ import {
   initializeCandidateResearchBatch,
   loadCampaignResearchContext,
 } from "./repository";
+import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
 
 export async function prepareCandidateResearchStage(input: {
   campaignRunId: string;
@@ -22,12 +23,12 @@ export async function prepareCandidateResearchStage(input: {
   const frozenBatch = await findCandidateResearchBatch(input);
   if (frozenBatch) return frozenBatch;
 
-  const context = await loadCampaignResearchContext(input);
-  const strategy = campaignStrategyV2Schema.parse(context.strategy);
-  if (
-    strategy.id !== context.strategyVersionId ||
-    strategy.status !== "confirmed"
-  ) {
+  const [context, semanticContext] = await Promise.all([
+    loadCampaignResearchContext(input),
+    prepareSemanticDiscoveryContext(input),
+  ]);
+  const strategy = campaignStrategyV2Schema.parse(semanticContext.strategy);
+  if (strategy.id !== context.strategyVersionId || strategy.status !== "confirmed") {
     throw new Error("Candidate research requires the run's frozen confirmed Strategy.");
   }
   const plans = prepareCampaignResearchPlans({

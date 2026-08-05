@@ -157,6 +157,25 @@ function validResponse(providerId = "web") {
         retrievedAt: "2026-07-28T10:00:00.000Z",
       },
     ],
+    classifications: [
+      {
+        sourceRecordKey: "record-1",
+        disposition: "candidate" as const,
+        probableOrganizationType: "operating_company" as const,
+        probableRelationshipTypes: [],
+        objectiveCompatibility: "unknown" as const,
+        geographyPlausible: null,
+        matchedSegmentId: "segment-1",
+        matchedArchetypeId: "archetype-1",
+        strategyVersionId: "strategy-1",
+        positiveSignals: [],
+        negativeSignals: [],
+        reasonCodes: ["plausible_company_homepage"],
+        sourceEvidenceIds: ["record-1"],
+        confidence: 0.5,
+        classifierVersion: "test/v1",
+      },
+    ],
     normalizedCandidates: [
       {
         sourceRecordKey: "record-1",

@@ -42,6 +42,28 @@ test("V3 review exposes commercial mechanics, buyer logic, rules, and questions"
   assert.match(page, /v3-question-skipped/);
 });
 
+test("V3 review allows offering-specific buyer logic correction", () => {
+  assert.match(workspace, /Correct offering and buyer logic/);
+  assert.match(workspace, /updateCompanyProfileV3OfferingAction/);
+  for (const field of [
+    "Offering boundary / name",
+    "Transaction / buying motion",
+    "Customer consumption / use mode",
+    "Why buyers buy",
+    "Required conditions",
+    "Preferred conditions",
+    "Triggers",
+    "Incompatible conditions",
+    "Likely decision roles",
+    "Positive evidence signals",
+    "Negative evidence signals",
+    "Buyer-logic confidence",
+    "Buyer-logic evidence",
+  ]) {
+    assert.match(workspace, new RegExp(field));
+  }
+});
+
 test("V3 review reads and mutates only workspace-scoped draft records", () => {
   assert.match(repository, /\.eq\("workspace_id", workspaceId\)/);
   assert.match(repository, /current_v3_draft_id/);

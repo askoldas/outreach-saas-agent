@@ -11,6 +11,7 @@ import {
 import {
   getCurrentCampaignStrategyV2Draft,
   getCurrentConfirmedCampaignStrategyV2,
+  getCampaignStrategyV2EnrichmentStatus,
 } from "@/server/campaign-strategy-v2/repository";
 import { getCampaignWorkflowVersion } from "@/server/campaigns/repository";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
@@ -47,12 +48,16 @@ export default async function StrategyPage({
     }
     const strategy = draft?.strategy ?? confirmed?.strategy;
     if (!strategy) throw new Error("Campaign Strategy V2 is missing for this campaign.");
+    const enrichment = draft
+      ? await getCampaignStrategyV2EnrichmentStatus(currentWorkspace.id, draft.id)
+      : null;
     return (
       <CampaignShell campaign={campaign} active="strategy">
         <CampaignStrategyV2Workspace
           campaignId={campaign.id}
           draftId={draft?.id ?? null}
           strategy={strategy}
+          enrichment={enrichment}
           message={message}
         />
       </CampaignShell>

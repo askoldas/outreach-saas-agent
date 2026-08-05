@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+export const discoveryCoveragePolicyVersion =
+  "discovery-coverage/v3-commercial-plausibility";
+
 export const discoveryCoverageMetricsSchema = z
   .object({
     campaignId: z.string().min(1),
@@ -13,8 +16,13 @@ export const discoveryCoverageMetricsSchema = z
     rawRecords: z.number().int().nonnegative(),
     normalizedCandidates: z.number().int().nonnegative(),
     uniqueCandidateHints: z.number().int().nonnegative(),
+    validOrganizationPages: z.number().int().nonnegative(),
     invalidRecordCount: z.number().int().nonnegative(),
-    plausibleCandidateCount: z.number().int().nonnegative().optional(),
+    sourceOnlyRecordCount: z.number().int().nonnegative(),
+    plausibleCandidateCount: z.number().int().nonnegative(),
+    geographyPlausibleCandidateCount: z.number().int().nonnegative(),
+    uniquePlausibleCandidateHints: z.number().int().nonnegative(),
+    relationshipCompatibleCandidateCount: z.number().int().nonnegative(),
     qualifiedCandidateCount: z.number().int().nonnegative().optional(),
     sourceTypesAttempted: z.array(z.string()),
     languagesAttempted: z.array(z.string()),
@@ -37,10 +45,11 @@ export const discoveryCoverageCellSchema = discoveryCoverageMetricsSchema
     providerExhausted: true,
   })
   .extend({
+    coveragePolicyVersion: z.literal(discoveryCoveragePolicyVersion),
     duplicateRate: z.number().min(0).max(1),
     invalidRecordRate: z.number().min(0).max(1),
     uniqueYieldPerCall: z.number().nonnegative(),
-    plausibleYieldPerCall: z.number().nonnegative().optional(),
+    plausibleYieldPerCall: z.number().nonnegative(),
     sourceDiversityCount: z.number().int().nonnegative(),
     confidence: z.number().min(0).max(1),
     status: z.enum([
@@ -69,10 +78,10 @@ export function calculateDiscoveryCoverage(
   const duplicateRate = ratio(duplicateCount, metrics.normalizedCandidates);
   const invalidRecordRate = ratio(metrics.invalidRecordCount, metrics.rawRecords);
   const uniqueYieldPerCall = ratio(metrics.uniqueCandidateHints, metrics.providerCalls);
-  const plausibleYieldPerCall =
-    metrics.plausibleCandidateCount === undefined
-      ? undefined
-      : ratio(metrics.plausibleCandidateCount, metrics.providerCalls);
+  const plausibleYieldPerCall = ratio(
+    metrics.uniquePlausibleCandidateHints,
+    metrics.providerCalls,
+  );
   const queryCoverage = setCoverage(
     metrics.queryFamiliesAttempted,
     metrics.expectedQueryFamilies,
@@ -88,16 +97,21 @@ export function calculateDiscoveryCoverage(
     metrics.normalizedCandidates,
   );
   const yieldSignal = Math.min(uniqueYieldPerCall / 2, 1);
-  const confidence = round(
-    queryCoverage * 0.25 +
-      languageCoverage * 0.2 +
-      sourceCoverage * 0.2 +
-      identityQuality * 0.2 +
-      yieldSignal * 0.15,
+  const commercialPlausibility = ratio(
+    metrics.uniquePlausibleCandidateHints,
+    Math.max(1, metrics.uniqueCandidateHints),
   );
+  const evidenceCoverage =
+    queryCoverage * 0.2 +
+    languageCoverage * 0.15 +
+    sourceCoverage * 0.15 +
+    identityQuality * 0.15 +
+    yieldSignal * 0.1 +
+    commercialPlausibility * 0.25;
+  const confidence = round(evidenceCoverage * (0.5 + commercialPlausibility * 0.5));
   const targetReached =
     metrics.targetUniqueCandidates !== undefined &&
-    metrics.uniqueCandidateHints >= metrics.targetUniqueCandidates;
+    metrics.uniquePlausibleCandidateHints >= metrics.targetUniqueCandidates;
   const allQueriesAttempted = queryCoverage === 1;
   const allLanguagesAttempted = languageCoverage === 1;
   let status: DiscoveryCoverageCell["status"];
@@ -115,7 +129,7 @@ export function calculateDiscoveryCoverage(
     metrics.providerExhausted &&
     allQueriesAttempted &&
     allLanguagesAttempted &&
-    uniqueYieldPerCall < 0.5
+    plausibleYieldPerCall < 0.5
   ) {
     status = "exhausted";
     reasons.push(
@@ -129,6 +143,7 @@ export function calculateDiscoveryCoverage(
     reasons.push("Source, language, query-family, or identity coverage remains weak.");
   }
   return discoveryCoverageCellSchema.parse({
+    coveragePolicyVersion: discoveryCoveragePolicyVersion,
     campaignId: metrics.campaignId,
     discoverySegmentId: metrics.discoverySegmentId,
     archetypeId: metrics.archetypeId,
@@ -139,16 +154,19 @@ export function calculateDiscoveryCoverage(
     normalizedCandidates: metrics.normalizedCandidates,
     uniqueCandidateHints: metrics.uniqueCandidateHints,
     invalidRecordCount: metrics.invalidRecordCount,
-    ...(metrics.plausibleCandidateCount === undefined
-      ? {}
-      : { plausibleCandidateCount: metrics.plausibleCandidateCount }),
+    validOrganizationPages: metrics.validOrganizationPages,
+    sourceOnlyRecordCount: metrics.sourceOnlyRecordCount,
+    plausibleCandidateCount: metrics.plausibleCandidateCount,
+    geographyPlausibleCandidateCount: metrics.geographyPlausibleCandidateCount,
+    uniquePlausibleCandidateHints: metrics.uniquePlausibleCandidateHints,
+    relationshipCompatibleCandidateCount: metrics.relationshipCompatibleCandidateCount,
     ...(metrics.qualifiedCandidateCount === undefined
       ? {}
       : { qualifiedCandidateCount: metrics.qualifiedCandidateCount }),
     duplicateRate,
     invalidRecordRate,
     uniqueYieldPerCall,
-    ...(plausibleYieldPerCall === undefined ? {} : { plausibleYieldPerCall }),
+    plausibleYieldPerCall,
     sourceDiversityCount,
     languagesAttempted: [...new Set(metrics.languagesAttempted)].sort(),
     confidence,

@@ -1,27 +1,30 @@
-import { parseCompleteJsonObject } from "@/lib/ai/structured-json";
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
 import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
-import { generateTextResult } from "@/lib/providers/openrouter";
+import { generateTextResult, type AiCallResult } from "@/lib/providers/openrouter";
+import { executeValidatedAiTask } from "@/lib/intelligence/runtime/execute-ai-task";
+import { IntelligenceTaskRegistry, type PromptDefinition } from "@/lib/intelligence/runtime/task-registry";
+import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
+import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 import {
   QUALIFICATION_CONFIDENCE_POLICY_VERSION,
   QUALIFICATION_FACTOR_PROMPT_VERSION,
   QUALIFICATION_RELATIONSHIP_PROMPT_VERSION,
   assignReviewLane,
-  buildFactorEvaluationMessages,
-  buildRelationshipClassificationMessages,
+  qualificationFactorTaskDefinition,
+  qualificationRelationshipTaskDefinition,
   calculateConfidence,
   calculateFit,
   calculatePotential,
+  compileHardExclusions,
+  suppressFitWhenEvidenceIsInsufficient,
   decideEligibility,
   normalizeFactorEvaluations,
   normalizeRelationshipClassification,
   type CandidateEligibility,
   type CandidateReviewLane,
-  type ExclusionAssessment,
   type FactorEvaluationOutput,
   type RelationshipClassificationOutput,
 } from "@/lib/qualification-v2";
-import type { IntelligenceRule } from "@/lib/intelligence/contracts/rules";
 import type { Json } from "@/types/database.types";
 import {
   claimQualificationMember,
@@ -85,6 +88,11 @@ export async function executeQualificationMember(input: {
         strength === "hard" && ["suspected", "unknown"].includes(state),
     ),
   });
+  const reportableFit = suppressFitWhenEvidenceIsInsufficient(
+    fit,
+    confidence.evidenceCoverage,
+    member.rubric.thresholds.minimumEvidenceCoverage,
+  );
   const eligibility = decideEligibility({
     validEntity: member.validEntity,
     merged: member.merged,
@@ -95,14 +103,14 @@ export async function executeQualificationMember(input: {
     factorEvaluations: factorResult.evaluations,
     evidenceCoverage: confidence.evidenceCoverage,
     minimumEvidenceCoverage: member.rubric.thresholds.minimumEvidenceCoverage,
-    fitScore: fit.score,
+    fitScore: reportableFit.score,
     rejectBelowFit: member.rubric.thresholds.rejectBelowFit,
     limitingCondition:
       relationship.output.objectiveCompatibility === "conditionally_compatible",
   });
   const lane = assignReviewLane({
     eligibility,
-    fitScore: fit.score,
+    fitScore: reportableFit.score,
     confidence: confidence.score,
     minimumFitForRecommended: member.rubric.thresholds.minimumFitForRecommended,
     minimumFitForConditional: member.rubric.thresholds.minimumFitForConditional,
@@ -117,21 +125,27 @@ export async function executeQualificationMember(input: {
     relationship: relationship.output,
     eligibility,
     lane,
-    fitScore: fit.score,
+    fitScore: reportableFit.score,
     potentialScore: potential.score,
     confidence: confidence.score,
+    confidenceCaps: confidence.caps,
+    exclusions,
     factors: factorResult.evaluations,
   });
   const finalSnapshot = {
     campaignCandidateId: member.campaignCandidateId,
     campaignStrategyVersionId: member.strategyVersionId,
     candidateIntelligenceVersionId: member.candidateIntelligenceVersionId,
+    claimApplicability: member.claims.map(({ id, applicability }) => ({
+      claimId: id,
+      applicability,
+    })),
     qualificationRubricContentHash: member.rubric.contentHash,
     relationship: relationship.assessment,
     objectiveCompatibility: relationship.output.objectiveCompatibility,
     exclusions,
     factorEvaluations: factorResult.evaluations,
-    fit,
+    fit: reportableFit,
     commercialPotential: potential,
     confidence,
     eligibility,
@@ -156,7 +170,7 @@ export async function executeQualificationMember(input: {
     } as unknown as Json,
     exclusions: exclusions as unknown as Json,
     factors: factorResult.evaluations as unknown as Json,
-    fit: fit as unknown as Json,
+    fit: reportableFit as unknown as Json,
     potential: potential as unknown as Json,
     confidence: confidence as unknown as Json,
     eligibility: eligibilityRecord(eligibility) as unknown as Json,
@@ -196,25 +210,31 @@ async function evaluateRelationship(input: {
       aiRequestId: cached.aiRequestId,
     };
   }
-  const messages = buildRelationshipClassificationMessages({
+  const request = {
     objective: input.member.objective,
     desiredRelationships: input.member.rubric.desiredRelationships,
     normallyExcludedRelationships: input.member.rubric.normallyExcludedRelationships,
     organization: input.member.organization,
     claims: input.member.claims,
     evidence: input.member.evidence,
-  });
+  };
   const startedAt = new Date().toISOString();
   assertIntelligenceExternalCallsAllowed("model");
-  const modelCall = await generateTextResult(messages, {
-    role: "company_qualification",
-    jsonMode: true,
-    maxCompletionTokens: 2_000,
-    reasoningEffort: "minimal",
-    taskName: "V2 candidate relationship classification",
+  const generated = await executeQualificationAiTask({
+    definition: qualificationRelationshipTaskDefinition,
+    request,
+    requestHash: input.requestHash,
+    member: input.member,
+    semanticValidate: (output) => {
+      normalizeRelationshipClassification({
+        raw: output,
+        claims: input.member.claims,
+        evidence: input.member.evidence,
+      });
+    },
   });
   const normalized = normalizeRelationshipClassification({
-    raw: parseCompleteJsonObject(modelCall.data),
+    raw: generated.output,
     claims: input.member.claims,
     evidence: input.member.evidence,
   });
@@ -224,7 +244,7 @@ async function evaluateRelationship(input: {
     taskType: "relationship",
     requestHash: input.requestHash,
     output: normalized.output as unknown as Json,
-    modelCall,
+    modelCall: generated.modelCall,
     startedAt,
   });
   return { ...normalized, aiRequestId: saved.aiRequestId };
@@ -263,24 +283,31 @@ async function evaluateFactors(input: {
       aiRequestId: cached.aiRequestId,
     };
   }
-  const messages = buildFactorEvaluationMessages({
+  const request = {
     objective: input.member.objective,
     relationship: input.relationship,
     factors,
     claims: input.member.claims,
     evidence: input.member.evidence,
-  });
+  };
   const startedAt = new Date().toISOString();
   assertIntelligenceExternalCallsAllowed("model");
-  const modelCall = await generateTextResult(messages, {
-    role: "company_qualification",
-    jsonMode: true,
-    maxCompletionTokens: 5_000,
-    reasoningEffort: "minimal",
-    taskName: "V2 candidate factor evaluation",
+  const generated = await executeQualificationAiTask({
+    definition: qualificationFactorTaskDefinition,
+    request,
+    requestHash: input.requestHash,
+    member: input.member,
+    semanticValidate: (output) => {
+      normalizeFactorEvaluations({
+        raw: output,
+        factors,
+        claims: input.member.claims,
+        evidence: input.member.evidence,
+      });
+    },
   });
   const normalized = normalizeFactorEvaluations({
-    raw: parseCompleteJsonObject(modelCall.data),
+    raw: generated.output,
     factors,
     claims: input.member.claims,
     evidence: input.member.evidence,
@@ -291,62 +318,99 @@ async function evaluateFactors(input: {
     taskType: "factors",
     requestHash: input.requestHash,
     output: normalized.output as unknown as Json,
-    modelCall,
+    modelCall: generated.modelCall,
     startedAt,
   });
   return { ...normalized, aiRequestId: saved.aiRequestId };
 }
 
-function compileExclusions(member: QualificationMemberContext) {
-  const claimById = new Map(member.claims.map((claim) => [claim.id, claim] as const));
-  const findingByKey = new Map(
-    member.questionFindings.map((finding) => [finding.questionKey, finding] as const),
-  );
-  return (member.rubric.hardExclusionRules as IntelligenceRule[])
-    .map((rule) => {
-      const finding = findingByKey.get(`exclusion.${rule.ruleKey}`);
-      const evidenceIds = uniqueSorted([
-        ...(finding?.evidenceIds ?? []),
-        ...(finding?.claimIds ?? []).flatMap(
-          (claimId) => claimById.get(claimId)?.evidenceIds ?? [],
-        ),
-      ]);
-      const confirmed = rule.status === "confirmed";
-      const state: ExclusionAssessment["state"] =
-        finding?.state === "answered_positive" && evidenceIds.length > 0
-          ? confirmed
-            ? "triggered"
-            : "suspected"
-          : finding?.state === "answered_negative" && evidenceIds.length > 0
-            ? "not_triggered"
-            : finding?.state === "conflicting"
-              ? "suspected"
-              : "unknown";
-      const confidence =
-        finding?.claimIds.length && evidenceIds.length
-          ? finding.claimIds.reduce(
-              (sum, claimId) => sum + (claimById.get(claimId)?.confidence ?? 0),
-              0,
-            ) / finding.claimIds.length
-          : 0;
+async function executeQualificationAiTask<TRequest, TOutput>(input: {
+  definition: PromptDefinition<TRequest, TOutput>;
+  request: TRequest;
+  requestHash: string;
+  member: QualificationMemberContext;
+  semanticValidate: (output: TOutput) => void;
+}) {
+  const tasks = new IntelligenceTaskRegistry();
+  tasks.register(input.definition);
+  const schemas = new IntelligenceSchemaRegistry();
+  schemas.register({
+    taskId: input.definition.taskId,
+    schemaVersion: input.definition.schemaVersion,
+    schema: input.definition.outputSchema,
+    semanticValidators: [(output) => input.semanticValidate(output)],
+  });
+  const result = await executeValidatedAiTask<TRequest, TOutput>({
+    registry: tasks,
+    schemas,
+    taskId: input.definition.taskId,
+    promptVersion: input.definition.promptVersion,
+    modelRouteVersion: "candidate-qualification-route/v1",
+    request: input.request,
+    recordAttempt: createIntelligenceAttemptRecorder({
+      workspaceId: input.member.workspaceId,
+      frozenInputHash: input.requestHash,
+      metadata: {
+        memberId: input.member.memberId,
+        campaignCandidateId: input.member.campaignCandidateId,
+      },
+    }),
+    transport: async (transportRequest) => {
+      const call = await generateTextResult(transportRequest.messages, {
+        role: "company_qualification",
+        maxCompletionTokens: transportRequest.maxCompletionTokens,
+        reasoningEffort:
+          transportRequest.reasoningClass === "standard"
+            ? "medium"
+            : transportRequest.reasoningClass,
+        taskName: input.definition.title,
+        ...(transportRequest.output.mode === "json_schema"
+          ? { jsonSchema: transportRequest.output }
+          : { jsonMode: true }),
+      });
       return {
-        ruleId: rule.ruleKey,
-        strength: "hard" as const,
-        state,
-        confidence,
-        evidenceIds,
-        effect:
-          state === "triggered"
-            ? ("exclude" as const)
-            : state === "suspected" || state === "unknown"
-              ? ("requires_research" as const)
-              : ("none" as const),
-        reason:
-          finding?.conciseAnswer ??
-          "The frozen evidence did not resolve this exclusion rule.",
+        output: call.data,
+        requestedModel: call.requestedModel,
+        actualModel: call.actualModel ?? call.requestedModel,
+        fallbackUsed: call.fallbackUsed,
+        requestHash: hashCanonical(transportRequest.messages),
+        responseHash: hashCanonical(call.data),
+        latencyMs: call.latencyMs,
+        inputUnits: call.inputTokens,
+        outputUnits: call.outputTokens,
+        actualCost: call.providerReportedCost,
+        currency: call.providerCurrency,
       };
-    })
-    .sort((left, right) => left.ruleId.localeCompare(right.ruleId));
+    },
+  });
+  return {
+    output: result.data,
+    modelCall: aiCallFromResult(result),
+  };
+}
+
+function aiCallFromResult<T>(result: Awaited<ReturnType<typeof executeValidatedAiTask<unknown, T>>>): AiCallResult<string> {
+  return {
+    data: JSON.stringify(result.data),
+    provider: "openrouter",
+    requestedModel: result.provenance.requestedModel,
+    actualModel: result.provenance.actualModel,
+    fallbackUsed: result.provenance.fallbackUsed,
+    inputTokens: result.provenance.inputUnits,
+    outputTokens: result.provenance.outputUnits,
+    providerReportedCost: result.provenance.actualCost,
+    providerCurrency: result.provenance.currency === "USD" ? "USD" : undefined,
+    latencyMs: result.provenance.latencyMs ?? 0,
+  };
+}
+
+export function compileExclusions(member: QualificationMemberContext) {
+  return compileHardExclusions({
+    rules: member.rubric.hardExclusionRules,
+    claims: member.claims,
+    evidence: member.evidence,
+    questionFindings: member.questionFindings,
+  });
 }
 
 function eligibilityRecord(eligibility: CandidateEligibility) {
@@ -382,6 +446,8 @@ function buildDeterministicExplanation(input: {
   fitScore: number | null;
   potentialScore: number | null;
   confidence: number;
+  confidenceCaps: string[];
+  exclusions: Array<{ ruleId: string; state: string; effect: string }>;
   factors: Array<{
     factorKey: string;
     state: string;
@@ -398,12 +464,21 @@ function buildDeterministicExplanation(input: {
     .map(({ factorKey }) => factorKey)
     .slice(0, 4)
     .join(", ");
+  const decisiveExclusions = input.exclusions
+    .filter(({ state }) => ["triggered", "suspected", "unknown"].includes(state))
+    .map(({ ruleId, state }) => `${ruleId}: ${state}`)
+    .slice(0, 3)
+    .join("; ");
   return [
     `Relationship: ${input.relationship.primaryRelationship} (${Math.round(input.relationship.confidence * 100)}% confidence).`,
     `Eligibility: ${input.eligibility}; review lane: ${input.lane}.`,
     `Fit: ${input.fitScore ?? "not enough evidence"}; commercial potential: ${input.potentialScore ?? "not enough evidence"}; confidence: ${input.confidence}.`,
     observed ? `Observed factors: ${observed}.` : "No scored factor was observed.",
     unresolved ? `Unresolved factors: ${unresolved}.` : "",
+    decisiveExclusions ? `Exclusion checks: ${decisiveExclusions}.` : "",
+    input.confidenceCaps.length
+      ? `Confidence caps: ${input.confidenceCaps.join(", ")}.`
+      : "",
   ]
     .filter(Boolean)
     .join(" ")

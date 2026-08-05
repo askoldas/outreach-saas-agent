@@ -62,7 +62,7 @@ export async function getCampaignV2Results(
 
   const { data: discoveryRun, error: discoveryError } = await supabase
     .from("discovery_runs_v2")
-    .select("id")
+    .select("id,discovery_plan_id")
     .eq("workspace_id", workspaceId)
     .eq("campaign_run_id", run.id)
     .order("created_at", { ascending: false })
@@ -70,6 +70,20 @@ export async function getCampaignV2Results(
     .maybeSingle();
   if (discoveryError)
     throw new Error(`Could not load V2 discovery coverage: ${discoveryError.message}`);
+
+  const { data: discoveryPlan, error: discoveryPlanError } = discoveryRun
+    ? await supabase
+        .from("discovery_plans_v2")
+        .select("memory_snapshot_id")
+        .eq("workspace_id", workspaceId)
+        .eq("id", discoveryRun.discovery_plan_id)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (discoveryPlanError) {
+    throw new Error(
+      `Could not load V2 discovery plan provenance: ${discoveryPlanError.message}`,
+    );
+  }
 
   const [entriesResult, coverageResult, gapsResult, entityCasesResult] =
     await Promise.all([
@@ -117,6 +131,7 @@ export async function getCampaignV2Results(
   const evaluationIds = entries.map((entry) => entry.candidate_evaluation_version_id);
   if (!candidateIds.length) {
     return {
+      appliedMemorySnapshotId: discoveryPlan?.memory_snapshot_id ?? null,
       anomalies: [],
       candidates: [],
       coverage: mapCoverage(coverageResult.data ?? [], labels),
@@ -265,17 +280,32 @@ export async function getCampaignV2Results(
       `Could not load V2 candidate provenance: ${normalizedCandidatesResult.error.message}`,
     );
   }
-  const providerSourceRecordIds = (
-    normalizedCandidatesResult.data ?? []
-  ).map((candidate) => candidate.provider_source_record_id);
+  const providerSourceRecordIds = (normalizedCandidatesResult.data ?? []).map(
+    (candidate) => candidate.provider_source_record_id,
+  );
   const sourceRecordsResult = await supabase
     .from("provider_source_records")
-    .select("id,raw_payload_json,source_url")
+    .select(
+      "id,provider_execution_id,provider_key,query_or_filter_fingerprint,raw_payload_json,source_type,source_url",
+    )
     .eq("workspace_id", workspaceId)
     .in("id", providerSourceRecordIds.length ? providerSourceRecordIds : [emptyUuid]);
   if (sourceRecordsResult.error) {
     throw new Error(
       `Could not load V2 candidate source records: ${sourceRecordsResult.error.message}`,
+    );
+  }
+  const executionIds = [
+    ...new Set((sourceRecordsResult.data ?? []).map((row) => row.provider_execution_id)),
+  ];
+  const discoveryQueriesResult = await supabase
+    .from("discovery_queries_v2")
+    .select("provider_execution_id,fingerprint,purpose,query_text")
+    .eq("workspace_id", workspaceId)
+    .in("provider_execution_id", executionIds.length ? executionIds : [emptyUuid]);
+  if (discoveryQueriesResult.error) {
+    throw new Error(
+      `Could not load V2 discovery query provenance: ${discoveryQueriesResult.error.message}`,
     );
   }
 
@@ -311,6 +341,15 @@ export async function getCampaignV2Results(
       .eq("campaign_run_id", run.id)
       .in("campaign_candidate_id", candidateIds),
   ]);
+  const preclassificationResult = await reviewClient
+    .from("provider_candidate_preclassifications_v2")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("campaign_id", campaign.id)
+    .in(
+      "provider_source_record_id",
+      providerSourceRecordIds.length ? providerSourceRecordIds : [emptyUuid],
+    );
 
   const byId = <T extends { id: string }>(items: T[] | null) =>
     new Map((items ?? []).map((item) => [item.id, item]));
@@ -320,6 +359,18 @@ export async function getCampaignV2Results(
   const intelligenceById = byId(intelligenceResult.data);
   const normalizedCandidateById = byId(normalizedCandidatesResult.data);
   const sourceRecordById = byId(sourceRecordsResult.data);
+  const queryByFingerprint = new Map(
+    (discoveryQueriesResult.data ?? []).map((item) => [
+      `${item.provider_execution_id}:${item.fingerprint}`,
+      item,
+    ]),
+  );
+  const preclassificationBySource = new Map(
+    (preclassificationResult.data ?? []).map((item) => [
+      String(item.provider_source_record_id),
+      item,
+    ]),
+  );
   const relationshipByEvaluation = new Map(
     (relationshipsResult.data ?? []).map((item) => [
       item.candidate_evaluation_version_id,
@@ -398,9 +449,16 @@ export async function getCampaignV2Results(
       organizationName: organization.name,
       organizationWebsiteUrl: organization.website_url,
       sourceTitle: objectString(sourceRecord?.raw_payload_json, "title"),
-      sourceUrl:
-        sourceRecord?.source_url ?? normalizedCandidate?.source_url ?? null,
+      sourceUrl: sourceRecord?.source_url ?? normalizedCandidate?.source_url ?? null,
     });
+    const discoveryQuery = sourceRecord
+      ? queryByFingerprint.get(
+          `${sourceRecord.provider_execution_id}:${sourceRecord.query_or_filter_fingerprint}`,
+        )
+      : undefined;
+    const preclassification = sourceRecord
+      ? preclassificationBySource.get(sourceRecord.id)
+      : undefined;
     const review = reviewByCandidate.get(candidate.id);
     const lane = normalizeLane(entry.lane);
     return [
@@ -439,6 +497,26 @@ export async function getCampaignV2Results(
         name: displayIdentity.name,
         organizationType: organization.organization_type,
         potential: scoreValue(scores, "potential"),
+        provenance: {
+          discoveryPurpose: discoveryQuery?.purpose ?? null,
+          discoveryQuery: discoveryQuery?.query_text ?? null,
+          firstParty: isFirstPartySource(
+            displayIdentity.domain,
+            displayIdentity.sourceUrl,
+          ),
+          preclassificationConfidence: preclassification
+            ? Number(preclassification.confidence)
+            : null,
+          preclassificationDisposition: preclassification
+            ? String(preclassification.disposition)
+            : null,
+          preclassificationReasons: preclassification
+            ? stringArray(preclassification.reason_codes_json)
+            : [],
+          provider: sourceRecord?.provider_key ?? null,
+          sourceTitle: objectString(sourceRecord?.raw_payload_json, "title"),
+          sourceType: sourceRecord?.source_type ?? null,
+        },
         rank: entry.rank_overall,
         relationship: displayEnum(relationship?.primary_relationship ?? "unknown"),
         relationshipConfidence: relationship?.confidence ?? null,
@@ -457,6 +535,7 @@ export async function getCampaignV2Results(
   for (const candidate of candidates) laneCounts[candidate.lane] += 1;
 
   return {
+    appliedMemorySnapshotId: discoveryPlan?.memory_snapshot_id ?? null,
     anomalies: (anomalyResult.data ?? []).map((item) => ({
       blocking: item.blocks_finalization,
       explanation: item.explanation,
@@ -477,6 +556,17 @@ export async function getCampaignV2Results(
     runId: run.id,
     runStatus: run.status,
   };
+}
+
+function isFirstPartySource(domain: string | null, sourceUrl: string | null) {
+  if (!domain || !sourceUrl) return false;
+  try {
+    const hostname = new URL(sourceUrl).hostname.replace(/^www\./, "").toLowerCase();
+    const normalizedDomain = domain.replace(/^www\./, "").toLowerCase();
+    return hostname === normalizedDomain || hostname.endsWith(`.${normalizedDomain}`);
+  } catch {
+    return false;
+  }
 }
 
 type ResultLabels = {
@@ -541,7 +631,7 @@ function archetypeLabel(value: string, labels: ResultLabels) {
   const configured = labels.archetypes.get(value);
   if (configured) return configured;
   const semanticKey = value.includes(".archetype.")
-    ? value.split(".archetype.").at(-1) ?? value
+    ? (value.split(".archetype.").at(-1) ?? value)
     : value;
   if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(semanticKey)) return "Target company";
   return humanizeKey(semanticKey);
@@ -563,10 +653,11 @@ function displayEnum(value: string) {
 }
 
 function humanizeKey(value: string) {
-  const words = value.replace(/[._-]+/g, " ").replace(/\s+/g, " ").trim();
-  return words
-    ? `${words.charAt(0).toUpperCase()}${words.slice(1)}`
-    : "Not established";
+  const words = value
+    .replace(/[._-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return words ? `${words.charAt(0).toUpperCase()}${words.slice(1)}` : "Not established";
 }
 
 function emptyLaneCounts(): Record<ResultLane, number> {
@@ -619,7 +710,5 @@ function stringArray(value: Json | unknown): string[] {
 function objectString(value: Json | unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = (value as Record<string, unknown>)[key];
-  return typeof candidate === "string" && candidate.trim()
-    ? candidate.trim()
-    : null;
+  return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
 }

@@ -3,7 +3,11 @@ import test from "node:test";
 import { z } from "zod";
 import { IntelligenceSchemaRegistry } from "../runtime/schema-registry.ts";
 import { IntelligenceTaskRegistry } from "../runtime/task-registry.ts";
-import { profileV3TaskDefinitions } from "./task-contracts.ts";
+import {
+  profileBuyerLogicShardOutputSchema,
+  profileCommercialSynthesisOutputSchema,
+  profileV3TaskDefinitions,
+} from "./task-contracts.ts";
 
 test("all V3 profile model stages register as independent versioned tasks", () => {
   const tasks = new IntelligenceTaskRegistry();
@@ -67,7 +71,12 @@ test("fact extraction receives every required atomic fact field in its prompt", 
   ]) {
     assert.match(prompt, new RegExp(field));
   }
-  assert.match(definition.promptVersion, /-v2$/);
+  assert.match(definition.promptVersion, /-v3$/);
+  assert.equal(
+    definition.schemaVersion,
+    "profile-fact-extraction-schema-v2-atomic-values",
+  );
+  assert.match(definition.description, /never return null, an object/i);
 });
 
 test("commercial synthesis is compact and has enough completion headroom", () => {
@@ -76,7 +85,7 @@ test("commercial synthesis is compact and has enough completion headroom", () =>
   );
   assert.ok(definition);
   assert.equal(definition.schemaVersion, "profile-commercial-synthesis-schema-v2");
-  assert.match(definition.promptVersion, /-v3$/);
+  assert.match(definition.promptVersion, /-v4$/);
   assert.equal(definition.maxCompletionTokens, 7_000);
   const schema = JSON.stringify(z.toJSONSchema(definition.outputSchema));
   assert.match(schema, /"primaryRoles"[\s\S]*?"maxItems":6/);
@@ -84,17 +93,51 @@ test("commercial synthesis is compact and has enough completion headroom", () =>
   assert.match(schema, /"unresolvedCommercialQuestions"[\s\S]*?"maxItems":12/);
 });
 
+test("commercial synthesis compacts verbose role descriptions into bounded labels", () => {
+  const parsed = profileCommercialSynthesisOutputSchema.parse({
+    primaryRoles: [{
+      role: `Manufacturer and supplier of specialized chemical intermediates, active pharmaceutical ingredients, and custom synthesis services for regulated pharmaceutical customers across multiple international markets`,
+      importance: "primary",
+      confidence: 0.8,
+      evidenceIds: ["evidence-1"],
+    }],
+    valueChainPosition: [],
+    revenueMechanics: [],
+    transactionModels: [],
+    deliveryModels: [],
+    customerConsumptionModes: [],
+    channelModels: [],
+    commercialConstraints: [],
+    unresolvedCommercialQuestions: [],
+    conciseCommercialSummary: "Commercial synthesis.",
+  });
+
+  assert.ok(parsed.primaryRoles[0]!.role.length <= 120);
+  assert.equal(parsed.primaryRoles[0]!.role.endsWith(" "), false);
+});
+
 test("profile buyer rules expose only durable profile scopes", () => {
   const definition = profileV3TaskDefinitions.find(
     ({ taskId }) => taskId === "profile.buyer_logic",
   );
   assert.ok(definition);
-  assert.equal(definition.schemaVersion, "profile-buyer-logic-schema-v3");
-  assert.match(definition.promptVersion, /-v4$/);
+  assert.equal(definition.schemaVersion, "profile-buyer-logic-schema-v6-sharded");
+  assert.match(definition.promptVersion, /-v7$/);
   const schema = JSON.stringify(z.toJSONSchema(definition.outputSchema));
   assert.match(schema, /"scope":\{"type":"string","enum":\["workspace","offering"\]\}/);
   assert.doesNotMatch(schema, /"scope"[\s\S]*?"candidate"/);
   assert.match(definition.description, /never campaign or candidate scope/i);
+  assert.match(definition.description, /one exact supplied offeringKey/i);
+  assert.match(definition.description, /exactly one offeringBuyerLogic/i);
+  assert.match(schema, /"offeringBuyerLogic"/);
+  assert.match(schema, /"likelyDecisionRoles"/);
+  assert.match(schema, /"positiveEvidenceSignals"/);
+  assert.match(schema, /"archetypes"[\s\S]*?"maxItems":36/);
+  assert.equal(definition.maxCompletionTokens, 4_000);
+  const shardSchema = JSON.stringify(z.toJSONSchema(profileBuyerLogicShardOutputSchema));
+  assert.match(shardSchema, /"offeringBuyerLogic"[\s\S]*?"minItems":1[\s\S]*?"maxItems":1/);
+  assert.match(shardSchema, /"archetypes"[\s\S]*?"maxItems":3/);
+  assert.match(shardSchema, /"proposedOfferingRules"[\s\S]*?"maxItems":2/);
 });
 
 test("profile clarification questions are always optional", () => {

@@ -3,6 +3,7 @@ import test from "node:test";
 import type { ConfirmedCampaignBrief } from "@/lib/campaign-workflow/contracts";
 import type { CampaignPlanningOffering } from "./planning-profile.ts";
 import { buildNativeCampaignStrategyV2 } from "./native-strategy.ts";
+import { compileCampaignStrategyV2 } from "./strategy-compiler.ts";
 
 test("native strategy creation compiles confirmed campaign intent without a V1 import", () => {
   const strategy = buildNativeCampaignStrategyV2({
@@ -85,6 +86,40 @@ test("native strategy accepts an explicitly selected worldwide market", () => {
   assert.deepEqual(strategy.geography.countryCodes, ["WORLDWIDE"]);
 });
 
+test("identical frozen inputs compile to the same baseline content hash", () => {
+  const input = {
+    campaignId: "campaign-repeatable",
+    strategyDraftId: "draft-repeatable",
+    profileVersionId: "profile-version-1",
+    offering: offering(),
+    confirmedBrief: brief(),
+    objectiveCode: "direct_buyer",
+    geography: {
+      mode: "country" as const,
+      displayName: "Lithuania",
+      countryCodes: ["LT"],
+      includedRegions: [],
+      includedCities: [],
+      excludedRegions: [],
+      excludedCities: [],
+      localLanguages: [],
+      workingLanguages: ["English"],
+      userConfirmed: true,
+    },
+    applicableProfileRules: [],
+  };
+  const first = compileCampaignStrategyV2({
+    draft: buildNativeCampaignStrategyV2(input),
+    compiledContextHash: "frozen-context-hash",
+  });
+  const second = compileCampaignStrategyV2({
+    draft: buildNativeCampaignStrategyV2(input),
+    compiledContextHash: "frozen-context-hash",
+  });
+
+  assert.equal(first.contentHash, second.contentHash);
+});
+
 function offering(): CampaignPlanningOffering {
   return {
     stableKey: "generic-prescription-portfolio",
@@ -105,11 +140,17 @@ function offering(): CampaignPlanningOffering {
       transactionModels: ["tender"],
     },
     buyerLogic: {
+      offeringKey: "generic-medicines",
       whyBuy: ["Maintain medicine availability"],
       requiredConditions: ["Procures prescription medicines"],
       preferredConditions: ["Runs formal tenders"],
       likelyTriggers: ["Upcoming procurement cycle"],
       incompatibleConditions: ["Does not purchase medicines"],
+      likelyDecisionRoles: ["Procurement director"],
+      positiveEvidenceSignals: ["Runs medicine tenders"],
+      negativeEvidenceSignals: ["Does not procure medicines"],
+      evidenceIds: [],
+      confidence: 0.84,
     },
     relationshipOptions: [
       {

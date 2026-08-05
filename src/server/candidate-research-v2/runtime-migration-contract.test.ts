@@ -40,7 +40,10 @@ test("Research evidence retains V2 provider or first-party fetch provenance", ()
   assert.match(migration, /expected_discovery_page_kind := 'other'/i);
   assert.doesNotMatch(migration, /target_page_kind <> case/i);
   assert.match(sourceService, /maximumFirstPartyFetches > 0/);
-  assert.match(sourceService, /minimumReusableContentLength/);
+  assert.doesNotMatch(sourceService, /minimumReusableContentLength/);
+  assert.match(sourceService, /member\.plan\.pageBudget/);
+  assert.match(sourceService, /member\.sourcePlan\.preferredPages/);
+  assert.match(sourceService, /searchWeb/);
   assert.match(
     migration,
     /page_fetch\.expires_at > now\(\)[\s\S]*on conflict \(candidate_research_member_id, source_artifact_id\) do nothing/i,
@@ -58,6 +61,11 @@ test("Paid extraction and candidate completion are separately replay safe", () =
   assert.match(worker, /findCandidateResearchExtraction/);
   assert.match(worker, /saveCandidateResearchExtraction/);
   assert.match(worker, /completeCandidateResearchMember/);
+  assert.match(worker, /executeValidatedAiTask/);
+  assert.match(worker, /createIntelligenceAttemptRecorder/);
+  assert.match(worker, /IntelligenceTaskRegistry/);
+  assert.match(worker, /IntelligenceSchemaRegistry/);
+  assert.doesNotMatch(worker, /parseCompleteJsonObject/);
 });
 
 test("Stage retries reuse the frozen batch before reading mutable candidate state", () => {

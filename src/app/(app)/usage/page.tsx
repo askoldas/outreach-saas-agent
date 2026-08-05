@@ -7,12 +7,18 @@ import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { listUsageEvents } from "@/server/outreach/repository";
 import { CommercialValidation } from "@/features/usage/CommercialValidation";
 import { getCommercialValidationMetrics } from "@/server/usage/repository";
+import { getIntelligenceRuntimeMetrics } from "@/server/intelligence-runtime/metrics-repository";
+import { IntelligenceRuntimeHealth } from "@/features/usage/IntelligenceRuntimeHealth";
+import { getIntelligenceFeedbackMetrics } from "@/server/intelligence-runtime/feedback-repository";
+import { IntelligenceFeedbackHealth } from "@/features/usage/IntelligenceFeedbackHealth";
 export default async function UsagePage() {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");
-  const [events, validation] = await Promise.all([
+  const [events, validation, intelligenceMetrics, feedbackMetrics] = await Promise.all([
     listUsageEvents(currentWorkspace.id),
     getCommercialValidationMetrics(currentWorkspace.id),
+    getIntelligenceRuntimeMetrics({ workspaceId: currentWorkspace.id }),
+    getIntelligenceFeedbackMetrics({ workspaceId: currentWorkspace.id }),
   ]);
   const actual = events.reduce((sum, event) => sum + event.actualUnits, 0);
   const estimated = events.reduce((sum, event) => sum + event.estimatedUnits, 0);
@@ -38,6 +44,8 @@ export default async function UsagePage() {
           </div>
         </Card>
       </section>
+      <IntelligenceRuntimeHealth metrics={intelligenceMetrics} />
+      <IntelligenceFeedbackHealth metrics={feedbackMetrics} />
       <CommercialValidation metrics={validation} />
       <Card>
         <CardHeader

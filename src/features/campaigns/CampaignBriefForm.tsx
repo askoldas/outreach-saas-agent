@@ -17,6 +17,11 @@ import type {
   CampaignPlanningOffering,
   CampaignPlanningProfile,
 } from "@/lib/intelligence/campaign-strategy-v2";
+import {
+  defaultRelationshipForObjective,
+  isObjectiveRelationshipCompatible,
+  parseCampaignObjective,
+} from "@/lib/campaign-workflow/objective-compatibility";
 import { Button } from "@/components/ui/Button";
 import form from "@/components/ui/FormControls.module.css";
 import shared from "@/features/shared/Feature.module.css";
@@ -88,7 +93,9 @@ export function CampaignBriefForm({
   const [countryCodes, setCountryCodes] = useState<string[]>([]);
   const [result, setResult] = useState<ProposalResult | null>(null);
   const [proposal, setProposal] = useState<CampaignBriefProposal | null>(null);
-  const [selectedOfferingId, setSelectedOfferingId] = useState("");
+  const [selectedOfferingId, setSelectedOfferingId] = useState(
+    profile.offerings[0]?.stableKey ?? "",
+  );
   const [campaignObjective, setCampaignObjective] = useState("direct_buyer");
   const [selectedTargetSegmentIds, setSelectedTargetSegmentIds] = useState<string[]>([]);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
@@ -109,15 +116,25 @@ export function CampaignBriefForm({
   const [pending, startTransition] = useTransition();
 
   const geographyLabel = regionLabel || countryCodes.join(", ");
+  const incompatibleSelectedRelationship = proposal?.targetSegments.find(
+    (segment) =>
+      selectedTargetSegmentIds.includes(segment.id) &&
+      !isObjectiveRelationshipCompatible(
+        parseCampaignObjective(campaignObjective),
+        segment.relationshipType,
+      ),
+  )?.relationshipType;
   const targetClientIssue = !targetSummary.trim()
     ? "Add a target-client summary to continue."
     : !split(companyTypes).length
       ? "Add at least one company type to continue."
       : !selectedTargetSegmentIds.length
         ? "Include at least one organization target to continue."
-        : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
-          ? "Answer the clarification above to continue."
-          : "";
+        : incompatibleSelectedRelationship
+          ? `The selected ${incompatibleSelectedRelationship.replaceAll("_", " ")} target is incompatible with the ${campaignObjective.replaceAll("_", " ")} objective. Generate target organizations again.`
+          : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
+            ? "Answer the clarification above to continue."
+            : "";
   const confirmedBrief = useMemo<ConfirmedCampaignBrief | null>(() => {
     if (!proposal) return null;
     return {
@@ -204,13 +221,18 @@ export function CampaignBriefForm({
     startTransition(async () => {
       setProposalError("");
       try {
-        const next = await proposeCampaignBriefAction({ countryCodes, regionLabel });
+        const next = await proposeCampaignBriefAction({
+          countryCodes,
+          regionLabel,
+          objective: campaignObjective,
+          selectedOfferingKey: selectedOfferingId,
+        });
         setResult(next);
         applyProposal(next.proposal);
         setName(
           `${next.proposal.offering.title} — ${regionLabel || countryCodes.join(", ")}`,
         );
-        setStep(2);
+        setStep(3);
       } catch (cause) {
         setProposalError(
           cause instanceof Error
@@ -223,20 +245,31 @@ export function CampaignBriefForm({
 
   function startWithProfileDefaults() {
     const offerings = profile.offerings;
-    const preferred = offerings[0];
-    if (!preferred) {
+    const selected = offerings.find(
+      (offering) => offering.stableKey === selectedOfferingId,
+    );
+    if (!selected) {
       setProposalError("The Company Profile has no campaign-ready offering.");
       return;
     }
     const next = buildProfileDefaultProposal(
       profile,
       { countryCodes, regionLabel },
-      preferred.stableKey,
+      selected.stableKey,
+      campaignObjective,
     );
+    next.provenance = {
+      objective: parseCampaignObjective(campaignObjective),
+      selectedOfferingKey: selected.stableKey,
+      selectedOfferingVersionId: selected.offeringVersionId,
+      profileVersionId: profile.profileVersionId,
+      promptVersion: "campaign-brief-proposal-v4-objective-first",
+      inputHash: "server-verified-on-confirmation",
+    };
     setResult(null);
     applyProposal(next);
     setName(`${next.offering.title} — ${geographyLabel}`);
-    setStep(2);
+    setStep(3);
   }
 
   function applyProposal(next: CampaignBriefProposal) {
@@ -264,9 +297,7 @@ export function CampaignBriefForm({
   function selectOffering(offeringId: string) {
     setSelectedOfferingId(offeringId);
     setResult(null);
-    applyProposal(
-      buildProfileDefaultProposal(profile, { countryCodes, regionLabel }, offeringId),
-    );
+    setProposal(null);
   }
 
   function toggleTargetSegment(segmentId: string) {
@@ -364,34 +395,33 @@ export function CampaignBriefForm({
               type="button"
               variant="primary"
               disabled={pending || !countryCodes.length}
-              onClick={startWithProfileDefaults}
+              onClick={() => setStep(2)}
             >
-              Continue with Company Profile defaults
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={pending || !countryCodes.length}
-              onClick={generateProposal}
-            >
-              {pending ? "Preparing recommendation…" : "Create or adapt target with AI"}
+              Continue
             </Button>
           </div>
         </section>
       ) : null}
 
-      {step === 2 && proposal ? (
+      {step === 2 ? (
         <section className={shared.stack}>
           <div>
-            <h2>Review the recommended offering</h2>
-            <p>{proposal.offering.rationale}</p>
+            <h2>Choose the commercial objective and primary offering</h2>
+            <p>
+              These frozen inputs determine which organization relationships may be
+              proposed.
+            </p>
           </div>
           <label className={form.field}>
             <span>Campaign objective</span>
             <select
               className={form.select}
               value={campaignObjective}
-              onChange={(event) => setCampaignObjective(event.target.value)}
+              onChange={(event) => {
+                setCampaignObjective(event.target.value);
+                setResult(null);
+                setProposal(null);
+              }}
             >
               <option value="direct_buyer">Find direct buyers</option>
               <option value="distributor">Find distributors</option>
@@ -429,33 +459,27 @@ export function CampaignBriefForm({
               ))}
             </div>
           </div>
-          <Field
-            label="Campaign offering"
-            value={offeringTitle}
-            onChange={setOfferingTitle}
-          />
-          <Field
-            label="Offering summary"
-            value={offeringSummary}
-            onChange={setOfferingSummary}
-            multiline
-          />
-          <Field
-            label="Value proposition"
-            value={valueProposition}
-            onChange={setValueProposition}
-            multiline
-          />
-          <Navigation
-            back={() => setStep(1)}
-            next={() => setStep(3)}
-            disabled={
-              !selectedOfferingId ||
-              !offeringTitle.trim() ||
-              !offeringSummary.trim() ||
-              !valueProposition.trim()
-            }
-          />
+          <div className={styles.navigation}>
+            <Button type="button" variant="ghost" onClick={() => setStep(1)}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending || !selectedOfferingId}
+              onClick={startWithProfileDefaults}
+            >
+              Adapt Company Profile targets
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={pending || !selectedOfferingId}
+              onClick={generateProposal}
+            >
+              Generate target organizations
+            </Button>
+          </div>
         </section>
       ) : null}
 
@@ -641,6 +665,7 @@ export function CampaignBriefForm({
               <strong>{desiredQualifiedCompanies}</strong>
             </p>
           </div>
+          {targetClientIssue ? <p className={styles.error}>{targetClientIssue}</p> : null}
           <form action={createCampaignAction}>
             <input type="hidden" name="name" value={name} />
             <input type="hidden" name="geography" value={geographyLabel} />
@@ -718,7 +743,11 @@ export function CampaignBriefForm({
               <Button type="button" variant="ghost" onClick={() => setStep(3)}>
                 Back
               </Button>
-              <Button type="submit" variant="primary" disabled={!name.trim()}>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!name.trim() || Boolean(targetClientIssue)}
+              >
                 Build campaign strategy
               </Button>
             </div>
@@ -737,16 +766,22 @@ function buildProfileDefaultProposal(
   profile: CampaignPlanningProfile,
   geography: { countryCodes: string[]; regionLabel: string },
   offeringId: string,
+  objectiveValue: string,
 ): CampaignBriefProposal {
   const offering = profile.offerings.find((item) => item.stableKey === offeringId);
   if (!offering) throw new Error("Select one Company Profile offering.");
   const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
+  const objective = parseCampaignObjective(objectiveValue);
   const archetypes = offering.archetypes
     .filter(
       (archetype) =>
         archetype.status !== "user_rejected" &&
         archetype.status !== "superseded" &&
-        archetype.priority !== "avoid",
+        archetype.priority !== "avoid" &&
+        isObjectiveRelationshipCompatible(
+          objective,
+          briefRelationshipType(archetype.relationshipType),
+        ),
     )
     .slice(0, 5);
   const roles = unique(archetypes.flatMap((archetype) => archetype.likelyDecisionRoles));
@@ -782,6 +817,7 @@ function buildProfileDefaultProposal(
           geography,
           offering,
           index,
+          objective,
         }),
       )
     : [
@@ -790,6 +826,7 @@ function buildProfileDefaultProposal(
           offering,
           organizationTypes,
           roles,
+          objective,
         }),
       ];
   return {
@@ -830,6 +867,7 @@ function profileArchetypeSegment(input: {
   geography: { countryCodes: string[]; regionLabel: string };
   offering: CampaignPlanningOffering;
   index: number;
+  objective: ReturnType<typeof parseCampaignObjective>;
 }): TargetSegment {
   const market =
     input.geography.regionLabel ||
@@ -839,7 +877,7 @@ function profileArchetypeSegment(input: {
     id: campaignKey(input.archetype.key || `profile-archetype-${input.index + 1}`),
     name: input.archetype.name,
     summary: `${input.archetype.description} Target market: ${market}.`,
-    relationshipType: briefRelationshipType(input.archetype.relationshipType),
+    relationshipType: defaultRelationshipForObjective(input.objective),
     organizationTypes: [input.archetype.name],
     industries: [],
     geographies: input.geography.countryCodes,
@@ -875,6 +913,7 @@ function fallbackOfferingSegment(input: {
   offering: CampaignPlanningOffering;
   organizationTypes: string[];
   roles: string[];
+  objective: ReturnType<typeof parseCampaignObjective>;
 }): TargetSegment {
   const relationship =
     input.offering.relationshipOptions.find((option) => option.relevance === "primary") ??
@@ -885,9 +924,7 @@ function fallbackOfferingSegment(input: {
     summary: `Organizations in ${
       input.geography.regionLabel || input.geography.countryCodes.join(", ")
     } with a plausible commercial fit for ${input.offering.name}.`,
-    relationshipType: briefRelationshipType(
-      relationship?.relationshipType ?? "direct_buyer",
-    ),
+    relationshipType: defaultRelationshipForObjective(input.objective),
     organizationTypes: input.organizationTypes,
     industries: [],
     geographies: input.geography.countryCodes,

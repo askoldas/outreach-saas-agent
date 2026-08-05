@@ -1,9 +1,24 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
-import type { MarketAnalysis } from "@/lib/campaign-workflow/market-planning";
 import {
   campaignStrategyV2Schema,
   type CampaignStrategyV2,
 } from "@/lib/intelligence/campaign-strategy-v2";
+
+type MarketAnalysis = {
+  summary: string;
+  marketBreadth: "very_narrow" | "narrow" | "medium" | "broad" | "very_broad";
+  estimatedCandidateRange?: { min?: number; max?: number };
+  relevantCompanyCategories: string[];
+  adjacentCategories: string[];
+  localTerminology: string[];
+  likelySourceTypes: string[];
+  positiveSignals: string[];
+  negativeSignals: string[];
+  exclusions: string[];
+  likelyDataChallenges: string[];
+  recommendedDiscoveryApproach: string;
+  confidence: number;
+};
 
 export type CampaignWorkflowSummary = {
   selectedRunId: string | null;

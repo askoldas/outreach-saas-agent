@@ -19,7 +19,7 @@ export async function calculateAndPersistCoverage(input: {
     cells: DiscoveryCoverageCell[];
     existingGaps: DiscoveryGap[];
     requestedCandidateCount: number;
-    currentCandidateCount: number;
+    currentPlausibleCandidateCount: number;
     deadlineReached: boolean;
     userState: "running" | "paused" | "cancelled";
     fatalProviderFailure: boolean;
@@ -45,7 +45,7 @@ export async function calculateAndPersistCoverage(input: {
     cells,
     gaps: [...input.campaignState.existingGaps, ...gaps],
     requestedCandidateCount: input.campaignState.requestedCandidateCount,
-    currentCandidateCount: input.campaignState.currentCandidateCount,
+    currentPlausibleCandidateCount: input.campaignState.currentPlausibleCandidateCount,
     remainingCalls: input.remainingCallBudget,
     deadlineReached: input.campaignState.deadlineReached,
     userState: input.campaignState.userState,

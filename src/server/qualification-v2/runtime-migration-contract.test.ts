@@ -37,6 +37,11 @@ test("Qualification caches narrow AI outputs and audits paid requests", () => {
   assert.match(worker, /factorRequestHash/);
   assert.match(worker, /taskType: "relationship"/);
   assert.match(worker, /taskType: "factors"/);
+  assert.match(worker, /executeValidatedAiTask/);
+  assert.match(worker, /createIntelligenceAttemptRecorder/);
+  assert.match(worker, /IntelligenceTaskRegistry/);
+  assert.match(worker, /IntelligenceSchemaRegistry/);
+  assert.doesNotMatch(worker, /parseCompleteJsonObject/);
 });
 
 test("Qualification persists relationship-first deterministic decisions atomically", () => {

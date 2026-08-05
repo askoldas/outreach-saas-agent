@@ -132,6 +132,9 @@ const factorSchema = z
 
 const rubricSchema = z
   .object({
+    campaignId: z.string().min(1).optional(),
+    offeringIds: z.array(z.string().min(1)).default([]),
+    archetypeIds: z.array(z.string().min(1)).default([]),
     desiredRelationships: z.array(z.string().min(1)),
     normallyExcludedRelationships: z.array(z.string().min(1)),
     factors: z.array(factorSchema),
@@ -299,7 +302,38 @@ export async function claimQualificationMember(input: {
       target_workspace_id: input.workspaceId,
     }),
   );
-  return parsed as QualificationMemberContext;
+  const factorKeys = new Set(parsed.rubric.factors.map(({ key }) => key));
+  const exclusionRuleKeys = new Set(
+    parsed.rubric.hardExclusionRules.flatMap((value) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+      const key = (value as Record<string, unknown>).ruleKey;
+      return typeof key === "string" ? [key] : [];
+    }),
+  );
+  return {
+    ...parsed,
+    claims: parsed.claims.map((claim) => ({
+      ...claim,
+      applicability: {
+        organizationId: parsed.organization.id,
+        campaignId: parsed.rubric.campaignId ?? parsed.campaignId,
+        offeringIds: [...parsed.rubric.offeringIds].sort(),
+        archetypeIds: [...parsed.rubric.archetypeIds].sort(),
+        questionKeys: [claim.key],
+        relationship: claim.key.includes("relationship"),
+        factorKeys: factorKeys.has(claim.key)
+          ? [claim.key]
+          : claim.key.startsWith("factor.") && factorKeys.has(claim.key.slice(7))
+            ? [claim.key.slice(7)]
+            : [],
+        exclusionRuleKeys: claim.key.startsWith("exclusion.")
+          ? exclusionRuleKeys.has(claim.key.slice(10))
+            ? [claim.key.slice(10)]
+            : []
+          : [],
+      },
+    })),
+  } as QualificationMemberContext;
 }
 
 export async function saveQualificationAiOutput(input: {

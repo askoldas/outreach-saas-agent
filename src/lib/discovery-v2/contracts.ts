@@ -201,11 +201,39 @@ export const normalizedProviderCandidateInputSchema = z
   })
   .strict();
 
+export const candidatePreclassificationSchema = z
+  .object({
+    sourceRecordKey: z.string().min(1),
+    disposition: z.enum(["candidate", "source_only", "reject", "needs_review"]),
+    probableOrganizationType: z.enum([
+      "operating_company",
+      "association",
+      "marketplace",
+      "publication",
+      "non_company_host",
+      "unknown",
+    ]),
+    probableRelationshipTypes: z.array(z.string()),
+    objectiveCompatibility: z.enum(["compatible", "incompatible", "unknown"]),
+    geographyPlausible: z.boolean().nullable(),
+    matchedSegmentId: z.string().min(1),
+    matchedArchetypeId: z.string().min(1),
+    strategyVersionId: z.string().min(1),
+    positiveSignals: z.array(z.string()),
+    negativeSignals: z.array(z.string()),
+    reasonCodes: z.array(z.string().min(1)).min(1),
+    sourceEvidenceIds: z.array(z.string().min(1)).min(1),
+    confidence: z.number().min(0).max(1),
+    classifierVersion: z.string().min(1),
+  })
+  .strict();
+
 export const providerDiscoveryResponseSchema = z
   .object({
     providerId: z.string().min(1),
     executionId: z.string().min(1),
     records: z.array(providerSourceRecordInputSchema),
+    classifications: z.array(candidatePreclassificationSchema),
     normalizedCandidates: z.array(normalizedProviderCandidateInputSchema),
     nextCursor: z.string().min(1).optional(),
     exhausted: z.boolean(),
@@ -238,12 +266,40 @@ export const providerDiscoveryResponseSchema = z
       });
     }
     const recordKeys = new Set(sourceKeys);
+    const classifiedKeys = response.classifications.map(
+      (classification) => classification.sourceRecordKey,
+    );
+    if (
+      classifiedKeys.length !== sourceKeys.length ||
+      new Set(classifiedKeys).size !== classifiedKeys.length ||
+      classifiedKeys.some((key) => !recordKeys.has(key))
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["classifications"],
+        message: "Every provider source record requires exactly one preclassification.",
+      });
+    }
     for (const candidate of response.normalizedCandidates) {
       if (!recordKeys.has(candidate.sourceRecordKey)) {
         context.addIssue({
           code: "custom",
           path: ["normalizedCandidates"],
           message: "A normalized candidate must reference a provider record key.",
+        });
+      }
+      const classification = response.classifications.find(
+        (item) => item.sourceRecordKey === candidate.sourceRecordKey,
+      );
+      if (
+        !classification ||
+        !["candidate", "needs_review"].includes(classification.disposition)
+      ) {
+        context.addIssue({
+          code: "custom",
+          path: ["normalizedCandidates"],
+          message:
+            "Only candidate or needs-review records may be normalized as candidates.",
         });
       }
     }
@@ -259,3 +315,4 @@ export type ProviderSourceRecordInput = z.infer<typeof providerSourceRecordInput
 export type NormalizedProviderCandidateInput = z.infer<
   typeof normalizedProviderCandidateInputSchema
 >;
+export type CandidatePreclassification = z.infer<typeof candidatePreclassificationSchema>;

@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   compileQualificationRubric,
+  compileHardExclusions,
+  isVerifiableClaim,
+  mapCampaignRelationshipsToQualification,
   normalizeFactorEvaluations,
   normalizeRelationshipClassification,
+  prepareQualificationCandidates,
+  qualificationFactorTaskDefinition,
+  qualificationRelationshipTaskDefinition,
   type QualificationClaim,
   type QualificationEvidence,
   type RuntimeQualificationFactor,
@@ -19,6 +25,16 @@ const claims: QualificationClaim[] = [
     epistemicStatus: "explicit_fact",
     confidence: 0.9,
     evidenceIds: ["evidence-home"],
+    applicability: {
+      organizationId: "organization-1",
+      campaignId: "campaign-1",
+      offeringIds: ["offering-1"],
+      archetypeIds: ["archetype-1"],
+      questionKeys: ["commercial_relationship"],
+      relationship: true,
+      factorKeys: ["offering_use_compatibility"],
+      exclusionRuleKeys: [],
+    },
   },
 ];
 
@@ -176,4 +192,189 @@ test("factor normalization derives bounded deterministic values and quality", ()
   assert.equal(result.evaluations[0]?.potentialValue, 1);
   assert.equal(result.evaluations[0]?.evidenceQuality, 1);
   assert.equal(result.evaluations[0]?.criticalGateState, "passed");
+});
+
+test("a cited hypothesis cannot establish a relationship", () => {
+  const hypothesis: QualificationClaim = {
+    ...claims[0]!,
+    id: "claim-hypothesis",
+    epistemicStatus: "hypothesis",
+  };
+  const result = normalizeRelationshipClassification({
+    raw: {
+      primaryRelationship: "probable_buyer",
+      secondaryRelationships: [],
+      objectiveCompatibility: "compatible",
+      confidence: 0.9,
+      positiveClaimIds: [hypothesis.id],
+      negativeClaimIds: [],
+      conflictClaimIds: [],
+      missingEvidence: [],
+      conciseRationale: "Hypothesis only.",
+    },
+    claims: [hypothesis],
+    evidence,
+  });
+
+  assert.equal(result.assessment.primaryRelationship, "unknown");
+  assert.equal(result.assessment.decisionBasis, "insufficient_evidence");
+});
+
+test("factor evidence must be linked to a verifiable supporting claim", () => {
+  const unrelatedEvidence: QualificationEvidence = {
+    ...evidence[0]!,
+    id: "evidence-unrelated",
+    excerpt: "Unrelated company history.",
+  };
+  const result = normalizeFactorEvaluations({
+    raw: {
+      factors: [
+        {
+          factorKey: "offering_use_compatibility",
+          state: "positive",
+          strength: 3,
+          confidence: 0.9,
+          supportingClaimIds: ["claim-buyer"],
+          counterClaimIds: [],
+          evidenceIds: ["evidence-unrelated"],
+          missingEvidence: [],
+          conciseExplanation: "Cites unrelated evidence.",
+          criticalGateRecommendation: "pass",
+        },
+      ],
+    },
+    factors,
+    claims,
+    evidence: [...evidence, unrelatedEvidence],
+  });
+
+  assert.equal(result.evaluations[0]?.state, "unknown");
+  assert.equal(result.evaluations[0]?.criticalGateState, "unresolved");
+});
+
+test("verifiable claims require bounded usable evidence", () => {
+  assert.equal(
+    isVerifiableClaim(claims[0], new Map(evidence.map((item) => [item.id, item]))),
+    true,
+  );
+  assert.equal(
+    isVerifiableClaim(
+      claims[0],
+      new Map(
+        evidence.map((item) => [
+          item.id,
+          { ...item, excerpt: null, directness: "unknown" as const },
+        ]),
+      ),
+    ),
+    false,
+  );
+});
+
+test("Campaign relationship taxonomy has an explicit qualification boundary", () => {
+  assert.deepEqual(
+    mapCampaignRelationshipsToQualification([
+      "direct_buyer",
+      "end_user_customer",
+      "implementation_partner",
+      "supplier",
+    ]),
+    ["end_user", "integration_partner", "probable_buyer", "supplier"],
+  );
+});
+
+test("a changed cited-claim snapshot invalidates the qualification input hash", () => {
+  const rubric = compileQualificationRubric(createNativeCampaignStrategyFixture());
+  const candidate = {
+    campaignCandidateId: "candidate-1",
+    organizationId: "organization-1",
+    candidateIntelligenceVersionId: "intelligence-1",
+    intelligenceContentHash: "a".repeat(64),
+    state: "active",
+    identityConfidence: 0.9,
+    identityReviewState: "resolved",
+    operatingStatus: "active",
+    mergedIntoOrganizationId: null,
+    procurementAutonomy: "independent",
+    procurementConfidence: 0.8,
+  };
+  const first = prepareQualificationCandidates({
+    campaignRunId: "run-1",
+    rubric,
+    candidates: [candidate],
+  });
+  const changed = prepareQualificationCandidates({
+    campaignRunId: "run-1",
+    rubric,
+    candidates: [{ ...candidate, intelligenceContentHash: "b".repeat(64) }],
+  });
+
+  assert.notEqual(first[0]?.inputHash, changed[0]?.inputHash);
+});
+
+test("hard exclusion requires an applicable verifiable positive claim", () => {
+  const exclusionClaim: QualificationClaim = {
+    ...claims[0]!,
+    id: "claim-exclusion",
+    key: "exclusion.blocked",
+    applicability: {
+      ...claims[0]!.applicability,
+      questionKeys: ["exclusion.blocked"],
+      exclusionRuleKeys: ["blocked"],
+    },
+  };
+  const rule = {
+    ruleKey: "blocked",
+    label: "Blocked condition",
+    description: "Exclude when explicitly present.",
+    ruleType: "hard_exclusion" as const,
+    scope: "campaign" as const,
+    strength: "hard" as const,
+    applicability: {
+      objectives: [],
+      offeringIds: [],
+      geographies: [],
+      relationshipTypes: [],
+      archetypeIds: [],
+    },
+    status: "confirmed" as const,
+    source: "user" as const,
+    evidenceIds: [],
+    confidence: 1,
+  };
+  const evaluate = (claim: QualificationClaim) =>
+    compileHardExclusions({
+      rules: [rule],
+      claims: [claim],
+      evidence,
+      questionFindings: [
+        {
+          questionKey: "exclusion.blocked",
+          state: "answered_positive",
+          claimIds: [claim.id],
+          conciseAnswer: "The condition is present.",
+        },
+      ],
+    })[0];
+
+  assert.equal(evaluate(exclusionClaim)?.state, "triggered");
+  assert.equal(
+    evaluate({ ...exclusionClaim, epistemicStatus: "hypothesis" })?.state,
+    "unknown",
+  );
+});
+
+test("relationship and factor evaluation are independent shared-runtime tasks", () => {
+  assert.equal(
+    qualificationRelationshipTaskDefinition.taskId,
+    "candidate.relationship_classification",
+  );
+  assert.equal(
+    qualificationFactorTaskDefinition.taskId,
+    "candidate.factor_evaluation",
+  );
+  assert.equal(qualificationRelationshipTaskDefinition.maxCompletionTokens, 2_000);
+  assert.equal(qualificationFactorTaskDefinition.maxCompletionTokens, 5_000);
+  assert.equal(qualificationRelationshipTaskDefinition.allowsRepair, true);
+  assert.equal(qualificationFactorTaskDefinition.allowsFallback, true);
 });

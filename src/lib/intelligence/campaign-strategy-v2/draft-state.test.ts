@@ -8,7 +8,8 @@ import { createNativeCampaignStrategyFixture } from "./test-fixture.ts";
 
 test("uncompiled Campaign Strategy placeholders are not parsed as strategies", () => {
   assert.equal(parseCampaignStrategyV2DraftPayload("building", {}), null);
-  assert.equal(canRetryCampaignStrategyV2Draft("building"), true);
+  assert.equal(canRetryCampaignStrategyV2Draft("building"), false);
+  assert.equal(canRetryCampaignStrategyV2Draft("failed"), true);
 });
 
 test("compiled Campaign Strategy drafts retain strict contract validation", () => {

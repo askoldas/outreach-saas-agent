@@ -1,5 +1,6 @@
 export type ModelRole =
   | "campaign_planning"
+  | "campaign_strategy_compilation"
   | "profile_analysis"
   | "company_qualification"
   | "outreach_generation"
@@ -11,6 +12,7 @@ export type ModelRole =
 
 export const modelRoles: readonly ModelRole[] = [
   "campaign_planning",
+  "campaign_strategy_compilation",
   "profile_analysis",
   "company_qualification",
   "outreach_generation",

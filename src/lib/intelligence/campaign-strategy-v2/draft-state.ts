@@ -4,7 +4,7 @@ import {
 } from "./schemas.ts";
 
 const compiledDraftStates = new Set(["ready_for_review", "confirmed"]);
-const recoverableDraftStates = new Set(["building", "needs_input"]);
+const recoverableDraftStates = new Set(["needs_input", "failed"]);
 
 export function parseCampaignStrategyV2DraftPayload(
   state: string,

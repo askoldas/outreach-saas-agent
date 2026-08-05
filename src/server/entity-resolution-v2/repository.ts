@@ -7,6 +7,8 @@ import {
   prepareResolutionCandidates,
   type CampaignResolutionInput,
 } from "./candidate-preparation";
+import { applyMemoryEntityResolutionEffects } from "@/lib/memory-v2";
+import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
 
 type RpcResult = {
   data: unknown;
@@ -60,16 +62,26 @@ export async function resolveCampaignEntities(input: {
   campaignRunId: string;
   workspaceId: string;
 }): Promise<CampaignEntityResolutionSummary> {
-  const rawCandidates = z.array(resolutionInputSchema).parse(
-    await rpc("load_campaign_entity_resolution_inputs_v2", {
+  const [loadedCandidates, semanticContext] = await Promise.all([
+    rpc("load_campaign_entity_resolution_inputs_v2", {
       target_workspace_id: input.workspaceId,
       target_campaign_run_id: input.campaignRunId,
     }),
-  ) as CampaignResolutionInput[];
-  const candidates = prepareResolutionCandidates(rawCandidates);
+    prepareSemanticDiscoveryContext(input),
+  ]);
+  const rawCandidates = z
+    .array(resolutionInputSchema)
+    .parse(loadedCandidates) as CampaignResolutionInput[];
+  const memoryAdjustedCandidates = applyMemoryEntityResolutionEffects(
+    rawCandidates,
+    semanticContext.memoryEntityResolutionEffects,
+  );
+  const candidates = prepareResolutionCandidates(memoryAdjustedCandidates);
   const inputHash = hashCanonical({
     campaignRunId: input.campaignRunId,
     candidates,
+    memorySnapshotId: semanticContext.memorySnapshot.id,
+    memoryCompilationTrace: semanticContext.memoryCompilationTrace,
     rulesVersion: ENTITY_RESOLUTION_RUNTIME_RULES_VERSION,
     workspaceId: input.workspaceId,
   });

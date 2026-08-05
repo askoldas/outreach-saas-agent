@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { parseCompleteJsonObject } from "@/lib/ai/structured-json";
 import {
-  buildCandidateEvidenceExtractionMessages,
+  candidateEvidenceExtractionPromptVersion,
+  candidateEvidenceExtractionSchemaVersion,
+  candidateEvidenceExtractionTaskDefinition,
   compileCandidateClaims,
   freshnessClassForQuestion,
   normalizeCandidateEvidenceExtraction,
@@ -11,6 +12,10 @@ import {
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
 import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import { generateTextResult } from "@/lib/providers/openrouter";
+import { executeValidatedAiTask } from "@/lib/intelligence/runtime/execute-ai-task";
+import { IntelligenceTaskRegistry } from "@/lib/intelligence/runtime/task-registry";
+import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
+import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 import type { Json } from "@/types/database.types";
 import {
   claimCandidateResearchMember,
@@ -22,8 +27,8 @@ import {
 } from "./repository";
 import { collectCandidateResearchSources } from "./source-service";
 
-const promptVersion = "candidate-evidence-extraction-v2.2";
-const schemaVersion = "candidate-evidence-extraction-v2.2";
+const promptVersion = candidateEvidenceExtractionPromptVersion;
+const schemaVersion = candidateEvidenceExtractionSchemaVersion;
 
 export async function executeCandidateResearchMember(input: {
   memberId: string;
@@ -82,7 +87,7 @@ export async function executeCandidateResearchMember(input: {
       });
       aiRequestIds = [cached.aiRequestId];
     } else {
-      const messages = buildCandidateEvidenceExtractionMessages({
+      const request = {
         organization: {
           id: member.organizationId,
           name: member.organizationName,
@@ -92,21 +97,82 @@ export async function executeCandidateResearchMember(input: {
         campaign: member.strategyContext,
         plan: member.plan,
         evidence: evidenceContext,
-      });
+      };
       const startedAt = new Date().toISOString();
       assertIntelligenceExternalCallsAllowed("model");
-      const modelCall = await generateTextResult(messages, {
-        role: "website_extraction",
-        jsonMode: true,
-        maxCompletionTokens: 5_000,
-        reasoningEffort: "minimal",
-        taskName: "V2 candidate evidence extraction",
+      const tasks = new IntelligenceTaskRegistry();
+      tasks.register(candidateEvidenceExtractionTaskDefinition);
+      const schemas = new IntelligenceSchemaRegistry();
+      schemas.register({
+        taskId: candidateEvidenceExtractionTaskDefinition.taskId,
+        schemaVersion: candidateEvidenceExtractionTaskDefinition.schemaVersion,
+        schema: candidateEvidenceExtractionTaskDefinition.outputSchema,
+        semanticValidators: [],
+      });
+      const generated = await executeValidatedAiTask<
+        typeof request,
+        CandidateEvidenceExtraction
+      >({
+        registry: tasks,
+        schemas,
+        taskId: candidateEvidenceExtractionTaskDefinition.taskId,
+        promptVersion,
+        modelRouteVersion: "candidate-research-extraction-route/v1",
+        request,
+        recordAttempt: createIntelligenceAttemptRecorder({
+          workspaceId: input.workspaceId,
+          frozenInputHash: extractionRequestHash,
+          metadata: {
+            memberId: member.memberId,
+            researchPlanId: member.researchPlanId,
+          },
+        }),
+        transport: async (transportRequest) => {
+          const call = await generateTextResult(transportRequest.messages, {
+            role: "website_extraction",
+            maxCompletionTokens: transportRequest.maxCompletionTokens,
+            reasoningEffort:
+              transportRequest.reasoningClass === "standard"
+                ? "medium"
+                : transportRequest.reasoningClass,
+            taskName: "V2 candidate evidence extraction",
+            ...(transportRequest.output.mode === "json_schema"
+              ? { jsonSchema: transportRequest.output }
+              : { jsonMode: true }),
+          });
+          return {
+            output: call.data,
+            requestedModel: call.requestedModel,
+            actualModel: call.actualModel ?? call.requestedModel,
+            fallbackUsed: call.fallbackUsed,
+            requestHash: hashCanonical(transportRequest.messages),
+            responseHash: hashCanonical(call.data),
+            latencyMs: call.latencyMs,
+            inputUnits: call.inputTokens,
+            outputUnits: call.outputTokens,
+            actualCost: call.providerReportedCost,
+            currency: call.providerCurrency,
+          };
+        },
       });
       extraction = normalizeCandidateEvidenceExtraction({
-        raw: parseCompleteJsonObject(modelCall.data),
+        raw: generated.data,
         plan: member.plan,
         evidence: evidenceContext,
       });
+      const modelCall = {
+        data: JSON.stringify(generated.data),
+        provider: "openrouter" as const,
+        requestedModel: generated.provenance.requestedModel,
+        actualModel: generated.provenance.actualModel,
+        fallbackUsed: generated.provenance.fallbackUsed,
+        inputTokens: generated.provenance.inputUnits,
+        outputTokens: generated.provenance.outputUnits,
+        providerReportedCost: generated.provenance.actualCost,
+        providerCurrency:
+          generated.provenance.currency === "USD" ? ("USD" as const) : undefined,
+        latencyMs: generated.provenance.latencyMs ?? 0,
+      };
       const saved = await saveCandidateResearchExtraction({
         memberId: member.memberId,
         workspaceId: input.workspaceId,

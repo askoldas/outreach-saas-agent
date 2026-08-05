@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import type { SearchResult } from "../../providers/tavily.ts";
 import type {
+  CandidatePreclassification,
   NormalizedProviderCandidateInput,
+  ProviderDiscoveryRequest,
   ProviderSourceRecordInput,
 } from "../contracts.ts";
+import { preclassifyWebResult } from "../candidate-preclassification.ts";
 import type { WebDiscoveryQuery } from "./web-query-generator.ts";
 
 export type WebResultPageType =
@@ -81,9 +84,10 @@ export function normalizeWebSearchResult(input: {
   rank: number;
   providerVersion: string;
   retrievedAt: string;
-  archetypeId: string;
+  segment: ProviderDiscoveryRequest["segment"];
 }): {
   record: ProviderSourceRecordInput;
+  classification: CandidatePreclassification;
   candidate?: NormalizedProviderCandidateInput;
 } {
   const pageType = classifyWebResult(input.result);
@@ -116,15 +120,27 @@ export function normalizeWebSearchResult(input: {
     rawPayloadHash: digest(JSON.stringify(rawPayload)),
     retrievedAt: input.retrievedAt,
   };
-  if (!isDirectOrganizationPage(pageType)) return { record };
+  const classification = preclassifyWebResult({
+    pageType,
+    result: input.result,
+    segment: input.segment,
+    sourceRecordKey,
+  });
+  if (
+    !isDirectOrganizationPage(pageType) ||
+    !["candidate", "needs_review"].includes(classification.disposition)
+  ) {
+    return { record, classification };
+  }
 
   const domain = canonicalDomainHint(input.result.url);
   const name = cleanResultName(input.result.title, input.result.url, pageType);
   const websiteUrl = websiteOrigin(input.result.url);
-  if (!name || !domain || !websiteUrl) return { record };
+  if (!name || !domain || !websiteUrl) return { record, classification };
 
   return {
     record,
+    classification,
     candidate: {
       sourceRecordKey,
       name,
@@ -134,7 +150,7 @@ export function normalizeWebSearchResult(input: {
       description: input.result.content.slice(0, 1000),
       organizationTypeHint: "company",
       matchedSegmentId: input.query.discoverySegmentId,
-      matchedArchetypeId: input.archetypeId,
+      matchedArchetypeId: input.segment.archetypeId,
       matchedSignals:
         input.query.family === "positive_signal" ? [input.query.purpose] : [],
       preliminaryQuality: {

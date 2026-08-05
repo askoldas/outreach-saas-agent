@@ -1,5 +1,4 @@
 import type { ProfileConfidence } from "../company-profile/structured-profile.ts";
-import { generateTextResult } from "../providers/openrouter.ts";
 
 export type OfferingStatus =
   | "suggested"
@@ -38,46 +37,6 @@ export type OfferingProposal = {
 };
 
 export const offeringProposalPromptVersion = "profile-offering-proposals-v1";
-
-export async function generateOfferingProposals(input: {
-  companyProfile: Record<string, unknown>;
-  clarificationAnswers?: Array<{ question: string; answer: string }>;
-}) {
-  const promptInput = {
-    companyProfile: input.companyProfile,
-    clarificationAnswers: input.clarificationAnswers ?? [],
-    requiredOutput: { offerings: [offeringShape] },
-  };
-  const modelCall = await generateTextResult(
-    [
-      {
-        role: "system",
-        content: [
-          "Propose the three to five strongest commercially meaningful offerings supported by the Company Profile.",
-          "Distinguish confirmed website offerings, inferred offerings, and proposed new B2B packaging.",
-          "A proposed package must require explicit confirmation as already provided, intended, or not relevant.",
-          "Every offering must identify an organization that could buy it, likely decision makers, and separate beneficiaries or end users.",
-          "Current consumer audiences are profile facts, not organization targets. For consumer businesses, propose only supported organization relationships such as distributors, retailers, resellers, corporate buyers, employers, partners, or institutions.",
-          "Do not invent capabilities, prices, commercial terms, delivery commitments, or geographic coverage.",
-          "Use supplied evidence and confidence. Return validated JSON only.",
-        ].join(" "),
-      },
-      { role: "user", content: JSON.stringify(promptInput) },
-    ],
-    {
-      role: "profile_analysis",
-      taskName: "structured offering proposal generation",
-      jsonMode: true,
-      maxCompletionTokens: 5_000,
-      reasoningEffort: "minimal",
-    },
-  );
-  return {
-    offerings: parseOfferingProposals(modelCall.data),
-    modelCall,
-    promptInput,
-  };
-}
 
 export function parseOfferingProposals(value: unknown): OfferingProposal[] {
   const parsed = typeof value === "string" ? parseJson(value) : value;
@@ -154,29 +113,6 @@ function parseOffering(value: unknown): OfferingProposal {
       : {}),
   };
 }
-
-const offeringShape = {
-  id: "stable_slug",
-  name: "commercial offering",
-  shortDescription: "one or two sentences",
-  problemSolved: "organization problem solved",
-  includedProducts: ["supported product"],
-  includedServices: ["supported service"],
-  supportingCapabilityIds: ["profile capability ID"],
-  buyerOrganizationTypes: ["organization type"],
-  beneficiaryTypes: ["end user or beneficiary"],
-  likelyBuyerRoles: ["decision maker"],
-  deliveryModel: "only when supported",
-  commercialModel: "only when supported",
-  geographicConstraints: ["known constraint"],
-  operationalConstraints: ["known constraint"],
-  evidence: ["profile evidence"],
-  source: "website|profile|user|ai_inference|ai_interpreted",
-  confidence: "high|medium|low",
-  status: "suggested|confirmed|inferred|proposed|rejected",
-  requiresConfirmation: true,
-  confirmationReason: "why confirmation is needed",
-};
 
 function parseJson(value: string) {
   try {

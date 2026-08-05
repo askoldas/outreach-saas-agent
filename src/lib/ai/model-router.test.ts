@@ -25,6 +25,10 @@ test("high-impact roles use the controlled paid fallback", () => {
     assert.deepEqual(getModelRoute(role).fallbackModels, ["openai/gpt-5-mini"]);
   }
   assert.deepEqual(getModelRoute("guided_interpretation").fallbackModels, []);
+  assert.equal(
+    getModelRoute("campaign_strategy_compilation").primaryModel,
+    "google/gemini-2.5-flash",
+  );
 });
 
 test("free and moving model aliases are rejected", () => {
@@ -41,7 +45,6 @@ test("AI call sites request roles and do not duplicate raw production model IDs"
   const files = [
     "draft-generation.ts",
     "campaign-brief-proposal.ts",
-    "structured-change-interpretation.ts",
   ];
   for (const file of files) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
@@ -61,10 +64,7 @@ test("no OpenRouter secret uses a public environment variable", async () => {
 
 test("current AI prompt versions match the approved structured contracts", async () => {
   const expectations = new Map([
-    ["offering-proposals.ts", "profile-offering-proposals-v1"],
-    ["target-segment-proposals.ts", "campaign-target-segments-v1"],
-    ["structured-change-interpretation.ts", "structured-additive-changes-v1"],
-    ["draft-generation.ts", "grounded-outreach-draft-v1"],
+    ["draft-generation.ts", "grounded-outreach-draft-v2-shared-runtime"],
   ]);
   for (const [file, promptVersion] of expectations) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");

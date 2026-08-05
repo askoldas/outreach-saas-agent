@@ -21,8 +21,12 @@ import {
 } from "@/lib/campaign-workflow/contracts";
 import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
 import { createInitialCampaignStrategyV2 } from "@/server/campaign-strategy-v2/service";
+import { dispatchCampaignStrategyV2Compilation } from "@/server/trigger/dispatch";
 import { getPublishedCampaignPlanningProfile } from "@/server/campaign-strategy-v2/repository";
 import { controlActiveCampaignWorkflowV2 } from "@/server/workflow-v2/control-service";
+import { parseCampaignObjective } from "@/lib/campaign-workflow/objective-compatibility";
+import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
+import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 
 type UpdateCampaignStatusInput = {
   campaignId: string;
@@ -34,6 +38,8 @@ const controlStatuses = new Set<CampaignStatus>(["completed", "paused", "running
 export async function proposeCampaignBriefAction(input: {
   countryCodes: string[];
   regionLabel?: string;
+  objective: string;
+  selectedOfferingKey: string;
 }) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) throw new Error("Authentication required.");
@@ -48,9 +54,24 @@ export async function proposeCampaignBriefAction(input: {
   if (!profile) {
     throw new Error("Publish the Company Profile before planning a campaign.");
   }
+  const objective = parseCampaignObjective(input.objective);
   const result = await generateCampaignBriefProposal({
     geography: { countryCodes, ...(regionLabel ? { regionLabel } : {}) },
     profile,
+    objective,
+    selectedOfferingKey: input.selectedOfferingKey,
+    runtime: {
+      recordAttempt: createIntelligenceAttemptRecorder({
+        workspaceId: currentWorkspace.id,
+        frozenInputHash: hashCanonical({
+          geography: { countryCodes, regionLabel: regionLabel ?? null },
+          objective,
+          profileVersionId: profile.profileVersionId,
+          selectedOfferingKey: input.selectedOfferingKey,
+        }),
+        metadata: { profileVersionId: profile.profileVersionId },
+      }),
+    },
   });
   return {
     proposal: result.proposal,
@@ -170,6 +191,7 @@ export async function createCampaignAction(formData: FormData) {
   const validOfferingIds = new Set(
     profile.offerings.map((offering) => offering.stableKey),
   );
+  const objectiveCode = parseCampaignObjective(getString(formData, "campaignObjective"));
   const proposal = parseCampaignBriefProposal(
     getJson(formData, "briefProposal"),
     validOfferingIds,
@@ -177,6 +199,7 @@ export async function createCampaignAction(formData: FormData) {
   const confirmedBrief = parseConfirmedCampaignBrief(
     getJson(formData, "confirmedBrief"),
     validOfferingIds,
+    objectiveCode,
   );
   const clarificationAnswer = parseClarificationAnswer(
     getJson(formData, "clarificationAnswer"),
@@ -186,10 +209,63 @@ export async function createCampaignAction(formData: FormData) {
       `/campaigns/new?error=${encodeURIComponent("Answer the campaign clarification before starting.")}`,
     );
   }
+  if (clarificationAnswer) {
+    const appliedAnswer = `Campaign clarification: ${clarificationAnswer.answer}`;
+    confirmedBrief.targetClient.characteristics = Array.from(
+      new Set([...confirmedBrief.targetClient.characteristics, appliedAnswer]),
+    );
+    confirmedBrief.targetSegments = confirmedBrief.targetSegments.map((segment) =>
+      segment.status === "confirmed"
+        ? {
+            ...segment,
+            characteristics: Array.from(
+              new Set([...segment.characteristics, appliedAnswer]),
+            ),
+          }
+        : segment,
+    );
+  }
   const geography =
     confirmedBrief.geography.regionLabel ||
     confirmedBrief.geography.countryCodes.join(", ");
   const selectedOfferingId = confirmedBrief.offering.profileOfferingIds[0]!;
+  const selectedOffering = profile.offerings.find(
+    (offering) => offering.stableKey === selectedOfferingId,
+  );
+  if (!selectedOffering) throw new Error("The selected offering is no longer published.");
+  const proposalInput = {
+    geography: {
+      countryCodes: confirmedBrief.geography.countryCodes,
+      ...(confirmedBrief.geography.regionLabel
+        ? { regionLabel: confirmedBrief.geography.regionLabel }
+        : {}),
+    },
+    objective: objectiveCode,
+    selectedOfferingKey: selectedOffering.stableKey,
+    selectedOfferingVersionId: selectedOffering.offeringVersionId,
+    profileVersionId: profile.profileVersionId,
+  };
+  const expectedInputHash = hashCanonical(proposalInput);
+  const provenanceMatches =
+    proposal.provenance?.objective === objectiveCode &&
+    proposal.provenance.selectedOfferingKey === selectedOffering.stableKey &&
+    proposal.provenance.selectedOfferingVersionId ===
+      selectedOffering.offeringVersionId &&
+    proposal.provenance.profileVersionId === profile.profileVersionId &&
+    proposal.provenance.promptVersion === campaignBriefPromptVersion &&
+    [expectedInputHash, "server-verified-on-confirmation"].includes(
+      proposal.provenance.inputHash,
+    );
+  if (!provenanceMatches) {
+    throw new Error(
+      "The target proposal is stale. Generate it again after reviewing geography, objective, and offering.",
+    );
+  }
+  proposal.provenance = {
+    ...proposalInput,
+    promptVersion: campaignBriefPromptVersion,
+    inputHash: expectedInputHash,
+  };
   const confirmedTargetSegments = confirmedBrief.targetSegments.filter(
     (segment) => segment.status === "confirmed",
   );
@@ -275,17 +351,33 @@ export async function createCampaignAction(formData: FormData) {
   });
   await completeGuidedDraft(currentWorkspace.id, "campaign", "new");
 
-  const { strategyDraftId } = await createInitialCampaignStrategyV2({
-    workspaceId: currentWorkspace.id,
-    campaign,
-    confirmedBrief,
-    objectiveCode: getString(formData, "campaignObjective") || "direct_buyer",
-  });
+  let strategyDraftId: string;
+  try {
+    ({ strategyDraftId } = await createInitialCampaignStrategyV2({
+      workspaceId: currentWorkspace.id,
+      campaign,
+      confirmedBrief,
+      objectiveCode,
+    }));
+    await dispatchCampaignStrategyV2Compilation({
+      workspaceId: currentWorkspace.id,
+      campaignExternalId: campaign.id,
+      strategyDraftId,
+    });
+  } catch (error) {
+    revalidatePath("/campaigns");
+    revalidatePath(`/campaigns/${campaign.id}/strategy`);
+    const message =
+      error instanceof Error
+        ? `Strategy setup paused: ${error.message}`
+        : "Strategy setup paused. Retry it from the Strategy page.";
+    redirect(`/campaigns/${campaign.id}/strategy?message=${encodeURIComponent(message)}`);
+  }
   revalidatePath("/campaigns");
   revalidatePath(`/campaigns/${campaign.id}/strategy`);
   redirect(
     `/campaigns/${campaign.id}/strategy?message=${encodeURIComponent(
-      `Strategy draft ${strategyDraftId.slice(0, 8)} is ready for review.`,
+      `Strategy draft ${strategyDraftId.slice(0, 8)} is queued for compilation.`,
     )}`,
   );
 }

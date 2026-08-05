@@ -62,6 +62,17 @@ export type AiTaskResult<T> = {
     fallbackUsed: boolean;
     requestHash: string;
     responseHash: string;
+    modelRouteVersion: string;
+    attemptCount: number;
+    repairAttempted: boolean;
+    structuredOutputUsed: boolean;
+    structuredOutputFallbackUsed: boolean;
+    cacheHit: boolean;
+    latencyMs?: number;
+    inputUnits?: number;
+    outputUnits?: number;
+    actualCost?: number;
+    currency?: string;
   };
 };
 

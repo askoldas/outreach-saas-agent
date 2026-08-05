@@ -8,6 +8,10 @@ import {
   providerDiscoveryRequestSchema,
   type ProviderDiscoveryRequest,
 } from "../contracts.ts";
+import {
+  directoryVocabulary,
+  relationshipVocabulary,
+} from "./relationship-vocabulary.ts";
 
 export const webDiscoveryQuerySchema = z
   .object({
@@ -32,6 +36,7 @@ export const webDiscoveryQuerySchema = z
     domains: z.array(z.string()).optional(),
     excludedDomains: z.array(z.string()).optional(),
     purpose: z.string().min(1),
+    expectedInformationGain: z.string().min(1).optional(),
     expectedGapId: z.string().min(1).optional(),
     priority: z.number().int().positive(),
     status: z.literal("planned"),
@@ -40,22 +45,15 @@ export const webDiscoveryQuerySchema = z
 
 export type WebDiscoveryQuery = z.infer<typeof webDiscoveryQuerySchema>;
 
-const localBusinessTerms: Record<string, string[]> = {
-  Lithuanian: ["įmonė", "tiekėjas", "gamintojas"],
-  Latvian: ["uzņēmums", "piegādātājs", "ražotājs"],
-  Estonian: ["ettevõte", "tarnija", "tootja"],
-  Polish: ["firma", "dostawca", "producent"],
-  German: ["Unternehmen", "Anbieter", "Hersteller"],
-  French: ["entreprise", "fournisseur", "fabricant"],
-  Italian: ["azienda", "fornitore", "produttore"],
-  Spanish: ["empresa", "proveedor", "fabricante"],
-};
+export const webQueryPolicyVersion = "web-query/v3-objective-aware";
 
 export function generateWebDiscoveryQueries(
   rawRequest: ProviderDiscoveryRequest,
 ): WebDiscoveryQuery[] {
   const request = providerDiscoveryRequestSchema.parse(rawRequest);
   const segment = request.segment;
+  const roleTerms = relationshipVocabulary(segment.relationshipType);
+  const directoryTerms = directoryVocabulary(segment.relationshipType);
   const geography = segment.geography.displayName;
   const countryContexts = segment.geography.countryCodes
     .map((countryCode) => countryCode.trim().toUpperCase())
@@ -68,6 +66,14 @@ export function generateWebDiscoveryQueries(
       ),
     }));
   const maximumQueries = Math.max(1, Math.min(request.budget.maxCalls ?? 6, 10));
+  const excludedDomains = request.executionContext.excludedCanonicalKeys
+    .map(domainFromCanonicalKey)
+    .filter((domain): domain is string => Boolean(domain));
+  const excludedTerms = segment.exclusionRules
+    .filter(({ ruleKey }) => ruleKey.startsWith("memory.query.exclude."))
+    .flatMap(({ description }) => description.split("|"))
+    .map((term) => term.trim())
+    .filter(Boolean);
   const candidates: Array<
     Pick<WebDiscoveryQuery, "query" | "family" | "language" | "purpose"> & {
       expectedGapId?: string;
@@ -94,7 +100,8 @@ export function generateWebDiscoveryQueries(
         query: join([
           segment.label,
           context.displayName,
-          "company manufacturer supplier official website",
+          roleTerms[0],
+          "official website",
         ]),
         family: "archetype",
         language: segment.geography.workingLanguages[0] ?? "English",
@@ -104,16 +111,12 @@ export function generateWebDiscoveryQueries(
     }
     for (const context of geographyContexts) {
       if (!context.localLanguage) continue;
-      const terms = localBusinessTerms[context.localLanguage];
-      if (!terms) continue;
+      const terms = relationshipVocabulary(
+        segment.relationshipType,
+        context.localLanguage,
+      );
       candidates.push({
-        query: join([
-          segment.label,
-          context.displayName,
-          terms[0],
-          terms[1],
-          "official website",
-        ]),
+        query: join([segment.label, context.displayName, terms[0], "official website"]),
         family: "local_language",
         language: context.localLanguage,
         country: context.countryCode,
@@ -122,7 +125,7 @@ export function generateWebDiscoveryQueries(
     }
     for (const model of segment.businessCharacteristics.businessModels.slice(0, 2)) {
       candidates.push({
-        query: join([model, segment.label, geography, "companies suppliers"]),
+        query: join([model, segment.label, geography, roleTerms[0]]),
         family: "business_model",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find organizations operating as ${model}.`,
@@ -133,7 +136,7 @@ export function generateWebDiscoveryQueries(
       ...segment.businessCharacteristics.keywords,
     ].slice(0, 2)) {
       candidates.push({
-        query: join([keyword, segment.label, geography, "companies manufacturers"]),
+        query: join([keyword, segment.label, geography, roleTerms[0]]),
         family: "use_context",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find organizations in the ${keyword} commercial context.`,
@@ -141,26 +144,20 @@ export function generateWebDiscoveryQueries(
     }
     for (const signal of segment.positiveSignals.slice(0, 2)) {
       candidates.push({
-        query: join([
-          quoted(signal.label),
-          segment.label,
-          geography,
-          "company manufacturer",
-        ]),
+        query: join([quoted(signal.label), segment.label, geography, roleTerms[0]]),
         family: "positive_signal",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find explicit evidence of ${signal.label}.`,
       });
     }
     candidates.push({
-      query: join([segment.label, geography, "association members directory"]),
+      query: join([segment.label, geography, directoryTerms[0]]),
       family: "directory",
       language: segment.geography.workingLanguages[0] ?? "English",
       purpose: `Find directories or member lists covering ${segment.label}.`,
     });
     for (const language of segment.geography.localLanguages) {
-      const terms = localBusinessTerms[language];
-      if (!terms) continue;
+      const terms = relationshipVocabulary(segment.relationshipType, language);
       candidates.push({
         query: join([segment.label, geography, terms[0], terms[1]]),
         family: "local_language",
@@ -174,7 +171,9 @@ export function generateWebDiscoveryQueries(
   const seen = new Set<string>();
   const queries: WebDiscoveryQuery[] = [];
   for (const candidate of candidates) {
-    const query = candidate.query.slice(0, 240).trim();
+    const query = appendExcludedTerms(candidate.query, excludedTerms)
+      .slice(0, 240)
+      .trim();
     const normalizedQuery = normalizeWebQuery(query);
     const fallbackCountry = countryContexts.length
       ? countryContexts[queries.length % countryContexts.length]
@@ -197,7 +196,11 @@ export function generateWebDiscoveryQueries(
         family: candidate.family,
         language: candidate.language,
         ...(country ? { country } : {}),
+        ...(excludedDomains.length ? { excludedDomains } : {}),
         purpose: candidate.purpose,
+        expectedInformationGain:
+          candidate.expectedGapId ??
+          `Evidence for ${segment.relationshipType} coverage in ${country ?? geography}.`,
         ...(candidate.expectedGapId
           ? { expectedGapId: candidate.expectedGapId }
           : request.executionContext.gapId
@@ -212,6 +215,13 @@ export function generateWebDiscoveryQueries(
   return queries;
 }
 
+function appendExcludedTerms(query: string, excludedTerms: string[]) {
+  return join([
+    query,
+    ...[...new Set(excludedTerms)].sort().map((term) => `-${quoted(term)}`),
+  ]);
+}
+
 function targetedCandidates(input: {
   action: NonNullable<
     ProviderDiscoveryRequest["executionContext"]["targetedActions"]
@@ -221,6 +231,8 @@ function targetedCandidates(input: {
 }) {
   const { action, geography, segment } = input;
   const language = segment.geography.workingLanguages[0] ?? "English";
+  const roleTerms = relationshipVocabulary(segment.relationshipType);
+  const directoryTerms = directoryVocabulary(segment.relationshipType);
   const industry =
     segment.businessCharacteristics.industries[0] ??
     segment.businessCharacteristics.keywords[0];
@@ -239,8 +251,7 @@ function targetedCandidates(input: {
   });
   if (action.type === "translate_queries") {
     return segment.geography.localLanguages.flatMap((localLanguage) => {
-      const terms = localBusinessTerms[localLanguage];
-      if (!terms) return [];
+      const terms = relationshipVocabulary(segment.relationshipType, localLanguage);
       return [
         make(
           join([segment.label, geography, terms[0], terms[1], industry]),
@@ -249,7 +260,7 @@ function targetedCandidates(input: {
           localLanguage,
         ),
         make(
-          join([industry, geography, terms[0], terms[2], "katalogas"]),
+          join([industry, geography, ...terms.slice(0, 2), "directory"]),
           "local_language",
           `Search a second ${localLanguage} formulation for ${action.gapId}.`,
           localLanguage,
@@ -265,9 +276,9 @@ function targetedCandidates(input: {
         `Expand association coverage for ${action.gapId}.`,
       ),
       make(
-        join([industry, geography, "supplier directory"]),
+        join([industry, geography, directoryTerms[1]]),
         "directory",
-        `Expand supplier-directory coverage for ${action.gapId}.`,
+        `Expand relationship-specific directory coverage for ${action.gapId}.`,
       ),
       make(
         join([segment.label, geography, "trade fair exhibitors"]),
@@ -308,27 +319,21 @@ function targetedCandidates(input: {
         `Broaden the business-model vocabulary for ${action.gapId}.`,
       ),
       make(
-        join([industry, geography, "organizations suppliers partners"]),
+        join([industry, geography, "organizations", ...roleTerms.slice(0, 2)]),
         "gap_targeted",
         `Broaden the relationship vocabulary for ${action.gapId}.`,
       ),
     ];
   }
   if (action.type === "expand_from_seed") {
-    return [
-      make(
-        join([segment.label, geography, "similar companies suppliers"]),
-        "known_entity_expansion",
-        `Expand from known market anchors for ${action.gapId}.`,
-      ),
-    ];
+    return [];
   }
   if (action.type === "request_user_clarification" || action.type === "stop_segment") {
     return [];
   }
   return [
     make(
-      join([segment.label, industry, geography, "suppliers distributors partners"]),
+      join([segment.label, industry, geography, ...roleTerms.slice(0, 2)]),
       "gap_targeted",
       `Run a non-duplicate targeted search for ${action.gapId}.`,
     ),
@@ -338,7 +343,7 @@ function targetedCandidates(input: {
       `Test an alternate commercial formulation for ${action.gapId}.`,
     ),
     make(
-      join([segment.label, geography, "manufacturers service providers list"]),
+      join([segment.label, geography, directoryTerms[0]]),
       "gap_targeted",
       `Test an alternate organization-source formulation for ${action.gapId}.`,
     ),
@@ -356,6 +361,7 @@ export function fingerprintWebQuery(
   return createHash("sha256")
     .update(
       [
+        `policy=${webQueryPolicyVersion}`,
         normalizedQuery,
         `country=${context.country?.trim().toUpperCase() ?? ""}`,
         `language=${context.language?.trim().toLowerCase() ?? ""}`,
@@ -375,4 +381,17 @@ function join(values: Array<string | undefined>) {
     .filter((value): value is string => Boolean(value))
     .join(" ")
     .replace(/\s+/g, " ");
+}
+
+function domainFromCanonicalKey(value: string) {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/^domain:/, "")
+    .replace(/^https?:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#]/)[0];
+  return normalized && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(normalized)
+    ? normalized
+    : undefined;
 }

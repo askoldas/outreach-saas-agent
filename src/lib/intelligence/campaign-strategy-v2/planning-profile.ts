@@ -38,11 +38,18 @@ export type CampaignPlanningOffering = {
     transactionModels: string[];
   };
   buyerLogic: {
+    offeringKey: string;
     whyBuy: string[];
     requiredConditions: string[];
     preferredConditions: string[];
     likelyTriggers: string[];
     incompatibleConditions: string[];
+    likelyDecisionRoles: string[];
+    procurementPattern?: string;
+    positiveEvidenceSignals: string[];
+    negativeEvidenceSignals: string[];
+    evidenceIds: string[];
+    confidence: number;
   };
   relationshipOptions: Array<{
     relationshipType: string;

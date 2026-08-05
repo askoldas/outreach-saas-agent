@@ -2,8 +2,10 @@ import { z } from "zod";
 import { hashCanonical } from "../intelligence/campaign-strategy-v2/context-compiler.ts";
 import type { CampaignStrategyV2 } from "../intelligence/campaign-strategy-v2/schemas.ts";
 import type { IntelligenceRule } from "../intelligence/contracts/rules.ts";
+import type { PromptDefinition } from "../intelligence/runtime/task-registry.ts";
 import type {
   CandidateRelationship,
+  ExclusionAssessment,
   FactorDefinition,
   FactorEvaluation,
   RelationshipAssessment,
@@ -13,13 +15,15 @@ import {
   STANDARD_FACTOR_LIBRARY_VERSION,
 } from "./factor-library.ts";
 
-export const QUALIFICATION_RUNTIME_CONTRACT_VERSION = "candidate-qualification-v2.2";
+export const QUALIFICATION_RUNTIME_CONTRACT_VERSION = "candidate-qualification-v2.3";
 export const QUALIFICATION_RELATIONSHIP_PROMPT_VERSION =
-  "candidate-relationship-classification-v2.1";
-export const QUALIFICATION_FACTOR_PROMPT_VERSION = "candidate-factor-evaluation-v2.1";
-export const QUALIFICATION_SCORING_POLICY_VERSION = "qualification-scoring-v2.1";
-export const QUALIFICATION_CONFIDENCE_POLICY_VERSION = "qualification-confidence-v2.1";
-export const QUALIFICATION_EXCLUSION_POLICY_VERSION = "qualification-exclusions-v2.1";
+  "candidate-relationship-classification-v2.3-shared-runtime";
+export const QUALIFICATION_FACTOR_PROMPT_VERSION =
+  "candidate-factor-evaluation-v2.3-shared-runtime";
+export const QUALIFICATION_SCORING_POLICY_VERSION = "qualification-scoring-v2.2";
+export const QUALIFICATION_CONFIDENCE_POLICY_VERSION = "qualification-confidence-v2.2";
+export const QUALIFICATION_EXCLUSION_POLICY_VERSION =
+  "qualification-exclusions-v2.2-positive-evidence";
 
 const candidateRelationships = [
   "probable_buyer",
@@ -40,7 +44,7 @@ const candidateRelationships = [
   "unknown",
 ] as const satisfies readonly CandidateRelationship[];
 
-const relationshipOutputSchema = z
+export const relationshipOutputSchema = z
   .object({
     primaryRelationship: z.enum(candidateRelationships),
     secondaryRelationships: z.array(z.enum(candidateRelationships)).max(6),
@@ -59,7 +63,7 @@ const relationshipOutputSchema = z
   })
   .strict();
 
-const factorOutputSchema = z
+export const factorOutputSchema = z
   .object({
     factors: z
       .array(
@@ -106,6 +110,16 @@ export type QualificationClaim = {
     | "conflict";
   confidence: number;
   evidenceIds: string[];
+  applicability: {
+    organizationId: string;
+    campaignId: string;
+    offeringIds: string[];
+    archetypeIds: string[];
+    questionKeys: string[];
+    relationship: boolean;
+    factorKeys: string[];
+    exclusionRuleKeys: string[];
+  };
 };
 
 export type QualificationEvidence = {
@@ -138,6 +152,9 @@ export type QualificationThresholds = {
 };
 
 export type QualificationRubricRuntime = {
+  campaignId: string;
+  offeringIds: string[];
+  archetypeIds: string[];
   desiredRelationships: CandidateRelationship[];
   normallyExcludedRelationships: CandidateRelationship[];
   factors: RuntimeQualificationFactor[];
@@ -235,10 +252,15 @@ export function compileQualificationRubric(
     rejectBelowFit: Math.max(0, minimumFitForConditional - 15),
   };
   const withoutHash = {
-    desiredRelationships: mapCampaignRelationships(
+    campaignId: strategy.campaignId,
+    offeringIds: uniqueSorted(
+      strategy.offeringReferences.map(({ offeringId }) => offeringId),
+    ),
+    archetypeIds: uniqueSorted(strategy.archetypes.map(({ id }) => id)),
+    desiredRelationships: mapCampaignRelationshipsToQualification(
       strategy.objective.targetRelationshipTypes,
     ),
-    normallyExcludedRelationships: mapCampaignRelationships(
+    normallyExcludedRelationships: mapCampaignRelationshipsToQualification(
       strategy.objective.normallyExcludedRelationshipTypes,
     ),
     factors,
@@ -341,6 +363,38 @@ export function normalizeRelationshipClassification(input: {
     throw new Error("A non-unknown relationship requires at least one cited claim.");
   }
   const claimsById = new Map(input.claims.map((claim) => [claim.id, claim] as const));
+  const evidenceById = new Map(input.evidence.map((item) => [item.id, item] as const));
+  const decisiveClaimIds = [...output.positiveClaimIds, ...output.negativeClaimIds];
+  if (
+    output.primaryRelationship !== "unknown" &&
+    !decisiveClaimIds.some(
+      (id) =>
+        Boolean(claimsById.get(id)?.applicability.relationship) &&
+        isVerifiableClaim(claimsById.get(id), evidenceById),
+    )
+  ) {
+    const downgraded = {
+      ...output,
+      primaryRelationship: "unknown" as const,
+      secondaryRelationships: [],
+      objectiveCompatibility: "unknown" as const,
+      confidence: 0,
+      positiveClaimIds: [],
+      negativeClaimIds: [],
+      conflictClaimIds: uniqueSorted([...output.conflictClaimIds, ...decisiveClaimIds]),
+      missingEvidence: uniqueSorted([
+        ...output.missingEvidence,
+        "The cited relationship claims lack verifiable current evidence.",
+      ]),
+      conciseRationale:
+        "The cited claims do not provide verifiable evidence for a relationship.",
+    };
+    return normalizeRelationshipClassification({
+      raw: downgraded,
+      claims: input.claims,
+      evidence: input.evidence,
+    });
+  }
   const evidenceIds = uniqueSorted(
     [...output.positiveClaimIds, ...output.negativeClaimIds].flatMap(
       (claimId) => claimsById.get(claimId)?.evidenceIds ?? [],
@@ -409,7 +463,20 @@ export function normalizeFactorEvaluations(input: {
         ["positive", "negative"].includes(factor.state) &&
         (factor.strength === 0 ||
           factor.supportingClaimIds.length === 0 ||
-          factor.evidenceIds.length === 0);
+          factor.evidenceIds.length === 0 ||
+          !factor.supportingClaimIds.some(
+            (claimId) =>
+              Boolean(
+                input.claims
+                  .find(({ id }) => id === claimId)
+                  ?.applicability.factorKeys.includes(factor.factorKey),
+              ) &&
+              isVerifiableClaim(
+                input.claims.find(({ id }) => id === claimId),
+                new Map(input.evidence.map((item) => [item.id, item] as const)),
+                factor.evidenceIds,
+              ),
+          ));
       if (!unsupportedObservation) return factor;
       return {
         ...factor,
@@ -500,6 +567,8 @@ export function buildRelationshipClassificationMessages(input: {
         "Classify one candidate organization's commercial relationship to the seller for the frozen campaign objective.",
         "Industry similarity is not enough.",
         "Use only supplied claims and evidence metadata.",
+        "Use a claim only for the Campaign dimensions listed in its applicability object.",
+        "A relationship requires a verifiable explicit fact or evidence-backed inference whose cited evidence is linked to that claim.",
         "Do not apply final eligibility rules or calculate fit.",
         "Return unknown when evidence is insufficient.",
         "Cite supplied claim IDs only and return one compact JSON object.",
@@ -543,6 +612,8 @@ export function buildFactorEvaluationMessages(input: {
       role: "system" as const,
       content: [
         "Evaluate every supplied qualification factor independently from recorded claims and evidence.",
+        "Use only claims whose applicability.factorKeys contains the exact factor key.",
+        "Cited evidence must be linked to the cited supporting claim; unrelated evidence cannot support a factor.",
         "Use the exact factor definitions and policies supplied.",
         "Do not invent evidence or treat missing evidence as negative.",
         "Use unknown for insufficient evidence and conflicting for material disagreement.",
@@ -578,7 +649,52 @@ export function buildFactorEvaluationMessages(input: {
   ];
 }
 
-function mapCampaignRelationships(values: string[]): CandidateRelationship[] {
+export type RelationshipClassificationRequest = Parameters<
+  typeof buildRelationshipClassificationMessages
+>[0];
+export type FactorEvaluationRequest = Parameters<typeof buildFactorEvaluationMessages>[0];
+
+export const qualificationRelationshipTaskDefinition: PromptDefinition<
+  RelationshipClassificationRequest,
+  RelationshipClassificationOutput
+> = {
+  taskId: "candidate.relationship_classification",
+  promptVersion: QUALIFICATION_RELATIONSHIP_PROMPT_VERSION,
+  schemaVersion: "candidate-relationship-output/v2.2",
+  contextCompilerVersion: "candidate-qualification-context/v2.3",
+  modelRole: "candidate_relationship_reasoning",
+  title: "Candidate relationship classification",
+  description: "Classify one evidence-bounded commercial relationship without deciding eligibility.",
+  buildMessages: buildRelationshipClassificationMessages,
+  outputSchema: relationshipOutputSchema,
+  maxCompletionTokens: 2_000,
+  reasoningClass: "minimal",
+  allowsRepair: true,
+  allowsFallback: true,
+};
+
+export const qualificationFactorTaskDefinition: PromptDefinition<
+  FactorEvaluationRequest,
+  FactorEvaluationOutput
+> = {
+  taskId: "candidate.factor_evaluation",
+  promptVersion: QUALIFICATION_FACTOR_PROMPT_VERSION,
+  schemaVersion: "candidate-factor-output/v2.2",
+  contextCompilerVersion: "candidate-qualification-context/v2.3",
+  modelRole: "candidate_factor_evaluation",
+  title: "Candidate qualification-factor evaluation",
+  description: "Evaluate every frozen factor independently without calculating final decisions.",
+  buildMessages: buildFactorEvaluationMessages,
+  outputSchema: factorOutputSchema,
+  maxCompletionTokens: 5_000,
+  reasoningClass: "minimal",
+  allowsRepair: true,
+  allowsFallback: true,
+};
+
+export function mapCampaignRelationshipsToQualification(
+  values: string[],
+): CandidateRelationship[] {
   const mapped = values.map((value): CandidateRelationship => {
     if (value === "direct_buyer") return "probable_buyer";
     if (value === "end_user_customer") return "end_user";
@@ -626,6 +742,96 @@ function calculateEvidenceQuality(evidence: QualificationEvidence[]) {
       0,
     ) / evidence.length
   );
+}
+
+export function isVerifiableClaim(
+  claim: QualificationClaim | undefined,
+  evidenceById: Map<string, QualificationEvidence>,
+  citedEvidenceIds?: string[],
+) {
+  if (
+    !claim ||
+    !["explicit_fact", "evidence_backed_inference"].includes(claim.epistemicStatus)
+  ) {
+    return false;
+  }
+  const cited = new Set(citedEvidenceIds ?? claim.evidenceIds);
+  return claim.evidenceIds.some((id) => {
+    if (!cited.has(id)) return false;
+    const evidence = evidenceById.get(id);
+    return (
+      Boolean(evidence?.excerpt?.trim()) &&
+      evidence?.directness !== "unknown" &&
+      evidence?.freshnessState !== "stale"
+    );
+  });
+}
+
+export function compileHardExclusions(input: {
+  rules: IntelligenceRule[];
+  claims: QualificationClaim[];
+  evidence: QualificationEvidence[];
+  questionFindings: Array<{
+    questionKey: string;
+    state: "answered_positive" | "answered_negative" | "unknown" | "conflicting";
+    claimIds: string[];
+    conciseAnswer: string;
+  }>;
+}) {
+  const claimById = new Map(input.claims.map((claim) => [claim.id, claim] as const));
+  const evidenceById = new Map(
+    input.evidence.map((evidence) => [evidence.id, evidence] as const),
+  );
+  const findingByKey = new Map(
+    input.questionFindings.map((finding) => [finding.questionKey, finding] as const),
+  );
+  return input.rules
+    .map((rule) => {
+      const finding = findingByKey.get(`exclusion.${rule.ruleKey}`);
+      const applicableClaims = (finding?.claimIds ?? [])
+        .map((claimId) => claimById.get(claimId))
+        .filter(
+          (claim): claim is QualificationClaim =>
+            Boolean(claim) &&
+            claim!.applicability.exclusionRuleKeys.includes(rule.ruleKey) &&
+            isVerifiableClaim(claim, evidenceById),
+        );
+      const evidenceIds = uniqueSorted(
+        applicableClaims.flatMap((claim) => claim.evidenceIds),
+      );
+      const confirmed = rule.status === "confirmed";
+      const state: ExclusionAssessment["state"] =
+        finding?.state === "answered_positive" && applicableClaims.length > 0
+          ? confirmed
+            ? "triggered"
+            : "suspected"
+          : finding?.state === "answered_negative" && applicableClaims.length > 0
+            ? "not_triggered"
+            : finding?.state === "conflicting"
+              ? "suspected"
+              : "unknown";
+      const confidence = applicableClaims.length
+        ? applicableClaims.reduce((sum, claim) => sum + claim.confidence, 0) /
+          applicableClaims.length
+        : 0;
+      return {
+        ruleId: rule.ruleKey,
+        strength: "hard" as const,
+        state,
+        confidence,
+        evidenceIds,
+        effect:
+          state === "triggered"
+            ? ("exclude" as const)
+            : state === "suspected" || state === "unknown"
+              ? ("requires_research" as const)
+              : ("none" as const),
+        reason:
+          finding?.conciseAnswer ??
+          "The frozen evidence did not resolve this exclusion rule.",
+      };
+    })
+    .sort((left, right) => left.ruleId.localeCompare(right.ruleId));
 }
 
 function assertKnownIds(values: string[], allowed: Set<string>, message: string) {

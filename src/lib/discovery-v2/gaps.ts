@@ -29,6 +29,7 @@ export const discoveryGapSchema = z
     type: z.enum([
       "geography_undercovered",
       "archetype_undercovered",
+      "relationship_undercovered",
       "language_not_attempted",
       "source_diversity_low",
       "unique_yield_low",
@@ -114,13 +115,57 @@ export function analyzeDiscoveryGaps(input: {
     );
   }
   if (
+    metrics.plausibleCandidateCount > 0 &&
+    metrics.geographyPlausibleCandidateCount === 0
+  ) {
+    add(
+      "geography_undercovered",
+      "No plausible candidate has reliable geography support.",
+      "high",
+      {
+        type: "run_new_queries",
+        reason: "Plausible candidates still lack reliable target-market presence.",
+        expectedImprovement:
+          "Find organizations with explicit first-party or directory geography evidence.",
+        maxCalls: Math.min(3, Math.max(1, input.remainingCallBudget)),
+      },
+      {
+        plausibleCandidateCount: metrics.plausibleCandidateCount,
+        geographyPlausibleCandidateCount: metrics.geographyPlausibleCandidateCount,
+      },
+    );
+  }
+  if (
+    metrics.validOrganizationPages > 0 &&
+    metrics.relationshipCompatibleCandidateCount === 0
+  ) {
+    add(
+      "relationship_undercovered",
+      "Retrieved organizations do not establish the Campaign relationship.",
+      "high",
+      {
+        type: "narrow_segment",
+        reason:
+          "Organization pages were found, but none supports the target relationship.",
+        expectedImprovement:
+          "Target observable role and relationship evidence for this archetype.",
+        maxCalls: Math.min(2, Math.max(1, input.remainingCallBudget)),
+      },
+      {
+        validOrganizationPages: metrics.validOrganizationPages,
+        relationshipCompatibleCandidateCount:
+          metrics.relationshipCompatibleCandidateCount,
+      },
+    );
+  }
+  if (
     metrics.targetUniqueCandidates !== undefined &&
-    metrics.uniqueCandidateHints < metrics.targetUniqueCandidates &&
+    metrics.uniquePlausibleCandidateHints < metrics.targetUniqueCandidates &&
     cell.status !== "blocked"
   ) {
     add(
       "archetype_undercovered",
-      `The segment has ${metrics.uniqueCandidateHints} of ${metrics.targetUniqueCandidates} target unique candidates.`,
+      `The segment has ${metrics.uniquePlausibleCandidateHints} of ${metrics.targetUniqueCandidates} plausible target organizations.`,
       "high",
       {
         type: "run_new_queries",
@@ -129,15 +174,15 @@ export function analyzeDiscoveryGaps(input: {
         maxCalls: Math.min(3, Math.max(1, input.remainingCallBudget)),
       },
       {
-        uniqueCandidateHints: metrics.uniqueCandidateHints,
+        uniquePlausibleCandidateHints: metrics.uniquePlausibleCandidateHints,
         targetUniqueCandidates: metrics.targetUniqueCandidates,
       },
     );
   }
-  if (cell.providerCalls > 0 && cell.uniqueYieldPerCall < 0.5) {
+  if (cell.providerCalls > 0 && cell.plausibleYieldPerCall < 0.5) {
     add(
-      "unique_yield_low",
-      "Recent provider work produces fewer than 0.5 unique candidates per call.",
+      "plausible_yield_low",
+      "Recent provider work produces fewer than 0.5 plausible candidates per call.",
       "normal",
       {
         type: "narrow_segment",
@@ -146,7 +191,7 @@ export function analyzeDiscoveryGaps(input: {
           "Test one more precise segment without repeating prior queries.",
         maxCalls: 2,
       },
-      { uniqueYieldPerCall: cell.uniqueYieldPerCall },
+      { plausibleYieldPerCall: cell.plausibleYieldPerCall },
     );
   }
   if (cell.status === "blocked") {

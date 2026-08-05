@@ -1,5 +1,11 @@
 import { z } from "zod";
 import type { CandidateResearchPlan, CandidateResearchQuestion } from "./contracts.ts";
+import type { PromptDefinition } from "../intelligence/runtime/task-registry.ts";
+
+export const candidateEvidenceExtractionPromptVersion =
+  "candidate-evidence-extraction-v2.4-shared-runtime";
+export const candidateEvidenceExtractionSchemaVersion =
+  "candidate-evidence-extraction-v2.2";
 
 const keySchema = z
   .string()
@@ -57,6 +63,10 @@ export type CandidateResearchEvidenceContext = {
   retrievedAt: string;
   content: string;
 };
+
+export type CandidateEvidenceExtractionRequest = Parameters<
+  typeof buildCandidateEvidenceExtractionMessages
+>[0];
 
 export function normalizeCandidateEvidenceExtraction(input: {
   raw: unknown;
@@ -224,6 +234,28 @@ export function buildCandidateEvidenceExtractionMessages(input: {
     },
   ];
 }
+
+export const candidateEvidenceExtractionTaskDefinition: PromptDefinition<
+  CandidateEvidenceExtractionRequest,
+  CandidateEvidenceExtraction
+> = {
+  taskId: "candidate.evidence_extraction",
+  promptVersion: candidateEvidenceExtractionPromptVersion,
+  schemaVersion: candidateEvidenceExtractionSchemaVersion,
+  contextCompilerVersion: "candidate-research-context/v2.3-multipage",
+  modelRole: "candidate_evidence_extraction",
+  title: "Candidate evidence extraction",
+  description: "Extract bounded evidence-grounded answers for one frozen candidate plan.",
+  buildMessages: buildCandidateEvidenceExtractionMessages,
+  outputSchema: z.preprocess(
+    (value) => deriveFindingClaimKeys(boundCandidateEvidenceProse(value)),
+    candidateEvidenceExtractionSchema,
+  ),
+  maxCompletionTokens: 5_000,
+  reasoningClass: "minimal",
+  allowsRepair: true,
+  allowsFallback: true,
+};
 
 function boundCandidateEvidenceProse(raw: unknown): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;

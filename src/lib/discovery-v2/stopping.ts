@@ -40,7 +40,7 @@ export function decideDiscoveryContinuation(input: {
   cells: DiscoveryCoverageCell[];
   gaps: DiscoveryGap[];
   requestedCandidateCount: number;
-  currentCandidateCount: number;
+  currentPlausibleCandidateCount: number;
   remainingCalls: number;
   deadlineReached: boolean;
   userState: "running" | "paused" | "cancelled";
@@ -74,7 +74,7 @@ export function decideDiscoveryContinuation(input: {
   }
   if (input.userState === "cancelled")
     return stop("user_stopped", "The user cancelled discovery.");
-  if (input.currentCandidateCount >= input.requestedCandidateCount)
+  if (input.currentPlausibleCandidateCount >= input.requestedCandidateCount)
     return stop("target_reached", "The requested candidate volume has been reached.");
   if (input.remainingCalls <= 0)
     return stop("budget_exhausted", "The provider-call budget is exhausted.");

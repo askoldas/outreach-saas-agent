@@ -3,7 +3,12 @@ import test from "node:test";
 import { decideEligibility, assignReviewLane } from "./decision.ts";
 import { compileFactorLibrary } from "./factor-library.ts";
 import { classifyRelationship } from "./relationship.ts";
-import { calculateConfidence, calculateFit, calculatePotential } from "./scoring.ts";
+import {
+  calculateConfidence,
+  calculateFit,
+  calculatePotential,
+  suppressFitWhenEvidenceIsInsufficient,
+} from "./scoring.ts";
 
 const factors = compileFactorLibrary([
   "business_model_compatibility",
@@ -114,4 +119,21 @@ test("potential cannot place an ineligible candidate in recommended", () => {
     }),
     "excluded",
   );
+});
+
+test("fit is suppressed when evidence coverage is insufficient", () => {
+  const fit = calculateFit(factors, [
+    {
+      factorKey: "business_model_compatibility",
+      applicability: "applicable",
+      state: "positive",
+      signedValue: 1,
+      confidence: 0.9,
+      evidenceQuality: 1,
+      evidenceIds: ["evidence-1"],
+      counterEvidenceIds: [],
+    },
+  ]);
+  assert.equal(fit.score, 100);
+  assert.equal(suppressFitWhenEvidenceIsInsufficient(fit, 0.2, 0.5).score, null);
 });

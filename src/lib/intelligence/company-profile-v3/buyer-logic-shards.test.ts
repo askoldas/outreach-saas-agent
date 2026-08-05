@@ -1,0 +1,98 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import {
+  buyerLogicShardContexts,
+  mergeBuyerLogicShardOutputs,
+} from "./buyer-logic-shards.ts";
+
+test("buyer logic creates one compact context per completed offering", () => {
+  const shards = buyerLogicShardContexts({
+    profileDraftId: "draft-1",
+    previousStageOutputs: [
+      { taskId: "profile.fact_extraction", output: { facts: ["large"] } },
+      { taskId: "profile.commercial_synthesis", output: { summary: "commercial" } },
+      {
+        taskId: "profile.offering_decomposition",
+        outputHash: "offerings-hash",
+        output: {
+          offerings: [offering("one"), offering("two")],
+          ungroupedItems: [],
+          groupingWarnings: [],
+        },
+      },
+    ],
+  });
+
+  assert.deepEqual(shards.map((shard) => shard.offeringKey), ["one", "two"]);
+  for (const shard of shards) {
+    const previous = shard.context.previousStageOutputs;
+    assert.equal(previous.length, 2);
+    assert.equal(previous.some((stage) => stage.taskId === "profile.fact_extraction"), false);
+    const decomposition = previous.find(
+      (stage) => stage.taskId === "profile.offering_decomposition",
+    );
+    assert.deepEqual(
+      (decomposition?.output as { offerings: Array<{ offeringKey: string }> }).offerings
+        .map((item) => item.offeringKey),
+      [shard.offeringKey],
+    );
+  }
+});
+
+test("buyer logic merges exact offering shards and rejects cross-offering output", () => {
+  const merged = mergeBuyerLogicShardOutputs([
+    { offeringKey: "one", output: buyerOutput("one") },
+    { offeringKey: "two", output: buyerOutput("two") },
+  ]);
+  assert.deepEqual(
+    merged.offeringBuyerLogic.map((logic) => logic.offeringKey),
+    ["one", "two"],
+  );
+  assert.throws(
+    () => mergeBuyerLogicShardOutputs([
+      { offeringKey: "one", output: buyerOutput("two") },
+    ]),
+    /outside offering one/,
+  );
+});
+
+function offering(offeringKey: string) {
+  return {
+    offeringKey,
+    name: `Offering ${offeringKey}`,
+    offeringType: "service",
+    shortDescription: "A campaign-worthy offering.",
+    includedItemKeys: [],
+    excludedItemKeys: [],
+    valueProposition: "Creates customer value.",
+    customerProblems: ["A commercial problem"],
+    expectedOutcomes: ["A commercial outcome"],
+    customerConsumptionMode: "use",
+    buyingMotion: "project",
+    dependencies: [],
+    commercialConstraints: [],
+    evidenceIds: [],
+    confidence: 0.8,
+  };
+}
+
+function buyerOutput(offeringKey: string) {
+  return {
+    offeringBuyerLogic: [{
+      offeringKey,
+      whyBuy: ["Solve a defined problem"],
+      requiredConditions: [],
+      preferredConditions: [],
+      likelyTriggers: [],
+      incompatibleConditions: [],
+      likelyDecisionRoles: [],
+      positiveEvidenceSignals: [],
+      negativeEvidenceSignals: [],
+      evidenceIds: [],
+      confidence: 0.7,
+    }],
+    archetypes: [],
+    proposedOfferingRules: [],
+    unresolvedQuestions: [],
+  };
+}

@@ -26,10 +26,11 @@ test("native Company Intelligence extraction uses bounded structured generation"
     "utf8",
   );
   assert.match(source, /generateTextResult/);
-  assert.match(source, /maxCompletionTokens: input\.definition\.maxCompletionTokens/);
-  assert.match(source, /validateStructuredOutput/);
+  assert.match(source, /maxCompletionTokens: request\.maxCompletionTokens/);
+  assert.match(source, /executeValidatedAiTask/);
+  assert.match(source, /createIntelligenceAttemptRecorder/);
   assert.match(source, /jsonSchema/);
-  assert.match(source, /repairMessages/);
+  assert.match(source, /IntelligenceSchemaRegistry/);
 });
 
 test("OpenRouter can require strict JSON Schema output from compatible providers", () => {

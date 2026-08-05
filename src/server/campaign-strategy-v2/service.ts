@@ -6,10 +6,10 @@ import {
   buildNativeCampaignStrategyV2,
   campaignGeographyV2Schema,
   campaignObjectiveV2Schema,
-  canRetryCampaignStrategyV2Draft,
   compileCampaignCommercialContext,
   compileCampaignStrategyV2,
   hashCanonical,
+  generateMarketSpecificStrategy,
   nativeCampaignStrategyEntryContract,
   resolveCampaignObjective,
 } from "@/lib/intelligence/campaign-strategy-v2";
@@ -23,7 +23,19 @@ import {
   getPublishedCampaignPlanningProfile,
   getPublishedCampaignProfileContext,
   persistCampaignStrategyV2Compilation,
+  recordCampaignStrategyModelCalls,
 } from "./repository";
+import { campaignV2TaskContracts } from "@/lib/intelligence/campaign-strategy-v2/task-contracts";
+import { intelligenceResultCacheKey } from "@/lib/intelligence/runtime/cache-key";
+import {
+  claimCampaignStrategyStage,
+  completeCampaignStrategyStage,
+  failCampaignStrategyStage,
+} from "./stage-repository";
+import {
+  campaignStrategyBaselineContract,
+  campaignStrategyModelRouteVersion,
+} from "./stage-contracts";
 
 export async function createInitialCampaignStrategyV2(input: {
   workspaceId: string;
@@ -136,29 +148,103 @@ export async function createInitialCampaignStrategyV2(input: {
     inputHash: hashCanonical(campaignInput),
     compiledContext: context,
   });
-  const draft = buildNativeCampaignStrategyV2({
-    campaignId: input.campaign.id,
+  await persistDeterministicBaseline({
+    workspaceId: input.workspaceId,
+    campaignExternalId: input.campaign.id,
     strategyDraftId: persisted.id,
     profileVersionId: profile.profileVersionId,
     offering,
     confirmedBrief: input.confirmedBrief,
     objectiveCode,
     geography,
-    applicableProfileRules: [
+    applicableRules: [
       ...context.applicableProfileRules,
       ...context.applicableOfferingRules,
     ],
-  });
-  const compilation = compileCampaignStrategyV2({
-    draft,
     compiledContextHash: context.contextHash,
-  });
-  await persistCampaignStrategyV2Compilation({
-    workspaceId: input.workspaceId,
-    strategyDraftId: persisted.id,
-    compilation,
+    campaignInput,
   });
   return { strategyDraftId: persisted.id };
+}
+
+async function persistDeterministicBaseline(input: {
+  workspaceId: string;
+  campaignExternalId: string;
+  strategyDraftId: string;
+  profileVersionId: string;
+  offering: Parameters<typeof buildNativeCampaignStrategyV2>[0]["offering"];
+  confirmedBrief: ConfirmedCampaignBrief;
+  objectiveCode: ReturnType<typeof resolveCampaignObjective>;
+  geography: Parameters<typeof buildNativeCampaignStrategyV2>[0]["geography"];
+  applicableRules: Parameters<
+    typeof buildNativeCampaignStrategyV2
+  >[0]["applicableProfileRules"];
+  compiledContextHash: string;
+  campaignInput: Record<string, unknown>;
+}) {
+  const contract = campaignStrategyBaselineContract;
+  const frozenInputHash = hashCanonical({
+    strategyDraftId: input.strategyDraftId,
+    compiledContextHash: input.compiledContextHash,
+    campaignInput: input.campaignInput,
+  });
+  const claimed = await claimCampaignStrategyStage({
+    workspaceId: input.workspaceId,
+    strategyDraftId: input.strategyDraftId,
+    stageId: "baseline",
+    cacheKey: intelligenceResultCacheKey({
+      taskId: contract.taskId,
+      frozenInputHash,
+      promptVersion: contract.promptVersion,
+      schemaVersion: contract.schemaVersion,
+      contextCompilerVersion: contract.contextCompilerVersion,
+      modelRouteVersion: campaignStrategyModelRouteVersion,
+    }),
+    inputHash: frozenInputHash,
+    promptVersion: contract.promptVersion,
+    schemaVersion: contract.schemaVersion,
+    contextCompilerVersion: contract.contextCompilerVersion,
+    modelRouteVersion: campaignStrategyModelRouteVersion,
+    triggerRunId: "campaign-creation",
+  });
+  if (claimed.status === "completed") return;
+
+  try {
+    const draft = buildNativeCampaignStrategyV2({
+      campaignId: input.campaignExternalId,
+      strategyDraftId: input.strategyDraftId,
+      profileVersionId: input.profileVersionId,
+      offering: input.offering,
+      confirmedBrief: input.confirmedBrief,
+      objectiveCode: input.objectiveCode,
+      geography: input.geography,
+      applicableProfileRules: input.applicableRules,
+    });
+    const compilation = compileCampaignStrategyV2({
+      draft,
+      compiledContextHash: input.compiledContextHash,
+    });
+    await persistCampaignStrategyV2Compilation({
+      workspaceId: input.workspaceId,
+      strategyDraftId: input.strategyDraftId,
+      compilation,
+    });
+    await completeCampaignStrategyStage({
+      workspaceId: input.workspaceId,
+      stageRunId: claimed.id,
+      output: {
+        contentHash: compilation.contentHash,
+        compilerVersion: compilation.compilerVersion,
+      },
+    });
+  } catch (error) {
+    await failCampaignStrategyStage({
+      workspaceId: input.workspaceId,
+      stageRunId: claimed.id,
+      error,
+    });
+    throw error;
+  }
 }
 
 export async function resumeInitialCampaignStrategyV2(input: {
@@ -166,8 +252,37 @@ export async function resumeInitialCampaignStrategyV2(input: {
   campaignExternalId: string;
   strategyDraftId: string;
 }) {
+  const prepared = await prepareCampaignStrategyV2Compilation(input);
+  const marketSpecific = await generateMarketSpecificStrategy({
+    frozenContext: prepared.storedContext,
+    campaignInput: prepared.campaignInput,
+  });
+  await recordMarketStrategyCalls({
+    workspaceId: input.workspaceId,
+    strategyDraftId: prepared.recovery.id,
+    inputHash:
+      prepared.recovery.id + ":" + prepared.recovery.compiledContextHash,
+    generated: marketSpecific,
+  });
+  const compilation = compileCampaignStrategyV2({
+    draft: prepared.deterministicBase,
+    compiledContextHash: prepared.recovery.compiledContextHash,
+  });
+  await persistCampaignStrategyV2Compilation({
+    workspaceId: input.workspaceId,
+    strategyDraftId: prepared.recovery.id,
+    compilation,
+  });
+  return { strategyDraftId: prepared.recovery.id };
+}
+
+export async function prepareCampaignStrategyV2Compilation(input: {
+  workspaceId: string;
+  campaignExternalId: string;
+  strategyDraftId: string;
+}) {
   const recovery = await getCampaignStrategyV2RecoveryData(input);
-  if (!canRetryCampaignStrategyV2Draft(recovery.state)) {
+  if (!["building", "needs_input", "failed", "ready_for_review"].includes(recovery.state)) {
     throw new Error(`Campaign Strategy draft cannot be retried from ${recovery.state}.`);
   }
   const profile = await getPublishedCampaignPlanningProfile(input.workspaceId);
@@ -220,7 +335,7 @@ export async function resumeInitialCampaignStrategyV2(input: {
     ...jsonArray(storedContext.applicableProfileRules),
     ...jsonArray(storedContext.applicableOfferingRules),
   ].map((rule) => intelligenceRuleSchema.parse(rule));
-  const draft = buildNativeCampaignStrategyV2({
+  const deterministicBase = buildNativeCampaignStrategyV2({
     campaignId: input.campaignExternalId,
     strategyDraftId: recovery.id,
     profileVersionId: recovery.profileVersionId,
@@ -230,16 +345,22 @@ export async function resumeInitialCampaignStrategyV2(input: {
     geography,
     applicableProfileRules: applicableRules,
   });
-  const compilation = compileCampaignStrategyV2({
-    draft,
-    compiledContextHash: recovery.compiledContextHash,
-  });
-  await persistCampaignStrategyV2Compilation({
-    workspaceId: input.workspaceId,
-    strategyDraftId: recovery.id,
-    compilation,
-  });
-  return { strategyDraftId: recovery.id };
+  const campaignInput = {
+    entryContract: nativeCampaignStrategyEntryContract,
+    geography,
+    objective,
+    offeringReferences: [
+      {
+        companyProfileVersionId: recovery.profileVersionId,
+        offeringId: offering.offeringId,
+        offeringVersionId: offering.offeringVersionId,
+      },
+    ],
+    constraints: confirmedBrief.targetClient.requiredCriteria,
+    initialHypothesis: hypothesis,
+    requestedVolume: recovery.requestedVolume,
+  };
+  return { recovery, storedContext, campaignInput, deterministicBase };
 }
 
 function jsonObject(value: Json | undefined): Record<string, Json | undefined> {
@@ -253,4 +374,33 @@ function jsonArray(value: Json | undefined): Json[] {
 
 function jsonString(value: Json | undefined) {
   return typeof value === "string" ? value : "";
+}
+
+async function recordMarketStrategyCalls(input: {
+  workspaceId: string;
+  strategyDraftId: string;
+  inputHash: string;
+  generated: Awaited<ReturnType<typeof generateMarketSpecificStrategy>>;
+}) {
+  await recordCampaignStrategyModelCalls({
+    workspaceId: input.workspaceId,
+    strategyDraftId: input.strategyDraftId,
+    inputHash: hashCanonical(input.inputHash),
+    calls: [
+      {
+        taskId: campaignV2TaskContracts.marketContext.taskId,
+        promptVersion: campaignV2TaskContracts.marketContext.promptVersion,
+        schemaVersion: campaignV2TaskContracts.marketContext.schemaVersion,
+        outputHash: hashCanonical(input.generated.marketContext),
+        call: input.generated.marketCall,
+      },
+      {
+        taskId: campaignV2TaskContracts.advisoryDelta.taskId,
+        promptVersion: campaignV2TaskContracts.advisoryDelta.promptVersion,
+        schemaVersion: campaignV2TaskContracts.advisoryDelta.schemaVersion,
+        outputHash: hashCanonical(input.generated.strategyProposal),
+        call: input.generated.strategyCall,
+      },
+    ],
+  });
 }

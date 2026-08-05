@@ -28,13 +28,37 @@ export type ProfileV3CompilationInput = {
 
 export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
   const offeringKeys = new Set(input.offerings.offerings.map((item) => item.offeringKey));
+  if (offeringKeys.size !== input.offerings.offerings.length) {
+    throw new Error("Offering decomposition returned duplicate offering keys.");
+  }
+  const buyerLogicByOffering = new Map(
+    input.buyerLogic.offeringBuyerLogic.map((logic) => [logic.offeringKey, logic]),
+  );
+  for (const key of buyerLogicByOffering.keys()) {
+    if (!offeringKeys.has(key)) {
+      throw new Error(`Buyer logic references unknown offering ${key}.`);
+    }
+  }
+  const missingBuyerLogic = [...offeringKeys].filter(
+    (key) => !buyerLogicByOffering.has(key),
+  );
+  if (missingBuyerLogic.length) {
+    throw new Error(
+      `Active offering(s) have no usable buyer logic: ${missingBuyerLogic.join(", ")}.`,
+    );
+  }
   const archetypesByOffering = new Map<string, BuyerLogic["archetypes"]>();
+  const archetypeKeys = new Set<string>();
   for (const archetype of input.buyerLogic.archetypes) {
     if (!offeringKeys.has(archetype.offeringKey)) {
       throw new Error(
         `Buyer archetype ${archetype.archetypeKey} references unknown offering ${archetype.offeringKey}.`,
       );
     }
+    if (archetypeKeys.has(archetype.archetypeKey)) {
+      throw new Error(`Duplicate buyer archetype key ${archetype.archetypeKey}.`);
+    }
+    archetypeKeys.add(archetype.archetypeKey);
     const entries = archetypesByOffering.get(archetype.offeringKey) ?? [];
     entries.push(archetype);
     archetypesByOffering.set(archetype.offeringKey, entries);
@@ -57,7 +81,7 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
       customerProblems: offering.customerProblems,
       expectedOutcomes: offering.expectedOutcomes,
     },
-    buyerLogic: input.buyerLogic.purchaseLogic,
+    buyerLogic: buyerLogicByOffering.get(offering.offeringKey)!,
     relationshipOptions: (archetypesByOffering.get(offering.offeringKey) ?? []).map(
       (archetype) => ({
         relationshipType: archetype.relationshipType,

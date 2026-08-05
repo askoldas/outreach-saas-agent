@@ -22,6 +22,7 @@ type WebSearchTransport = (
   maxResults: number,
   options?: {
     country?: string;
+    excludeDomains?: string[];
     includeDomains?: string[];
     includeRawContent?: boolean;
   },
@@ -29,7 +30,7 @@ type WebSearchTransport = (
 
 export class WebSearchProvider implements CompanyDiscoveryProvider {
   readonly id = "web_search";
-  readonly version = "2.3";
+  readonly version = "2.4";
   readonly #transport: WebSearchTransport;
   readonly #now: () => string;
   readonly #executionId: () => string;
@@ -105,6 +106,9 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
             ...(query.country
               ? { country: countryDisplayName(query.country).toLowerCase() }
               : {}),
+            ...(query.excludedDomains?.length
+              ? { excludeDomains: query.excludedDomains }
+              : {}),
           }),
         };
       } catch (error) {
@@ -121,6 +125,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
       }
     });
     const records = [];
+    const classifications = [];
     const normalizedCandidates = [];
     for (const outcome of outcomes) {
       for (const [index, result] of outcome.results.entries()) {
@@ -131,9 +136,10 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
           rank: index + 1,
           providerVersion: this.version,
           retrievedAt,
-          archetypeId: parsed.segment.archetypeId,
+          segment: parsed.segment,
         });
         records.push(normalized.record);
+        classifications.push(normalized.classification);
         if (normalized.candidate) normalizedCandidates.push(normalized.candidate);
       }
     }
@@ -143,6 +149,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
       providerId: this.id,
       executionId: this.#executionId(),
       records,
+      classifications,
       normalizedCandidates,
       exhausted: errors.length === 0 && !retainedResultCapReached,
       usage: {
@@ -159,7 +166,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
 
 export const webSearchProviderCapabilities: DiscoveryProviderCapabilities = {
   providerId: "web_search",
-  providerVersion: "2.3",
+  providerVersion: "2.4",
   sourceTypes: ["web_search", "industry_directory"],
   supports: {
     countryFilter: true,

@@ -43,7 +43,7 @@ import { executeAndPersistDiscoveryProvider } from "./provider-service";
 import { prepareSemanticDiscoveryContext } from "./semantic-context";
 
 const maximumResultsPerTargetedSegment = 25;
-const normalizationVersion = "web-search-normalization-v2.0";
+const normalizationVersion = "web-search-normalization-v3.0-preclassified";
 
 export async function executeSemanticDiscoveryStage(input: {
   campaignRunId: string;
@@ -182,7 +182,7 @@ async function executeTargetedPass(input: {
     maximumPassNumber: passNumber - 1,
   });
   const priorProviderCalls = totalProviderCalls(priorHistories);
-  const priorUniqueCandidateHints = globalUniqueCandidateHints(priorHistories);
+  const priorPlausibleCandidateHints = globalPlausibleCandidateHints(priorHistories);
   const remainingBeforePass = Math.max(
     0,
     input.plan.budgetPolicy.maximumProviderCalls - priorProviderCalls,
@@ -383,11 +383,11 @@ async function executeTargetedPass(input: {
     };
   });
 
-  const uniqueCandidateHints = globalUniqueCandidateHints(currentHistories);
+  const plausibleCandidateHints = globalPlausibleCandidateHints(currentHistories);
   const passProviderCalls = Math.max(0, totalCalls - priorProviderCalls);
   const passUniqueCandidates = Math.max(
     0,
-    uniqueCandidateHints.size - priorUniqueCandidateHints.size,
+    plausibleCandidateHints.size - priorPlausibleCandidateHints.size,
   );
   const marginalUniqueYieldPerCall =
     passProviderCalls > 0 ? passUniqueCandidates / passProviderCalls : 0;
@@ -419,7 +419,7 @@ async function executeTargetedPass(input: {
     cells: coverageResults.map(({ coverage }) => coverage),
     gaps,
     requestedCandidateCount,
-    currentCandidateCount: uniqueCandidateHints.size,
+    currentPlausibleCandidateCount: plausibleCandidateHints.size,
     remainingCalls,
     deadlineReached: deadlineReached(
       input.plan.budgetPolicy.deadlineAt,
@@ -434,7 +434,7 @@ async function executeTargetedPass(input: {
   });
   const usageSummary = buildUsageSummary(currentHistories);
   const coverageSummary = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     passNumber,
     cells: coverageResults.map(({ coverage }) => coverage),
     gaps,
@@ -555,7 +555,7 @@ function buildUsageSummary(
     (total, history) => total + history.coverageFacts.normalizedCandidates,
     0,
   );
-  const uniqueCandidateGroups = globalUniqueCandidateHints(histories).size;
+  const uniqueCandidateGroups = globalPlausibleCandidateHints(histories).size;
   const invalidEntities = values.reduce(
     (total, history) => total + history.coverageFacts.invalidRecordCount,
     0,
@@ -566,7 +566,10 @@ function buildUsageSummary(
     normalizedProviderCandidates,
     uniqueCandidateGroups,
     canonicalOrganizations: 0,
-    candidatesPrefiltered: 0,
+    candidatesPrefiltered: values.reduce(
+      (total, history) => total + history.coverageFacts.plausibleCandidateCount,
+      0,
+    ),
     candidatesResearched: 0,
     candidatesEvaluated: 0,
     eligibleCandidates: 0,
@@ -592,12 +595,12 @@ function totalProviderCalls(
   );
 }
 
-function globalUniqueCandidateHints(
+function globalPlausibleCandidateHints(
   histories: Awaited<ReturnType<typeof loadAllSegmentHistories>>,
 ) {
   return new Set(
     [...histories.values()].flatMap(
-      ({ coverageFacts }) => coverageFacts.candidateIdentityHints,
+      ({ coverageFacts }) => coverageFacts.plausibleCandidateIdentityHints,
     ),
   );
 }
@@ -610,10 +613,7 @@ function finalStageResult(input: {
 }): StageResult {
   const decisionKind = input.decision.decision_json.decision;
   const usage = jsonRecord(input.run.usage_summary_json);
-  const normalizedCandidateCount = recordNumber(
-    usage,
-    "normalizedProviderCandidates",
-  );
+  const normalizedCandidateCount = recordNumber(usage, "normalizedProviderCandidates");
   if (decisionKind === "stop" && normalizedCandidateCount === 0) {
     if (input.decision.decision_json.reasonCode === "fatal_provider_failure") {
       throw new Error(

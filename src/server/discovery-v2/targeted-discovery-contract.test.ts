@@ -24,7 +24,7 @@ test("targeted discovery freezes history before a pass and recomputes cumulative
   assert.match(history, /previousQueryFingerprints/);
   assert.match(history, /candidateIdentityHints/);
   assert.match(history, /providerCalls/);
-  assert.match(stage, /globalUniqueCandidateHints/);
+  assert.match(stage, /globalPlausibleCandidateHints/);
   assert.match(stage, /marginalUniqueYieldPerCall/);
   assert.match(stage, /consecutiveLowYieldPasses/);
 });

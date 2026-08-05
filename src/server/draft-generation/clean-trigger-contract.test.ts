@@ -27,6 +27,18 @@ test("draft generation dispatches selected clean Campaign contacts through Trigg
   assert.match(trigger, /executeDraftGeneration/);
 });
 
+test("outreach generation uses the shared audited intelligence runtime", () => {
+  const generator = readFileSync(
+    new URL("../../lib/ai/draft-generation.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(generator, /executeValidatedAiTask/);
+  assert.match(generator, /recordAttempt/);
+  assert.match(service, /createIntelligenceAttemptRecorder/);
+  assert.match(generator, /semanticValidators/);
+  assert.match(generator, /outreach\.grounded_draft/);
+});
+
 test("draft execution writes clean drafts, AI audit, state, and usage", () => {
   for (const table of [
     "outreach_drafts",

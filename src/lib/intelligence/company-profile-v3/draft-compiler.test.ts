@@ -58,13 +58,7 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
       groupingWarnings: [],
     }),
     buyerLogic: profileBuyerLogicOutputSchema.parse({
-      purchaseLogic: {
-        whyBuy: ["Reliable supply"],
-        requiredConditions: [],
-        preferredConditions: [],
-        likelyTriggers: [],
-        incompatibleConditions: [],
-      },
+      offeringBuyerLogic: [buyerLogic("core-products", ["Reliable supply"])],
       archetypes: [
         {
           archetypeKey: "distributor",
@@ -108,13 +102,7 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
 
 test("V3 compilation rejects archetypes assigned to unknown offerings", () => {
   const buyer = profileBuyerLogicOutputSchema.parse({
-    purchaseLogic: {
-      whyBuy: [],
-      requiredConditions: [],
-      preferredConditions: [],
-      likelyTriggers: [],
-      incompatibleConditions: [],
-    },
+    offeringBuyerLogic: [buyerLogic("known", ["A defined commercial need"])],
     archetypes: [
       {
         archetypeKey: "bad",
@@ -192,3 +180,176 @@ test("V3 compilation rejects archetypes assigned to unknown offerings", () => {
     /unknown offering/,
   );
 });
+
+test("multi-offering compilation keeps product and consulting buyer logic distinct", () => {
+  const input = compilationFixture();
+  input.offerings = profileOfferingDecompositionOutputSchema.parse({
+    offerings: [
+      offering("product", "Core product", "resell", "wholesale_order"),
+      offering("consulting", "Consulting service", "use", "project"),
+    ],
+    ungroupedItems: [],
+    groupingWarnings: [],
+  });
+  input.buyerLogic = profileBuyerLogicOutputSchema.parse({
+    offeringBuyerLogic: [
+      buyerLogic("product", ["Stock a profitable product"], ["Distribution network"]),
+      buyerLogic("consulting", ["Solve an operational problem"], ["Executive sponsor"]),
+    ],
+    archetypes: [
+      archetype("product-distributor", "product", "distributor"),
+      archetype("consulting-buyer", "consulting", "direct_buyer"),
+    ],
+    proposedOfferingRules: [],
+    unresolvedQuestions: [],
+  });
+  const compiled = compileProfileV3Draft(input);
+  assert.deepEqual(compiled.offerings[0]?.buyerLogic.whyBuy, [
+    "Stock a profitable product",
+  ]);
+  assert.deepEqual(compiled.offerings[1]?.buyerLogic.whyBuy, [
+    "Solve an operational problem",
+  ]);
+  assert.deepEqual(compiled.offerings[1]?.buyerLogic.requiredConditions, [
+    "Executive sponsor",
+  ]);
+  assert.equal(
+    compiled.offerings[1]?.relationshipOptions[0]?.relationshipType,
+    "direct_buyer",
+  );
+});
+
+test("compilation rejects missing, unknown, and duplicate offering buyer logic", () => {
+  const input = compilationFixture();
+  assert.throws(
+    () =>
+      compileProfileV3Draft({
+        ...input,
+        buyerLogic: profileBuyerLogicOutputSchema.parse({
+          offeringBuyerLogic: [buyerLogic("unknown", ["Unknown reason"])],
+          archetypes: [],
+          proposedOfferingRules: [],
+          unresolvedQuestions: [],
+        }),
+      }),
+    /unknown offering/,
+  );
+  assert.throws(
+    () =>
+      profileBuyerLogicOutputSchema.parse({
+        offeringBuyerLogic: [
+          buyerLogic("known", ["Reason one"]),
+          buyerLogic("known", ["Reason two"]),
+        ],
+        archetypes: [],
+        proposedOfferingRules: [],
+        unresolvedQuestions: [],
+      }),
+    /duplicate offering keys/,
+  );
+});
+
+function buyerLogic(
+  offeringKey: string,
+  whyBuy: string[],
+  requiredConditions: string[] = [],
+) {
+  return {
+    offeringKey,
+    whyBuy,
+    requiredConditions,
+    preferredConditions: [],
+    likelyTriggers: [],
+    incompatibleConditions: [],
+    likelyDecisionRoles: [],
+    positiveEvidenceSignals: [],
+    negativeEvidenceSignals: [],
+    evidenceIds: [],
+    confidence: 0.75,
+  };
+}
+
+function offering(
+  offeringKey: string,
+  name: string,
+  customerConsumptionMode: "use" | "resell",
+  buyingMotion: "project" | "wholesale_order",
+) {
+  return {
+    offeringKey,
+    name,
+    offeringType: buyingMotion === "project" ? "service" : "product",
+    shortDescription: `${name} description`,
+    includedItemKeys: [],
+    excludedItemKeys: [],
+    valueProposition: `${name} value`,
+    customerProblems: ["Commercial problem"],
+    expectedOutcomes: ["Commercial outcome"],
+    customerConsumptionMode,
+    buyingMotion,
+    dependencies: [],
+    commercialConstraints: [],
+    evidenceIds: [],
+    confidence: 0.8,
+  };
+}
+
+function archetype(archetypeKey: string, offeringKey: string, relationshipType: string) {
+  return {
+    archetypeKey,
+    offeringKey,
+    name: archetypeKey,
+    relationshipType,
+    priority: "priority" as const,
+    description: "Offering-specific buyer archetype.",
+    whyCompatible: ["Commercially compatible"],
+    requiredEvidence: [],
+    positiveSignals: [],
+    negativeSignals: [],
+    likelyDecisionRoles: [],
+    evidenceIds: [],
+    epistemicStatus: "hypothesis" as const,
+    confidence: 0.7,
+  };
+}
+
+function compilationFixture(): Parameters<typeof compileProfileV3Draft>[0] {
+  return {
+    workspaceId: "w",
+    profileDraftId: "d",
+    companyProfileId: "p",
+    baseSnapshot: {},
+    commercial: profileCommercialSynthesisOutputSchema.parse({
+      primaryRoles: [],
+      valueChainPosition: [],
+      revenueMechanics: [],
+      transactionModels: [],
+      deliveryModels: [],
+      customerConsumptionModes: [],
+      channelModels: [],
+      commercialConstraints: [],
+      unresolvedCommercialQuestions: [],
+      conciseCommercialSummary: "Summary",
+    }),
+    offerings: profileOfferingDecompositionOutputSchema.parse({
+      offerings: [offering("known", "Known", "use", "project")],
+      ungroupedItems: [],
+      groupingWarnings: [],
+    }),
+    buyerLogic: profileBuyerLogicOutputSchema.parse({
+      offeringBuyerLogic: [buyerLogic("known", ["Reason"])],
+      archetypes: [],
+      proposedOfferingRules: [],
+      unresolvedQuestions: [],
+    }),
+    clarification: profileClarificationOutputSchema.parse({
+      questions: [],
+      omittedQuestions: [],
+    }),
+    consistency: profileConsistencyOutputSchema.parse({
+      findings: [],
+      publishRecommendation: "ready_with_warnings",
+      conciseSummary: "Review",
+    }),
+  };
+}

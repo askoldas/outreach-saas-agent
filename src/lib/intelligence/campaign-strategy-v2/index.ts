@@ -4,4 +4,6 @@ export * from "./draft-state";
 export * from "./strategy-compiler";
 export * from "./task-contracts";
 export * from "./planning-profile";
+export * from "./market-strategy";
 export * from "./native-strategy";
+export * from "./advisory-merge";

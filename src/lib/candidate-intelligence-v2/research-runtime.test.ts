@@ -3,6 +3,7 @@ import test from "node:test";
 import { createNativeCampaignStrategyFixture } from "../intelligence/campaign-strategy-v2/test-fixture.ts";
 import {
   buildCandidateEvidenceExtractionMessages,
+  candidateEvidenceExtractionTaskDefinition,
   normalizeCandidateEvidenceExtraction,
 } from "./evidence-extraction.ts";
 import { compileCandidateResearchPlan } from "./research-plan.ts";
@@ -447,6 +448,14 @@ test("Candidate evidence prompts keep scoring and eligibility outside research",
   assert.match(prompt, /Copy evidence IDs exactly/);
   assert.match(prompt, /Copy questionKey values exactly/);
   assert.match(prompt, /Set questionFindings\.claimKeys to an empty array/);
+});
+
+test("Candidate evidence extraction is a bounded shared-runtime task", () => {
+  assert.equal(candidateEvidenceExtractionTaskDefinition.taskId, "candidate.evidence_extraction");
+  assert.equal(candidateEvidenceExtractionTaskDefinition.maxCompletionTokens, 5_000);
+  assert.equal(candidateEvidenceExtractionTaskDefinition.allowsRepair, true);
+  assert.equal(candidateEvidenceExtractionTaskDefinition.allowsFallback, true);
+  assert.match(candidateEvidenceExtractionTaskDefinition.promptVersion, /shared-runtime/);
 });
 
 function confirmedStrategy() {

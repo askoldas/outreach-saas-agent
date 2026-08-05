@@ -105,9 +105,23 @@ export async function loadDiscoverySegmentHistory(input: {
     candidates.push(...(data ?? []));
   }
 
+  const { data: classifications, error: classificationError } = await supabase
+    .from("provider_candidate_preclassifications_v2")
+    .select(
+      "provider_source_record_id,disposition,objective_compatibility,geography_plausible",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .in("provider_execution_id", executionIds);
+  if (classificationError) {
+    throw new Error(
+      `Could not load candidate preclassification history: ${classificationError.message}`,
+    );
+  }
+
   const coverage = summarizePersistedProviderCoverage({
     sources: sources ?? [],
     candidates,
+    classifications: classifications ?? [],
   });
   const attemptedQueries = (queries ?? []).filter(({ status }) =>
     ["completed", "failed"].includes(status),
@@ -129,6 +143,9 @@ export async function loadDiscoverySegmentHistory(input: {
       invalidRecordCount: coverage.invalidRecordCount,
       languagesAttempted: sortedUnique(attemptedQueries.map(({ language }) => language)),
       normalizedCandidates: candidates.length,
+      plausibleCandidateCount: coverage.plausibleCandidateCount ?? 0,
+      geographyPlausibleCandidateCount: coverage.geographyPlausibleCandidateCount ?? 0,
+      plausibleCandidateIdentityHints: coverage.plausibleCandidateIdentityHints ?? [],
       providerCalls: orderedExecutions.reduce(
         (total, execution) =>
           total + nonnegativeInteger(jsonNumber(execution.usage_json, "calls")),
@@ -144,8 +161,13 @@ export async function loadDiscoverySegmentHistory(input: {
         attemptedQueries.map(({ query_type }) => query_type),
       ),
       rawRecords: sources?.length ?? 0,
+      relationshipCompatibleCandidateCount:
+        coverage.relationshipCompatibleCandidateCount ?? 0,
+      sourceOnlyRecordCount: coverage.sourceOnlyRecordCount ?? 0,
       sourceTypesAttempted: coverage.sourceTypes,
       uniqueCandidateHints: coverage.uniqueCandidateHintCount,
+      uniquePlausibleCandidateHints: coverage.uniquePlausibleCandidateHintCount ?? 0,
+      validOrganizationPages: coverage.validOrganizationPageCount ?? 0,
     },
   };
 }
@@ -160,14 +182,21 @@ function emptyHistory(): DiscoverySegmentHistory {
       invalidRecordCount: 0,
       languagesAttempted: [],
       normalizedCandidates: 0,
+      plausibleCandidateCount: 0,
+      geographyPlausibleCandidateCount: 0,
+      plausibleCandidateIdentityHints: [],
       providerCalls: 0,
       providerExhausted: false,
       providerFailureCount: 0,
       queriesExecuted: 0,
       queryFamiliesAttempted: [],
       rawRecords: 0,
+      relationshipCompatibleCandidateCount: 0,
+      sourceOnlyRecordCount: 0,
       sourceTypesAttempted: [],
       uniqueCandidateHints: 0,
+      uniquePlausibleCandidateHints: 0,
+      validOrganizationPages: 0,
     },
   };
 }

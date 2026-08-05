@@ -1,29 +1,32 @@
 import { createHash } from "node:crypto";
-import { z } from "zod";
 import { compileProfileV3Draft } from "@/lib/intelligence/company-profile-v3/draft-compiler";
+import {
+  buyerLogicShardContexts,
+  mergeBuyerLogicShardOutputs,
+} from "@/lib/intelligence/company-profile-v3/buyer-logic-shards";
+import { normalizeProfileStageProviderOutput } from "@/lib/intelligence/company-profile-v3/output-normalization";
 import { normalizeLegacyProfileBuyerRuleScopes } from "@/lib/intelligence/company-profile-v3/profile-rule-scopes";
 import {
   profileBuyerLogicOutputSchema,
+  profileBuyerLogicShardOutputSchema,
   profileClarificationOutputSchema,
   profileCommercialSynthesisOutputSchema,
   profileConsistencyOutputSchema,
   profileOfferingDecompositionOutputSchema,
   profileV3TaskDefinitions,
 } from "@/lib/intelligence/company-profile-v3/task-contracts";
-import { resolveProfileV3DraftState } from "@/lib/intelligence/company-profile-v3/workflow";
+import {
+  assertProfileStageDependencies,
+  resolveProfileV3DraftState,
+} from "@/lib/intelligence/company-profile-v3/workflow";
 import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import { resolveWorkspaceIntelligenceSettings } from "@/lib/intelligence/rollout";
 import type { PromptDefinition } from "@/lib/intelligence/runtime/task-registry";
-import {
-  supportsStrictStructuredOutput,
-  validateStructuredOutput,
-} from "@/lib/intelligence/runtime/validated-output";
-import {
-  generateTextResult,
-  type AiCallResult,
-  OpenRouterRequestError,
-  type OpenRouterMessage,
-} from "@/lib/providers/openrouter";
+import { executeValidatedAiTask } from "@/lib/intelligence/runtime/execute-ai-task";
+import { IntelligenceTaskRegistry } from "@/lib/intelligence/runtime/task-registry";
+import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
+import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
+import { generateTextResult, type AiCallResult } from "@/lib/providers/openrouter";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 import { ensureNativeCompanyProfileEvidence } from "./source-service";
@@ -94,12 +97,20 @@ export async function executeProfileV3Stage(input: {
     output: stage.output_json,
     outputHash: stage.output_hash,
   }));
+  assertProfileStageDependencies(input.taskId, previousStageOutputs);
+  const buyerLogicStage = input.taskId === "profile.buyer_logic";
   const context = {
     profileDraftId: draft.id,
     baseProfileVersionId: draft.base_version_id,
-    draftSnapshot: draft.compiled_snapshot_json,
+    ...(!buyerLogicStage ? { draftSnapshot: draft.compiled_snapshot_json } : {}),
     evidence: evidence ?? [],
-    previousStageOutputs,
+    previousStageOutputs: buyerLogicStage
+      ? previousStageOutputs.filter(({ taskId }) => [
+          "profile.fact_extraction",
+          "profile.commercial_synthesis",
+          "profile.offering_decomposition",
+        ].includes(taskId))
+      : previousStageOutputs,
     ...(input.taskId === "profile.consistency_audit"
       ? {
           profileUnderAudit: assembleProfileUnderAudit(
@@ -171,6 +182,10 @@ export async function executeProfileV3Stage(input: {
       context,
       definition,
       taskId: input.taskId,
+      workspaceId: input.workspaceId,
+      profileDraftId: input.profileDraftId,
+      inputHash,
+      taskRunId,
     });
     const output = generation.output;
     const modelCall = generation.calls.at(-1);
@@ -211,7 +226,7 @@ export async function executeProfileV3Stage(input: {
           providerRequestIds: generation.calls
             .map((call) => call.providerRequestId)
             .filter(Boolean),
-          repairAttempted: generation.calls.length > 1,
+          repairAttempted: generation.repairAttempted,
           responseHash: outputHash,
           structuredOutputFallbackUsed: generation.structuredOutputFallbackUsed,
           taskRunId,
@@ -429,218 +444,141 @@ type ValidatedProfileStageGeneration = {
   output: unknown;
   structuredOutputFallbackUsed: boolean;
   truncationRetryUsed: boolean;
+  repairAttempted: boolean;
 };
 
 async function generateValidatedProfileStageOutput(input: {
   context: unknown;
   definition: PromptDefinition<unknown, unknown>;
   taskId: ProfileV3StageId;
+  workspaceId: string;
+  profileDraftId: string;
+  inputHash: string;
+  taskRunId: string;
 }): Promise<ValidatedProfileStageGeneration> {
-  const messages = input.definition.buildMessages(input.context);
-  const outputJsonSchema = z.toJSONSchema(input.definition.outputSchema) as Record<
-    string,
-    unknown
-  >;
-  const firstGeneration = await generateProfileModelCall({
-    definition: input.definition,
-    jsonSchema: outputJsonSchema,
-    messages,
-    reasoning: reasoningEffort(input.definition),
-    schemaName: input.taskId.replaceAll(".", "_"),
-    taskId: input.taskId,
-  });
-  const firstCall = firstGeneration.call;
-  const firstValidation = validateStructuredOutput(
-    input.definition.outputSchema,
-    firstCall.data,
+  if (input.taskId !== "profile.buyer_logic") {
+    return generateSingleValidatedProfileStageOutput(input);
+  }
+  const shards = buyerLogicShardContexts(input.context);
+  const generated = await Promise.all(
+    shards.map(({ context, offeringKey }) =>
+      generateSingleValidatedProfileStageOutput({
+        ...input,
+        context,
+        definition: {
+          ...input.definition,
+          schemaVersion: "profile-buyer-logic-shard-schema/v1",
+          outputSchema: profileBuyerLogicShardOutputSchema,
+        },
+        inputHash: hash({ inputHash: input.inputHash, offeringKey }),
+        offeringKey,
+      }).catch((error) => {
+        throw new Error(`Buyer logic failed for offering ${offeringKey}: ${errorMessage(error)}`, {
+          cause: error,
+        });
+      }),
+    ),
   );
-  if (firstValidation.success) {
-    return {
-      calls: [firstCall],
-      output: firstValidation.data,
-      structuredOutputFallbackUsed: firstGeneration.structuredOutputFallbackUsed,
-      truncationRetryUsed: firstGeneration.truncationRetryUsed,
-    };
-  }
-  if (!input.definition.allowsRepair) {
-    throw new InvalidProfileStageOutputError(input.taskId, firstValidation.issue);
-  }
-
-  const repairMessages: OpenRouterMessage[] = [
-    ...messages,
-    { role: "assistant", content: firstCall.data.slice(0, 30_000) },
-    {
-      role: "user",
-      content: [
-        "Correct the previous response so it conforms exactly to the supplied JSON Schema.",
-        "Preserve supported meaning, do not invent evidence, and return only the corrected JSON object.",
-        `Validation issues: ${firstValidation.issue}`,
-      ].join(" "),
-    },
-  ];
-  const repairGeneration = await generateProfileModelCall({
-    definition: input.definition,
-    jsonSchema: outputJsonSchema,
-    messages: repairMessages,
-    reasoning: "minimal",
-    schemaName: `${input.taskId.replaceAll(".", "_")}_repair`,
-    taskId: input.taskId,
-  });
-  const repairCall = repairGeneration.call;
-  const repairedValidation = validateStructuredOutput(
-    input.definition.outputSchema,
-    repairCall.data,
+  const output = mergeBuyerLogicShardOutputs(
+    generated.map((generation, index) => ({
+      offeringKey: shards[index]!.offeringKey,
+      output: generation.output,
+    })),
   );
-  if (!repairedValidation.success) {
-    throw new InvalidProfileStageOutputError(input.taskId, repairedValidation.issue);
-  }
   return {
-    calls: [firstCall, repairCall],
-    initialValidationIssue: firstValidation.issue,
-    output: repairedValidation.data,
-    structuredOutputFallbackUsed:
-      firstGeneration.structuredOutputFallbackUsed ||
-      repairGeneration.structuredOutputFallbackUsed,
-    truncationRetryUsed:
-      firstGeneration.truncationRetryUsed || repairGeneration.truncationRetryUsed,
+    calls: generated.flatMap((item) => item.calls),
+    output,
+    structuredOutputFallbackUsed: generated.some(
+      (item) => item.structuredOutputFallbackUsed,
+    ),
+    truncationRetryUsed: false,
+    repairAttempted: generated.some((item) => item.repairAttempted),
   };
 }
 
-type ProfileModelCallGeneration = {
-  call: AiCallResult<string>;
-  structuredOutputFallbackUsed: boolean;
-  truncationRetryUsed: boolean;
-};
-
-async function generateProfileModelCall(input: {
+async function generateSingleValidatedProfileStageOutput(input: {
+  context: unknown;
   definition: PromptDefinition<unknown, unknown>;
-  jsonSchema: Record<string, unknown>;
-  messages: OpenRouterMessage[];
-  reasoning: "minimal" | "medium" | "high";
-  schemaName: string;
   taskId: ProfileV3StageId;
-}): Promise<ProfileModelCallGeneration> {
-  const commonOptions = {
-    role: modelRole(input.taskId),
-    maxCompletionTokens: input.definition.maxCompletionTokens,
-    reasoningEffort: input.reasoning,
-    taskName: input.schemaName.replaceAll("_", " "),
-  } as const;
-  try {
-    return {
-      call: await generateTextResult(input.messages, {
-        ...commonOptions,
-        jsonSchema: {
-          name: input.schemaName,
-          schema: input.jsonSchema,
-          strict: supportsStrictStructuredOutput(input.jsonSchema),
-        },
-      }),
-      structuredOutputFallbackUsed: false,
-      truncationRetryUsed: false,
-    };
-  } catch (error) {
-    if (isUnsupportedStructuredOutput(error)) {
-      return generateJsonModeProfileCall(input, {
-        structuredOutputFallbackUsed: true,
-        truncationRetryUsed: false,
-      });
-    }
-    if (isTruncatedResponse(error)) {
-      return generateJsonModeProfileCall(input, {
-        structuredOutputFallbackUsed: false,
-        truncationRetryUsed: true,
-      });
-    }
-    throw error;
-  }
-}
-
-async function generateJsonModeProfileCall(
-  input: {
-    definition: PromptDefinition<unknown, unknown>;
-    jsonSchema: Record<string, unknown>;
-    messages: OpenRouterMessage[];
-    reasoning: "minimal" | "medium" | "high";
-    schemaName: string;
-    taskId: ProfileV3StageId;
-  },
-  state: {
-    structuredOutputFallbackUsed: boolean;
-    truncationRetryUsed: boolean;
-  },
-): Promise<ProfileModelCallGeneration> {
-  const messages: OpenRouterMessage[] = state.truncationRetryUsed
-    ? [
-        ...input.messages,
-        {
-          role: "user",
-          content:
-            "The previous response reached the completion limit. Return one complete, compact JSON object. Respect every maxItems and maxLength bound, avoid repetition, and omit no required field.",
-        },
-      ]
-    : input.messages;
-  try {
-    return {
-      call: await generateTextResult(messages, {
+  workspaceId: string;
+  profileDraftId: string;
+  inputHash: string;
+  taskRunId: string;
+  offeringKey?: string;
+}): Promise<ValidatedProfileStageGeneration> {
+  const tasks = new IntelligenceTaskRegistry();
+  tasks.register(input.definition);
+  const schemas = new IntelligenceSchemaRegistry();
+  schemas.register({
+    taskId: input.definition.taskId,
+    schemaVersion: input.definition.schemaVersion,
+    schema: input.definition.outputSchema,
+    semanticValidators: [],
+  });
+  const result = await executeValidatedAiTask<unknown, unknown>({
+    registry: tasks,
+    schemas,
+    taskId: input.taskId,
+    promptVersion: input.definition.promptVersion,
+    modelRouteVersion: "company-profile-v3-route/v1",
+    request: input.context,
+    recordAttempt: createIntelligenceAttemptRecorder({
+      workspaceId: input.workspaceId,
+      frozenInputHash: input.inputHash,
+      metadata: {
+        profileDraftId: input.profileDraftId,
+        taskRunId: input.taskRunId,
+        ...(input.offeringKey ? { offeringKey: input.offeringKey } : {}),
+      },
+    }),
+    transport: async (request) => {
+      const startedAt = Date.now();
+      const call = await generateTextResult(request.messages, {
         role: modelRole(input.taskId),
-        jsonMode: true,
-        maxCompletionTokens: state.truncationRetryUsed
-          ? expandedCompletionBudget(input.definition.maxCompletionTokens)
-          : input.definition.maxCompletionTokens,
-        reasoningEffort: state.truncationRetryUsed ? "minimal" : input.reasoning,
-        taskName: state.truncationRetryUsed
-          ? `${input.schemaName.replaceAll("_", " ")} compact retry`
-          : input.schemaName.replaceAll("_", " "),
-      }),
-      ...state,
-    };
-  } catch (error) {
-    if (!state.truncationRetryUsed && isTruncatedResponse(error)) {
-      return generateJsonModeProfileCall(input, {
-        ...state,
-        truncationRetryUsed: true,
+        maxCompletionTokens: request.maxCompletionTokens,
+        reasoningEffort:
+          request.reasoningClass === "standard"
+            ? "medium"
+            : request.reasoningClass,
+        taskName: input.taskId.replaceAll(".", " "),
+        ...(request.output.mode === "json_schema"
+          ? { jsonSchema: request.output }
+          : { jsonMode: true }),
       });
-    }
-    throw error;
-  }
-}
-
-function isUnsupportedStructuredOutput(error: unknown) {
-  if (!(error instanceof OpenRouterRequestError)) return false;
-  return (
-    (error.code === "model_unavailable" &&
-      /requested parameters|no endpoints found/i.test(error.message)) ||
-    (error.code === "http_400" &&
-      /json.?schema|response_format|structured output/i.test(error.message))
-  );
-}
-
-function isTruncatedResponse(error: unknown) {
-  return error instanceof OpenRouterRequestError && error.code === "completion_truncated";
-}
-
-function expandedCompletionBudget(currentBudget: number) {
-  return Math.min(Math.max(currentBudget * 2, 8_000), 12_000);
-}
-
-class InvalidProfileStageOutputError extends Error {
-  readonly code = "invalid_provider_response";
-
-  constructor(taskId: string, issue: string) {
-    super(
-      `[invalid_provider_response] OpenRouter returned schema-invalid JSON for ${taskId} after one correction attempt. ${issue}`,
-    );
-    this.name = "InvalidProfileStageOutputError";
-  }
-}
-
-function reasoningEffort(definition: PromptDefinition<unknown, unknown>) {
-  return definition.reasoningClass === "high"
-    ? ("high" as const)
-    : definition.reasoningClass === "standard"
-      ? ("medium" as const)
-      : ("minimal" as const);
+      return {
+        output: normalizeProfileStageProviderOutput(input.taskId, call.data),
+        requestedModel: call.requestedModel,
+        actualModel: call.actualModel ?? call.requestedModel,
+        fallbackUsed: call.fallbackUsed,
+        requestHash: hash(request.messages),
+        responseHash: hash(call.data),
+        latencyMs: call.latencyMs || Date.now() - startedAt,
+        inputUnits: call.inputTokens,
+        outputUnits: call.outputTokens,
+        actualCost: call.providerReportedCost,
+        currency: call.providerCurrency,
+      };
+    },
+  });
+  const provenance = result.provenance;
+  return {
+    calls: [{
+      data: JSON.stringify(result.data),
+      provider: "openrouter",
+      requestedModel: provenance.requestedModel,
+      actualModel: provenance.actualModel,
+      fallbackUsed: provenance.fallbackUsed,
+      inputTokens: provenance.inputUnits,
+      outputTokens: provenance.outputUnits,
+      providerReportedCost: provenance.actualCost,
+      providerCurrency: provenance.currency === "USD" ? "USD" : undefined,
+      latencyMs: provenance.latencyMs ?? 0,
+    }],
+    output: result.data,
+    structuredOutputFallbackUsed: provenance.structuredOutputFallbackUsed,
+    truncationRetryUsed: false,
+    repairAttempted: provenance.repairAttempted,
+  };
 }
 
 function sumMetric(

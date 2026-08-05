@@ -32,6 +32,22 @@ test("campaign brief proposal is structured and references a frozen profile offe
   assert.equal(result.targetClient.employeeRange?.max, 100);
 });
 
+test("campaign brief proposal preserves validated stale-input provenance", () => {
+  const provenance = {
+    objective: "direct_buyer",
+    selectedOfferingKey: "offering-1",
+    selectedOfferingVersionId: "offering-version-1",
+    profileVersionId: "profile-version-1",
+    promptVersion: "campaign-brief-proposal-v4-objective-first",
+    inputHash: "a".repeat(64),
+  };
+  const result = parseCampaignBriefProposal(
+    { ...valid, provenance },
+    new Set(["offering-1"]),
+  );
+  assert.deepEqual(result.provenance, provenance);
+});
+
 test("campaign brief rejects an offering absent from the Company Profile", () => {
   assert.throws(
     () => parseCampaignBriefProposal(valid, new Set(["other-offering"])),
@@ -121,5 +137,41 @@ test("confirmed campaign brief rejects an inverted employee range", () => {
         new Set(["offering-1"]),
       ),
     /invalid employee range/,
+  );
+});
+
+test("confirmed brief enforces objective and relationship compatibility", () => {
+  assert.throws(
+    () =>
+      parseConfirmedCampaignBrief(
+        {
+          ...valid,
+          targetSegments: [
+            {
+              id: "supplier-segment",
+              name: "Suppliers",
+              summary: "Organizations supplying an input.",
+              relationshipType: "supplier",
+              organizationTypes: ["Supplier"],
+              industries: [],
+              geographies: ["DE"],
+              characteristics: [],
+              buyingSignals: [],
+              likelyBuyerRoles: [],
+              exclusions: [],
+              rationale: "Supplier sourcing",
+              supportingEvidence: [],
+              discoverability: "medium",
+              source: "user_added",
+              confidence: "medium",
+              status: "confirmed",
+            },
+          ],
+          desiredQualifiedCompanies: 25,
+        },
+        new Set(["offering-1"]),
+        "direct_buyer",
+      ),
+    /incompatible.*supplier/,
   );
 });

@@ -1,4 +1,5 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 import {
   campaignStrategyV2Schema,
@@ -10,6 +11,128 @@ import {
   type CompiledCampaignCommercialContext,
 } from "@/lib/intelligence/campaign-strategy-v2";
 import { intelligenceRuleSchema } from "@/lib/intelligence/contracts/rules";
+import type { AiCallResult } from "@/lib/providers/openrouter";
+
+export type CampaignStrategyEnrichmentStatus = {
+  state: "baseline_ready" | "running" | "partially_enriched" | "enriched" | "failed";
+  applied: number;
+  rejected: number;
+  requiresUserReview: number;
+  omittedByBudget: number;
+  message?: string;
+};
+
+export async function getCampaignStrategyV2EnrichmentStatus(
+  workspaceId: string,
+  strategyDraftId: string,
+): Promise<CampaignStrategyEnrichmentStatus> {
+  const { supabase } = await createAuthenticatedDatabaseClient();
+  type EnrichmentRpc = {
+    rpc(name: string, args: Record<string, unknown>): Promise<{
+      data: unknown;
+      error: { message: string } | null;
+    }>;
+  };
+  const { data, error } = await (supabase as unknown as EnrichmentRpc).rpc(
+    "get_campaign_strategy_enrichment_v2",
+    {
+      target_workspace_id: workspaceId,
+      target_strategy_draft_id: strategyDraftId,
+    },
+  );
+  if (error) throw new Error(`Could not load Strategy enrichment: ${error.message}`);
+  const rows = Array.isArray(data) ? data.map(objectValue) : [];
+  const byStage = new Map(rows.map((row) => [optionalString(row.stage_id), row]));
+  const relevant = ["market_context", "advisory_delta", "compilation"]
+    .map((stage) => byStage.get(stage))
+    .filter((row): row is Record<string, Json | undefined> => Boolean(row));
+  const failed = relevant.find((row) => row.status === "failed");
+  if (failed) {
+    return {
+      state: "failed",
+      applied: 0,
+      rejected: 0,
+      requiresUserReview: 0,
+      omittedByBudget: 0,
+      message: optionalString(failed.error_message) ?? "Optional enrichment failed.",
+    };
+  }
+  if (relevant.some((row) => row.status === "running")) {
+    return { state: "running", applied: 0, rejected: 0, requiresUserReview: 0, omittedByBudget: 0 };
+  }
+  const compilation = byStage.get("compilation");
+  if (compilation?.status !== "completed") {
+    return { state: "baseline_ready", applied: 0, rejected: 0, requiresUserReview: 0, omittedByBudget: 0 };
+  }
+  const summary = objectValue(objectValue(compilation.output_json).dispositionSummary);
+  const result = {
+    applied: integerValue(summary.applied),
+    rejected: integerValue(summary.rejected),
+    requiresUserReview: integerValue(summary.requiresUserReview),
+    omittedByBudget: integerValue(summary.omittedByBudget),
+  };
+  return {
+    state:
+      result.rejected || result.requiresUserReview || result.omittedByBudget
+        ? "partially_enriched"
+        : "enriched",
+    ...result,
+  };
+}
+
+export async function recordCampaignStrategyModelCalls(input: {
+  workspaceId: string;
+  strategyDraftId: string;
+  inputHash: string;
+  calls: Array<{
+    taskId: string;
+    promptVersion: string;
+    schemaVersion: string;
+    outputHash: string;
+    call: AiCallResult<string>;
+  }>;
+}) {
+  const supabase = createServiceRoleClient();
+  type AuditRpc = {
+    rpc(
+      name: "record_campaign_strategy_ai_requests_v2",
+      args: {
+        target_requests: Json;
+        target_strategy_draft_id: string;
+        target_workspace_id: string;
+      },
+    ): Promise<{ error: { message: string } | null }>;
+  };
+  const requests = input.calls.map((item) => ({
+    role: item.taskId,
+    selectedModel: item.call.requestedModel,
+    fallbackModel: item.call.fallbackUsed
+      ? (item.call.actualModel ?? item.call.requestedModel)
+      : "",
+    fallbackUsed: item.call.fallbackUsed,
+    promptVersion: item.promptVersion,
+    schemaVersion: item.schemaVersion,
+    requestHash: input.inputHash,
+    inputUnits: item.call.inputTokens ?? null,
+    outputUnits: item.call.outputTokens ?? null,
+    actualCost: item.call.providerReportedCost ?? 0,
+    currency: item.call.providerCurrency ?? "USD",
+    actualModel: item.call.actualModel ?? null,
+    latencyMs: item.call.latencyMs,
+    outputHash: item.outputHash,
+    providerRequestId: item.call.providerRequestId ?? null,
+  }));
+  const { error } = await (supabase as unknown as AuditRpc).rpc(
+    "record_campaign_strategy_ai_requests_v2",
+    {
+      target_workspace_id: input.workspaceId,
+      target_strategy_draft_id: input.strategyDraftId,
+      target_requests: requests as unknown as Json,
+    },
+  );
+  if (error)
+    throw new Error(`Could not audit Campaign Strategy model tasks: ${error.message}`);
+}
 
 export async function createCampaignStrategyV2Draft(input: {
   workspaceId: string;
@@ -39,7 +162,7 @@ export async function persistCampaignStrategyV2Compilation(input: {
   strategyDraftId: string;
   compilation: CampaignStrategyCompilation;
 }) {
-  const { supabase: database } = await createAuthenticatedDatabaseClient();
+  const database = createServiceRoleClient();
   const { data, error } = await database.rpc("compile_campaign_strategy_v2_draft", {
     target_workspace_id: input.workspaceId,
     target_strategy_draft_id: input.strategyDraftId,
@@ -48,6 +171,52 @@ export async function persistCampaignStrategyV2Compilation(input: {
   if (error)
     throw new Error(`Could not compile Campaign Strategy V2 draft: ${error.message}`);
   return draftIdentity(data);
+}
+
+export async function markCampaignStrategyV2Building(input: {
+  workspaceId: string;
+  strategyDraftId: string;
+}) {
+  const { error } = await createServiceRoleClient()
+    .from("campaign_strategy_drafts")
+    .update({ state: "building", updated_at: new Date().toISOString() })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.strategyDraftId)
+    .in("state", ["building", "needs_input", "failed"]);
+  if (error) throw new Error(`Could not queue Campaign Strategy draft: ${error.message}`);
+}
+
+export async function failCampaignStrategyV2Draft(input: {
+  workspaceId: string;
+  strategyDraftId: string;
+  error: unknown;
+}) {
+  const message = input.error instanceof Error ? input.error.message : "Strategy compilation failed.";
+  const supabase = createServiceRoleClient();
+  const { data: draft } = await supabase
+    .from("campaign_strategy_drafts")
+    .select("campaign_id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.strategyDraftId)
+    .maybeSingle();
+  await supabase
+    .from("campaign_strategy_drafts")
+    .update({ state: "failed", updated_at: new Date().toISOString() })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.strategyDraftId)
+    .neq("state", "ready_for_review")
+    .neq("state", "confirmed");
+  if (draft?.campaign_id) {
+    await supabase.from("campaign_strategy_events").insert({
+      workspace_id: input.workspaceId,
+      campaign_id: draft.campaign_id,
+      campaign_strategy_draft_id: input.strategyDraftId,
+      event_type: "draft_compilation_failed",
+      actor_type: "system",
+      affected_paths: ["strategy"],
+      details_json: { message: message.slice(0, 2_000) },
+    });
+  }
 }
 
 export async function confirmCampaignStrategyV2(input: {
@@ -105,10 +274,7 @@ export async function getCurrentCampaignStrategyV2Draft(
     contextHash: data.compiled_context_hash,
     contentHash: data.content_hash,
     updatedAt: data.updated_at,
-    strategy: parseCampaignStrategyV2DraftPayload(
-      data.state,
-      data.compiled_draft_json,
-    ),
+    strategy: parseCampaignStrategyV2DraftPayload(data.state, data.compiled_draft_json),
   };
 }
 
@@ -117,7 +283,7 @@ export async function getCampaignStrategyV2RecoveryData(input: {
   campaignExternalId: string;
   strategyDraftId: string;
 }) {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const supabase = createServiceRoleClient();
   const { data: campaign, error: campaignError } = await supabase
     .from("campaigns")
     .select("id,current_strategy_draft_id")
@@ -224,7 +390,7 @@ export async function getPublishedCampaignProfileContext(
 export async function getPublishedCampaignPlanningProfile(
   workspaceId: string,
 ): Promise<CampaignPlanningProfile | null> {
-  const { supabase } = await createAuthenticatedDatabaseClient();
+  const supabase = createServiceRoleClient();
   const { data: profile, error: profileError } = await supabase
     .from("company_profiles")
     .select("id,current_version_id")
@@ -349,11 +515,20 @@ export async function getPublishedCampaignPlanningProfile(
         transactionModels: stringArray(mechanics.transactionModels),
       },
       buyerLogic: {
+        offeringKey: optionalString(buyerLogic.offeringKey) ?? entity.stable_key,
         whyBuy: stringArray(buyerLogic.whyBuy),
         requiredConditions: stringArray(buyerLogic.requiredConditions),
         preferredConditions: stringArray(buyerLogic.preferredConditions),
         likelyTriggers: stringArray(buyerLogic.likelyTriggers),
         incompatibleConditions: stringArray(buyerLogic.incompatibleConditions),
+        likelyDecisionRoles: stringArray(buyerLogic.likelyDecisionRoles),
+        ...(optionalString(buyerLogic.procurementPattern)
+          ? { procurementPattern: optionalString(buyerLogic.procurementPattern) }
+          : {}),
+        positiveEvidenceSignals: stringArray(buyerLogic.positiveEvidenceSignals),
+        negativeEvidenceSignals: stringArray(buyerLogic.negativeEvidenceSignals),
+        evidenceIds: stringArray(buyerLogic.evidenceIds),
+        confidence: numericValue(buyerLogic.confidence),
       },
       relationshipOptions: arrayValue(row.relationship_options_json).map((value) => {
         const option = objectValue(value);
@@ -487,6 +662,10 @@ function optionalString(value: Json | undefined) {
 function numericValue(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? Math.max(0, Math.min(1, parsed)) : 0;
+}
+
+function integerValue(value: unknown) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 ? value : 0;
 }
 
 function humanize(value: string) {

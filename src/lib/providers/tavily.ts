@@ -33,6 +33,7 @@ export async function searchWeb(
   options: {
     country?: string;
     includeDomains?: string[];
+    excludeDomains?: string[];
     includeRawContent?: boolean;
   } = {},
 ): Promise<SearchResult[]> {
@@ -45,6 +46,9 @@ export async function searchWeb(
         : {}),
       ...(options.includeDomains?.length
         ? { include_domains: options.includeDomains }
+        : {}),
+      ...(options.excludeDomains?.length
+        ? { exclude_domains: options.excludeDomains }
         : {}),
       ...(options.includeRawContent ? { include_raw_content: "text" } : {}),
       max_results: maxResults,

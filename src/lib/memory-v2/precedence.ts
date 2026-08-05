@@ -38,6 +38,7 @@ export function memoryConflictKey(memory: IntelligenceMemory) {
   const applicability = memory.applicability;
   return [
     memory.kind,
+    effectConflictKey(memory),
     applicability?.objectiveCodes?.join(",") ?? "*",
     applicability?.offeringIds?.join(",") ?? "*",
     applicability?.geographyCodes?.join(",") ?? "*",
@@ -46,6 +47,32 @@ export function memoryConflictKey(memory: IntelligenceMemory) {
     applicability?.relationshipTypes?.join(",") ?? "*",
     applicability?.qualificationFactorKeys?.join(",") ?? "*",
   ].join("|");
+}
+
+function effectConflictKey(memory: IntelligenceMemory) {
+  const effect = memory.effect;
+  if (!effect) return "legacy";
+  switch (effect.type) {
+    case "hard_exclusion": {
+      const rule = effect.rule as { ruleKey?: unknown };
+      return `${effect.type}:${String(rule?.ruleKey ?? memory.statement)}`;
+    }
+    case "soft_exclusion":
+    case "required_condition":
+    case "preferred_condition": {
+      const condition = effect.condition as { field?: unknown };
+      return `${effect.type}:${String(condition?.field ?? memory.statement)}`;
+    }
+    case "organization_alias":
+      return `${effect.type}:${effect.organizationId}`;
+    case "entity_resolution_correction":
+      return `${effect.type}:${effect.action.matchNames.join(",")}`;
+    case "query_term_include":
+    case "query_term_exclude":
+      return `${effect.type}:${[...effect.terms].sort().join(",")}`;
+    default:
+      return effect.type;
+  }
 }
 
 function applicabilitySpecificity(memory: IntelligenceMemory) {

@@ -12,6 +12,7 @@ import {
   reviewCompanyProfileV3RuleAction,
   skipCompanyProfileV3QuestionAction,
   updateCompanyProfileV3CoreAction,
+  updateCompanyProfileV3OfferingAction,
 } from "@/server/company-profile-v3/actions";
 import styles from "./CompanyProfileWorkspace.module.css";
 
@@ -21,8 +22,7 @@ export function CompanyProfileV3Workspace({
   const pending = review.questions.filter((question) => question.status === "pending");
   const reviewable = ["needs_input", "ready_for_review"].includes(review.state);
   const publishable =
-    reviewable &&
-    review.offerings.some((offering) => offering.status === "active");
+    reviewable && review.offerings.some((offering) => offering.status === "active");
   return (
     <>
       <section
@@ -190,6 +190,10 @@ export function CompanyProfileV3Workspace({
                   value={`${percent(offering.confidence)} confidence`}
                 />
                 <JsonList
+                  label="Value proposition"
+                  value={path(offering.commercial_mechanics_json, "valueProposition")}
+                />
+                <JsonList
                   label="Customer problems"
                   value={path(offering.commercial_mechanics_json, "customerProblems")}
                 />
@@ -201,6 +205,159 @@ export function CompanyProfileV3Workspace({
                   label="Why buyers act"
                   value={path(offering.buyer_logic_json, "whyBuy")}
                 />
+                <JsonList
+                  label="Required conditions"
+                  value={path(offering.buyer_logic_json, "requiredConditions")}
+                />
+                <JsonList
+                  label="Preferred conditions"
+                  value={path(offering.buyer_logic_json, "preferredConditions")}
+                />
+                <JsonList
+                  label="Likely triggers"
+                  value={path(offering.buyer_logic_json, "likelyTriggers")}
+                />
+                <JsonList
+                  label="Incompatible conditions"
+                  value={path(offering.buyer_logic_json, "incompatibleConditions")}
+                />
+                <JsonList
+                  label="Likely decision roles"
+                  value={path(offering.buyer_logic_json, "likelyDecisionRoles")}
+                />
+                <Info
+                  label="Procurement pattern"
+                  value={String(
+                    path(offering.buyer_logic_json, "procurementPattern") || "Unknown",
+                  )}
+                />
+                <JsonList
+                  label="Positive evidence signals"
+                  value={path(offering.buyer_logic_json, "positiveEvidenceSignals")}
+                />
+                <JsonList
+                  label="Negative evidence signals"
+                  value={path(offering.buyer_logic_json, "negativeEvidenceSignals")}
+                />
+                <Info
+                  label="Buyer-logic confidence"
+                  value={`${percent(Number(path(offering.buyer_logic_json, "confidence") || 0))} confidence`}
+                />
+                <JsonList
+                  label="Buyer-logic evidence"
+                  value={path(offering.buyer_logic_json, "evidenceIds")}
+                />
+                {reviewable ? (
+                  <details className={styles.section}>
+                    <summary>Correct offering and buyer logic</summary>
+                    <form
+                      action={updateCompanyProfileV3OfferingAction}
+                      className={shared.stack}
+                    >
+                      <input type="hidden" name="draftId" value={review.id} />
+                      <input type="hidden" name="entityId" value={offering.id} />
+                      <CoreField
+                        name="name"
+                        label="Offering boundary / name"
+                        value={offering.name}
+                      />
+                      <CoreField
+                        name="offeringType"
+                        label="Offering type"
+                        value={offering.offering_type}
+                      />
+                      <CoreField
+                        name="shortDescription"
+                        label="Summary"
+                        value={offering.short_description}
+                      />
+                      <CoreField
+                        name="buyingMotion"
+                        label="Transaction / buying motion"
+                        value={String(
+                          path(offering.commercial_mechanics_json, "buyingMotion") ||
+                            "unknown",
+                        )}
+                      />
+                      <CoreField
+                        name="customerConsumptionMode"
+                        label="Customer consumption / use mode"
+                        value={String(
+                          path(
+                            offering.commercial_mechanics_json,
+                            "customerConsumptionMode",
+                          ) || "unknown",
+                        )}
+                      />
+                      {[
+                        [
+                          "valueProposition",
+                          "Value proposition",
+                          offering.commercial_mechanics_json,
+                        ],
+                        [
+                          "customerProblems",
+                          "Customer problems",
+                          offering.commercial_mechanics_json,
+                        ],
+                        [
+                          "expectedOutcomes",
+                          "Expected outcomes",
+                          offering.commercial_mechanics_json,
+                        ],
+                        ["whyBuy", "Why buyers buy", offering.buyer_logic_json],
+                        [
+                          "requiredConditions",
+                          "Required conditions",
+                          offering.buyer_logic_json,
+                        ],
+                        [
+                          "preferredConditions",
+                          "Preferred conditions",
+                          offering.buyer_logic_json,
+                        ],
+                        ["likelyTriggers", "Triggers", offering.buyer_logic_json],
+                        [
+                          "incompatibleConditions",
+                          "Incompatible conditions",
+                          offering.buyer_logic_json,
+                        ],
+                        [
+                          "likelyDecisionRoles",
+                          "Likely decision roles",
+                          offering.buyer_logic_json,
+                        ],
+                        [
+                          "positiveEvidenceSignals",
+                          "Positive evidence signals",
+                          offering.buyer_logic_json,
+                        ],
+                        [
+                          "negativeEvidenceSignals",
+                          "Negative evidence signals",
+                          offering.buyer_logic_json,
+                        ],
+                      ].map(([name, fieldLabel, source]) => (
+                        <label className={form.field} key={String(name)}>
+                          <span>{String(fieldLabel)}</span>
+                          <textarea
+                            className={form.textarea}
+                            name={String(name)}
+                            defaultValue={jsonLines(source, String(name))}
+                          />
+                        </label>
+                      ))}
+                      <CoreField
+                        name="procurementPattern"
+                        label="Procurement pattern"
+                        value={String(
+                          path(offering.buyer_logic_json, "procurementPattern") || "",
+                        )}
+                      />
+                      <Button type="submit">Save offering intelligence</Button>
+                    </form>
+                  </details>
+                ) : null}
                 <strong>Buyer archetypes</strong>
                 {offering.archetypes.length ? (
                   <ul className={styles.list}>
@@ -418,6 +575,13 @@ function path(value: unknown, key: string) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)[key]
     : undefined;
+}
+
+function jsonLines(value: unknown, key: string) {
+  const selected = path(value, key);
+  return Array.isArray(selected)
+    ? selected.filter((item): item is string => typeof item === "string").join("\n")
+    : "";
 }
 
 function arrayObjects(value: unknown) {

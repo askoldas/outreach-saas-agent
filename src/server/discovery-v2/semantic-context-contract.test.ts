@@ -34,6 +34,13 @@ test("semantic Memory selection and hashing are deterministic", () => {
   assert.match(semanticContext, /conflicts: \[\.\.\.resolved\.conflicts\]\.sort/);
   assert.match(semanticContext, /campaignMemorySnapshotPayloadSchema\.parse/);
   assert.match(semanticContext, /hashCanonical\(snapshot\)/);
+  assert.match(semanticContext, /schemaVersion: 3/);
+  assert.match(semanticContext, /applied: resolved\.applied/);
+  assert.match(semanticContext, /overridden: resolved\.overridden/);
+  assert.match(semanticContext, /effectCompilerVersion: compiled\.compilerVersion/);
+  assert.match(semanticContext, /compilationTrace: compiled\.trace/);
+  assert.match(semanticContext, /loadMemoryEvidenceIds/);
+  assert.match(semanticContext, /recordVersion: canonicalTimestamp\(row\.updated_at\)/);
 });
 
 test("Campaign Run snapshot RPC and returned identities fail closed", () => {
@@ -79,4 +86,6 @@ test("Memory parsing and application audit are retry safe", () => {
   );
   assert.match(semanticContext, /ignoreDuplicates: true/);
   assert.match(semanticContext, /conflictByOverriddenMemoryId/);
+  assert.match(semanticContext, /memoryEffectSchema\.safeParse/);
+  assert.match(semanticContext, /compileMemoryEffects/);
 });

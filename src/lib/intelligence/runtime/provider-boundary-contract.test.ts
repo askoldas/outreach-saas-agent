@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import test from "node:test";
 
 const migratedV2Adapters = [
@@ -16,6 +16,9 @@ const migratedV2Adapters = [
 const activeV2Exceptions = [] as const;
 
 const legacyOrInactiveCallers = [] as const;
+
+const providerCallPattern =
+  /generateText(?:Result)?\(|generateTextResult\)\s*\(/;
 
 test("migrated V2 provider adapters execute through the shared runtime", () => {
   for (const file of migratedV2Adapters) {
@@ -45,21 +48,18 @@ test("every production OpenRouter call site belongs to a reviewed boundary class
 });
 
 function providerCallers() {
-  const output = execFileSync(
-    "rg",
-    [
-      "-l",
-      "generateText(?:Result)?\\(|generateTextResult\\)\\s*\\(",
-      "src",
-      "--glob",
-      "!**/*.test.ts",
-    ],
-    { encoding: "utf8" },
-  );
   return new Set(
-    output
-      .split(/\r?\n/)
-      .map((file) => file.replaceAll("\\", "/"))
-      .filter((file) => file && file !== "src/lib/providers/openrouter.ts"),
+    sourceFiles("src")
+      .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => file !== "src/lib/providers/openrouter.ts")
+      .filter((file) => providerCallPattern.test(readFileSync(file, "utf8"))),
   );
+}
+
+function sourceFiles(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(directory, entry.name).replaceAll("\\", "/");
+    if (entry.isDirectory()) return sourceFiles(path);
+    return entry.isFile() && /\.(?:ts|tsx)$/.test(entry.name) ? [path] : [];
+  });
 }

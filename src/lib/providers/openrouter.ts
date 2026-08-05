@@ -157,13 +157,7 @@ async function generateTextResultAttempt(
       false,
     );
   }
-  const content = payload.choices?.[0]?.message?.content?.trim();
-  if (!content)
-    throw new OpenRouterRequestError(
-      `OpenRouter model "${route.primaryModel}" returned no content for ${taskName}. ${describeEmptyCompletion(payload)}`,
-      "empty_completion",
-      false,
-    );
+
   const finishReason =
     payload.choices?.[0]?.finish_reason ?? payload.choices?.[0]?.native_finish_reason;
   if (finishReason === "length") {
@@ -195,6 +189,14 @@ async function generateTextResultAttempt(
       false,
     );
   }
+
+  const content = payload.choices?.[0]?.message?.content?.trim();
+  if (!content)
+    throw new OpenRouterRequestError(
+      `OpenRouter model "${route.primaryModel}" returned no content for ${taskName}. ${describeEmptyCompletion(payload)}`,
+      "empty_completion",
+      false,
+    );
 
   const actualModel = payload.model?.trim() || route.primaryModel;
   const fallbackUsed = actualModel !== route.primaryModel;

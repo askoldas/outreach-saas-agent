@@ -56,6 +56,43 @@ test("buyer logic merges exact offering shards and rejects cross-offering output
   );
 });
 
+test("buyer logic deduplicates and caps merged unresolved questions", () => {
+  const shards = Array.from({ length: 5 }, (_, index) => {
+    const offeringKey = `offering-${index + 1}`;
+    return {
+      offeringKey,
+      output: buyerOutput(offeringKey, [
+        "Shared question",
+        `Question ${index + 1}a`,
+        `Question ${index + 1}b`,
+      ]),
+    };
+  });
+
+  const merged = mergeBuyerLogicShardOutputs(shards);
+
+  assert.equal(merged.unresolvedQuestions.length, 11);
+  assert.equal(merged.unresolvedQuestions[0], "Shared question");
+  assert.equal(new Set(merged.unresolvedQuestions).size, 11);
+
+  const capped = mergeBuyerLogicShardOutputs(
+    Array.from({ length: 5 }, (_, index) => {
+      const offeringKey = `unique-${index + 1}`;
+      return {
+        offeringKey,
+        output: buyerOutput(offeringKey, [
+          `Question ${index + 1}a`,
+          `Question ${index + 1}b`,
+          `Question ${index + 1}c`,
+        ]),
+      };
+    }),
+  );
+
+  assert.equal(capped.unresolvedQuestions.length, 12);
+  assert.equal(capped.unresolvedQuestions.at(-1), "Question 4c");
+});
+
 function offering(offeringKey: string) {
   return {
     offeringKey,
@@ -76,7 +113,7 @@ function offering(offeringKey: string) {
   };
 }
 
-function buyerOutput(offeringKey: string) {
+function buyerOutput(offeringKey: string, unresolvedQuestions: string[] = []) {
   return {
     offeringBuyerLogic: [{
       offeringKey,
@@ -93,6 +130,6 @@ function buyerOutput(offeringKey: string) {
     }],
     archetypes: [],
     proposedOfferingRules: [],
-    unresolvedQuestions: [],
+    unresolvedQuestions,
   };
 }

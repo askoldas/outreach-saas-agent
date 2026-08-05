@@ -22,7 +22,10 @@ test("OpenRouter retries a truncated completion once with a larger compact budge
     process.env.OPENROUTER_API_KEY = "test-key";
     process.env.OPENROUTER_MODEL_ROUTING_ENABLED = "true";
     process.env.OPENROUTER_ALLOW_FALLBACKS = "false";
-    globalThis.fetch = (async (_input, init) => {
+    globalThis.fetch = (async (
+      _input: string | URL | Request,
+      init?: RequestInit,
+    ) => {
       requests.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
       const firstAttempt = requests.length === 1;
       return new Response(

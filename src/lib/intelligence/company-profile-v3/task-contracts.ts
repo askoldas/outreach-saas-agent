@@ -150,16 +150,16 @@ export const profileOfferingDecompositionOutputSchema = z
 const offeringBuyerLogicSchema = z
   .object({
     offeringKey: z.string().min(1).max(160),
-    whyBuy: z.array(z.string().min(1).max(320)).min(1).max(5),
-    requiredConditions: z.array(z.string().min(1).max(300)).max(6),
-    preferredConditions: z.array(z.string().min(1).max(300)).max(6),
-    likelyTriggers: z.array(z.string().min(1).max(300)).max(6),
-    incompatibleConditions: z.array(z.string().min(1).max(300)).max(6),
-    likelyDecisionRoles: z.array(z.string().min(1).max(160)).max(8),
-    procurementPattern: z.string().min(1).max(500).optional(),
-    positiveEvidenceSignals: z.array(z.string().min(1).max(300)).max(8),
-    negativeEvidenceSignals: z.array(z.string().min(1).max(300)).max(8),
-    evidenceIds: z.array(z.string().min(1).max(160)).max(20),
+    whyBuy: z.array(z.string().min(1).max(220)).min(1).max(4),
+    requiredConditions: z.array(z.string().min(1).max(220)).max(4),
+    preferredConditions: z.array(z.string().min(1).max(220)).max(3),
+    likelyTriggers: z.array(z.string().min(1).max(220)).max(4),
+    incompatibleConditions: z.array(z.string().min(1).max(220)).max(4),
+    likelyDecisionRoles: z.array(z.string().min(1).max(120)).max(6),
+    procurementPattern: z.string().min(1).max(320).optional(),
+    positiveEvidenceSignals: z.array(z.string().min(1).max(220)).max(5),
+    negativeEvidenceSignals: z.array(z.string().min(1).max(220)).max(5),
+    evidenceIds: z.array(z.string().min(1).max(160)).max(12),
     confidence: z.number().min(0).max(1),
   })
   .strict();
@@ -167,40 +167,80 @@ const offeringBuyerLogicSchema = z
 const buyerArchetypeSchema = z.object({
   archetypeKey: z.string().min(1).max(160),
   offeringKey: z.string().min(1).max(160),
-  name: z.string().min(1).max(180),
-  relationshipType: z.string().min(1).max(120),
+  name: z.string().min(1).max(160),
+  relationshipType: z.string().min(1).max(100),
   priority: z.enum(["priority", "conditional", "exclude_by_default"]),
-  description: z.string().min(1).max(500),
-  whyCompatible: z.array(z.string().min(1).max(300)).max(5),
-  requiredEvidence: z.array(z.string().min(1).max(300)).max(6),
-  positiveSignals: z.array(z.string().min(1).max(300)).max(8),
-  negativeSignals: z.array(z.string().min(1).max(300)).max(8),
-  likelyDecisionRoles: z.array(z.string().min(1).max(160)).max(8),
-  evidenceIds: z.array(z.string().min(1).max(160)).max(20),
+  description: z.string().min(1).max(320),
+  whyCompatible: z.array(z.string().min(1).max(220)).max(4),
+  requiredEvidence: z.array(z.string().min(1).max(220)).max(4),
+  positiveSignals: z.array(z.string().min(1).max(220)).max(5),
+  negativeSignals: z.array(z.string().min(1).max(220)).max(5),
+  likelyDecisionRoles: z.array(z.string().min(1).max(120)).max(6),
+  evidenceIds: z.array(z.string().min(1).max(160)).max(12),
   epistemicStatus: z.enum(["evidence_backed_inference", "hypothesis"]),
   confidence: z.number().min(0).max(1),
 });
+
+const compactProfileIntelligenceRuleSchema = z
+  .object({
+    ruleKey: z.string().min(1).max(160),
+    label: z.string().min(1).max(180),
+    description: z.string().min(1).max(320),
+    ruleType: z.enum([
+      "positive_signal",
+      "negative_signal",
+      "hard_exclusion",
+      "soft_exclusion",
+      "requirement",
+      "preference",
+    ]),
+    scope: z.enum(["workspace", "offering"]),
+    strength: z.enum(["hard", "soft"]),
+    applicability: z
+      .object({
+        objectives: z.array(z.string().min(1).max(160)).max(3).default([]),
+        offeringIds: z.array(z.string().min(1).max(160)).max(3).default([]),
+        geographies: z.array(z.string().min(1).max(160)).max(3).default([]),
+        relationshipTypes: z.array(z.string().min(1).max(160)).max(3).default([]),
+        archetypeIds: z.array(z.string().min(1).max(160)).max(3).default([]),
+      })
+      .strict(),
+    status: z.enum(["proposed", "provisional"]),
+    source: z.literal("ai"),
+    evidenceIds: z.array(z.string().min(1).max(160)).max(12).default([]),
+    confidence: z.number().min(0).max(1),
+  })
+  .strict()
+  .superRefine((rule, context) => {
+    if (rule.ruleType === "hard_exclusion" && rule.strength !== "hard") {
+      context.addIssue({
+        code: "custom",
+        message: "Hard exclusions must have hard strength.",
+        path: ["strength"],
+      });
+    }
+  });
 
 function uniqueBuyerLogicKeys(
   output: { offeringBuyerLogic: Array<{ offeringKey: string }> },
   context: z.RefinementCtx,
 ) {
-    const keys = output.offeringBuyerLogic.map((logic) => logic.offeringKey);
-    if (new Set(keys).size !== keys.length) {
-      context.addIssue({
-        code: "custom",
-        path: ["offeringBuyerLogic"],
-        message: "Buyer logic contains duplicate offering keys.",
-      });
-    }
+  const keys = output.offeringBuyerLogic.map((logic) => logic.offeringKey);
+  if (new Set(keys).size !== keys.length) {
+    context.addIssue({
+      code: "custom",
+      path: ["offeringBuyerLogic"],
+      message: "Buyer logic contains duplicate offering keys.",
+    });
+  }
 }
 
 export const profileBuyerLogicShardOutputSchema = z
   .object({
     offeringBuyerLogic: z.array(offeringBuyerLogicSchema).length(1),
-    archetypes: z.array(buyerArchetypeSchema).max(3),
-    proposedOfferingRules: z.array(profileIntelligenceRuleSchema).max(2),
-    unresolvedQuestions: z.array(z.string().min(1).max(320)).max(4),
+    archetypes: z.array(buyerArchetypeSchema).max(2),
+    proposedOfferingRules: z.array(compactProfileIntelligenceRuleSchema).max(1),
+    unresolvedQuestions: z.array(z.string().min(1).max(220)).max(3),
   })
   .strict()
   .superRefine(uniqueBuyerLogicKeys);
@@ -208,9 +248,9 @@ export const profileBuyerLogicShardOutputSchema = z
 export const profileBuyerLogicOutputSchema = z
   .object({
     offeringBuyerLogic: z.array(offeringBuyerLogicSchema).min(1).max(12),
-    archetypes: z.array(buyerArchetypeSchema).max(36),
-    proposedOfferingRules: z.array(profileIntelligenceRuleSchema).max(24),
-    unresolvedQuestions: z.array(z.string().min(1).max(320)).max(12),
+    archetypes: z.array(buyerArchetypeSchema).max(24),
+    proposedOfferingRules: z.array(profileIntelligenceRuleSchema).max(12),
+    unresolvedQuestions: z.array(z.string().min(1).max(220)).max(12),
   })
   .strict()
   .superRefine(uniqueBuyerLogicKeys);
@@ -326,10 +366,10 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
   ),
   definition(
     "profile.buyer_logic",
-    "profile-buyer-logic-schema-v6-sharded",
+    "profile-buyer-logic-schema-v7-compact-sharded",
     "profile_commercial_reasoning",
     profileBuyerLogicOutputSchema,
-    "Build compact buyer logic for the one exact supplied offeringKey. Return exactly one offeringBuyerLogic record, never reference another offering, attach at most three high-value archetypes, and propose at most two non-duplicative rules. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
+    "Build compact buyer logic for the one exact supplied offeringKey. Return exactly one offeringBuyerLogic record and never reference another offering. Include at most two distinct high-value archetypes and at most one rule, only when that rule materially changes qualification. Keep lists to the strongest few items, keep each sentence concise, and prefer an empty array over speculation. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
   ),
   definition(
     "profile.clarification",
@@ -357,7 +397,7 @@ function definition(
   const outputJsonSchema = z.toJSONSchema(outputSchema) as Record<string, unknown>;
   const promptRevision =
     taskId === "profile.buyer_logic"
-      ? "v7"
+      ? "v8"
       : taskId === "profile.commercial_synthesis"
         ? "v4"
         : taskId === "profile.clarification"
@@ -384,7 +424,10 @@ function definition(
     ],
     outputSchema,
     maxCompletionTokens: completionBudget(taskId),
-    reasoningClass: taskId === "profile.fact_extraction" ? "minimal" : "standard",
+    reasoningClass:
+      taskId === "profile.fact_extraction" || taskId === "profile.buyer_logic"
+        ? "minimal"
+        : "standard",
     allowsRepair: true,
     allowsFallback: true,
   };
@@ -409,6 +452,6 @@ function completionBudget(taskId: string) {
     taskId === "profile.offering_decomposition" ||
     taskId === "profile.buyer_logic"
   )
-    return taskId === "profile.buyer_logic" ? 4_000 : 6_000;
+    return 6_000;
   return 4_000;
 }

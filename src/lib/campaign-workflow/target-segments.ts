@@ -137,7 +137,8 @@ export function assertCampaignTargetIsDiscoverable(segment: TargetSegment) {
     throw new Error("Consumer alone cannot be a Campaign target industry.");
   }
   if (
-    assessCampaignTargetDiscoverability(segment) === "low" &&
+    (segment.discoverability === "low" ||
+      assessCampaignTargetDiscoverability(segment) === "low") &&
     segment.status === "confirmed"
   ) {
     throw new Error("A confirmed Campaign target must be searchable.");
@@ -207,12 +208,8 @@ function parseTargetSegment(value: unknown): TargetSegment {
       "status",
     ),
   };
-  const normalizedSegment: TargetSegment = {
-    ...segment,
-    discoverability: assessCampaignTargetDiscoverability(segment),
-  };
-  assertCampaignTargetIsDiscoverable(normalizedSegment);
-  return normalizedSegment;
+  assertCampaignTargetIsDiscoverable(segment);
+  return segment;
 }
 
 function isSpecificOrganizationLabel(value: string) {

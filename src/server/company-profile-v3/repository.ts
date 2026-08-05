@@ -2,6 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { tasks } from "@trigger.dev/sdk";
 import { createNativeCompanyProfileSeed } from "@/lib/intelligence/company-profile-v3/native-source";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
+import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Database, Json } from "@/types/database.types";
 import type { createCompanyIntelligenceV3Task } from "@/trigger/create-company-intelligence-v3";
 import { getWorkspaceIntelligenceSettings } from "@/server/intelligence-settings/repository";
@@ -166,28 +167,17 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
     throw new Error("Company Intelligence V3 is not enabled for this workspace.");
 
   const { supabase } = await createAuthenticatedDatabaseClient();
-  const [
-    { data: workspace, error: workspaceError },
-    { data: profile, error: profileError },
-  ] = await Promise.all([
-    supabase
-      .from("workspaces")
-      .select("id,name,website_url")
-      .eq("id", workspaceId)
-      .single(),
-    supabase
-      .from("company_profiles")
-      .select("id")
-      .eq("workspace_id", workspaceId)
-      .single(),
-  ]);
+  const { data: workspace, error: workspaceError } = await supabase
+    .from("workspaces")
+    .select("id,name,website_url")
+    .eq("id", workspaceId)
+    .single();
   if (workspaceError)
     throw new Error(`Could not load Company workspace: ${workspaceError.message}`);
-  if (profileError)
-    throw new Error(`Could not load Company Profile container: ${profileError.message}`);
   if (!workspace.website_url)
     throw new Error("A company website is required for native Company Intelligence.");
 
+  const profile = await ensureCompanyProfileContainer(workspaceId);
   const snapshot = createNativeCompanyProfileSeed({
     companyProfileId: profile.id,
     publicName: workspace.name,
@@ -212,7 +202,9 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
     },
   );
   if (error)
-    throw new Error(`Could not create Company Intelligence draft: ${error.message}`);
+    throw new Error(
+      `Could not create Company Intelligence draft: ${error.message}. Apply migration 20260729000200_native_company_intelligence_v3_entry.sql if the RPC is missing.`,
+    );
 
   let handle;
   try {
@@ -246,6 +238,18 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
   if (linkError)
     throw new Error(`Could not link Company Intelligence run: ${linkError.message}`);
   return { profileDraftId: draft.id, triggerRunId: handle.id };
+}
+
+async function ensureCompanyProfileContainer(workspaceId: string) {
+  const service = createServiceRoleClient();
+  const { data, error } = await service
+    .from("company_profiles")
+    .upsert({ workspace_id: workspaceId }, { onConflict: "workspace_id" })
+    .select("id")
+    .single();
+  if (error)
+    throw new Error(`Could not repair Company Profile container: ${error.message}`);
+  return data;
 }
 
 function errorMessage(error: unknown) {

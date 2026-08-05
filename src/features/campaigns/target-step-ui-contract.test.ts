@@ -15,7 +15,8 @@ test("campaign Target keeps essentials visible and secondary fields advanced", (
   assert.match(targetStep, /label="Summary"/);
   assert.match(targetStep, /label="Company types"/);
   assert.match(targetStep, /label="Industries"/);
-  assert.match(advanced, /<summary>Advanced targeting<\/summary>/);
+  assert.match(advanced, /Improve target discoverability/);
+  assert.match(advanced, /Advanced targeting/);
   assert.match(advanced, /label="Positive signals"/);
   assert.match(advanced, /label="Required criteria"/);
   assert.match(advanced, /label="Exclude"/);

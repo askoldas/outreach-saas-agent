@@ -14,11 +14,13 @@ const sourceService = readFileSync(
 );
 const repository = readFileSync("src/server/company-profile-v3/repository.ts", "utf8");
 
-test("V3 profile orchestration uses one Trigger run with durable sequential stages", () => {
+test("V3 profile orchestration uses one retryable Trigger run with durable sequential stages", () => {
   assert.match(parent, /id: "create-company-intelligence-v3"/);
   assert.match(parent, /profileV3StageIds/);
   assert.match(parent, /executeProfileV3Stage/);
   assert.doesNotMatch(parent, /triggerAndWait/);
+  assert.match(parent, /maxAttempts: 3/);
+  assert.match(parent, /minTimeoutInMs: 5_000/);
   assert.match(parent, /onFailure/);
   assert.match(parent, /failProfileV3Draft/);
 });

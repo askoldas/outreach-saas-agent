@@ -88,6 +88,59 @@ test("OpenRouter retries a truncated completion once with a larger compact budge
   }
 });
 
+test("OpenRouter retries a length completion even when it contains no text", async () => {
+  const originalFetch = globalThis.fetch;
+  const originalEnvironment = Object.fromEntries(
+    environmentKeys.map((key) => [key, process.env[key]]),
+  );
+  let calls = 0;
+
+  try {
+    process.env.OPENROUTER_API_KEY = "test-key";
+    process.env.OPENROUTER_MODEL_ROUTING_ENABLED = "true";
+    process.env.OPENROUTER_ALLOW_FALLBACKS = "false";
+    globalThis.fetch = (async () => {
+      calls += 1;
+      const firstAttempt = calls === 1;
+      return new Response(
+        JSON.stringify({
+          model: "openai/gpt-5-mini",
+          choices: [
+            {
+              finish_reason: firstAttempt ? "length" : "stop",
+              message: {
+                content: firstAttempt ? "" : '{"answer":"complete"}',
+              },
+            },
+          ],
+        }),
+        { status: 200 },
+      );
+    }) as typeof fetch;
+
+    const result = await generateTextResult(
+      [{ role: "user", content: "Return JSON." }],
+      {
+        role: "low_risk_transformation",
+        jsonMode: true,
+        maxCompletionTokens: 4_000,
+        taskName: "test task",
+      },
+    );
+
+    assert.equal(calls, 2);
+    assert.equal(result.data, '{"answer":"complete"}');
+    assert.equal(result.truncationRetryUsed, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+    for (const key of environmentKeys) {
+      const value = originalEnvironment[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+});
+
 test("OpenRouter stops after one compact truncation retry", async () => {
   const originalFetch = globalThis.fetch;
   const originalEnvironment = Object.fromEntries(

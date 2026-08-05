@@ -3,6 +3,8 @@ import { getModelRoute } from "../ai/model-router.ts";
 import { requireOpenRouterConfig } from "./config.ts";
 
 const endpoint = "https://openrouter.ai/api/v1/chat/completions";
+const truncationRetryInstruction =
+  "The previous response exceeded the completion limit. Retry from scratch and return one complete JSON response. Be concise: keep only the highest-value items, shorten descriptions, respect all schema maximums, and omit nonessential repetition.";
 
 export type OpenRouterMessage = {
   content: string;
@@ -23,6 +25,7 @@ export interface AiCallResult<T> {
   providerReportedCost?: number;
   providerCurrency?: "USD";
   latencyMs: number;
+  truncationRetryUsed?: boolean;
 }
 
 export type GenerateTextOptions = {
@@ -67,6 +70,14 @@ export async function generateText(
 export async function generateTextResult(
   messages: OpenRouterMessage[],
   options: GenerateTextOptions,
+): Promise<AiCallResult<string>> {
+  return generateTextResultAttempt(messages, options, false);
+}
+
+async function generateTextResultAttempt(
+  messages: OpenRouterMessage[],
+  options: GenerateTextOptions,
+  truncationRetryUsed: boolean,
 ): Promise<AiCallResult<string>> {
   const { apiKey } = requireOpenRouterConfig();
   const route = getModelRoute(options.role);
@@ -155,12 +166,35 @@ export async function generateTextResult(
     );
   const finishReason =
     payload.choices?.[0]?.finish_reason ?? payload.choices?.[0]?.native_finish_reason;
-  if (finishReason === "length")
+  if (finishReason === "length") {
+    if (!truncationRetryUsed) {
+      const retry = await generateTextResultAttempt(
+        [
+          ...messages,
+          {
+            role: "user",
+            content: truncationRetryInstruction,
+          },
+        ],
+        {
+          ...options,
+          maxCompletionTokens: expandedCompletionBudget(options.maxCompletionTokens),
+          reasoningEffort: "minimal",
+        },
+        true,
+      );
+      return {
+        ...retry,
+        latencyMs: Date.now() - startedAt,
+        truncationRetryUsed: true,
+      };
+    }
     throw new OpenRouterRequestError(
-      `OpenRouter truncated the response for ${taskName}.`,
+      `OpenRouter truncated the response for ${taskName} after one compact retry.`,
       "completion_truncated",
       false,
     );
+  }
 
   const actualModel = payload.model?.trim() || route.primaryModel;
   const fallbackUsed = actualModel !== route.primaryModel;
@@ -189,6 +223,7 @@ export async function generateTextResult(
     ...(typeof payload.usage?.cost === "number"
       ? { providerReportedCost: payload.usage.cost, providerCurrency: "USD" as const }
       : {}),
+    ...(truncationRetryUsed ? { truncationRetryUsed: true } : {}),
     latencyMs: Date.now() - startedAt,
   };
 }
@@ -230,6 +265,11 @@ export function describeEmptyCompletion(payload: OpenRouterResponse) {
 
 export function getOpenRouterTimeoutMs(role: ModelRole = "low_risk_transformation") {
   return getModelRoute(role).timeoutMs;
+}
+
+function expandedCompletionBudget(current?: number) {
+  const baseline = current ?? 4_000;
+  return Math.min(12_000, Math.max(baseline + 2_000, Math.ceil(baseline * 1.5)));
 }
 
 function isRetryableStatus(status: number) {

@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(14);
+select plan(21);
 
 insert into auth.users (id, instance_id, aud, role, email, encrypted_password)
 values
@@ -156,6 +156,50 @@ insert into public.outreach_drafts (
   'Relevant introduction', 'Grounded synthetic draft', 'primary', 'draft-input'
 );
 
+insert into public.evidence_items (
+  id, workspace_id, subject_type, subject_id, manual_source_label, evidence_type,
+  excerpt, directness, source_reliability, freshness_state, retrieved_at, content_hash
+) values (
+  'a5000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'workspace_company',
+  'a0100000-0000-0000-0000-000000000001',
+  'Owner confirmation',
+  'user_confirmation',
+  'Seller A provides the synthetic service.',
+  'direct',
+  'first_party',
+  'current',
+  now(),
+  'fixture-evidence-hash'
+);
+
+insert into public.intelligence_claims (
+  id, workspace_id, subject_type, subject_id, claim_key, field_path, statement,
+  value_json, epistemic_status, confidence, origin_type
+) values (
+  'a5100000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'workspace_company',
+  'a0100000-0000-0000-0000-000000000001',
+  'offering.synthetic-service',
+  'offerings[0].name',
+  'Seller A provides the synthetic service.',
+  '"Synthetic service"'::jsonb,
+  'explicit_fact',
+  1,
+  'user'
+);
+
+insert into public.claim_evidence_links (
+  claim_id, evidence_id, workspace_id, stance
+) values (
+  'a5100000-0000-0000-0000-000000000001',
+  'a5000000-0000-0000-0000-000000000001',
+  'a0000000-0000-0000-0000-000000000001',
+  'supports'
+);
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -195,9 +239,44 @@ select results_eq(
   array[9::bigint],
   'authenticated users can read global model routing'
 );
+select results_eq(
+  $$ select count(*)::bigint from public.workspace_intelligence_settings $$,
+  array[1::bigint],
+  'owner reads only their workspace Intelligence rollout settings'
+);
+select results_eq(
+  $$ select count(*)::bigint from public.evidence_items $$,
+  array[1::bigint],
+  'owner reads workspace evidence'
+);
+select results_eq(
+  $$ select count(*)::bigint from public.intelligence_claims $$,
+  array[1::bigint],
+  'owner reads workspace claims'
+);
+select throws_ok(
+  $$ update public.intelligence_claims set statement = 'Mutated' where id = 'a5100000-0000-0000-0000-000000000001' $$,
+  '42501',
+  null,
+  'claims cannot be mutated by authenticated users'
+);
+select lives_ok(
+  $$ update public.workspace_intelligence_settings set shadow_mode = false where workspace_id = 'a0000000-0000-0000-0000-000000000001' $$,
+  'workspace owner may update their Intelligence rollout settings'
+);
 
 select set_config('request.jwt.claim.sub', '20000000-0000-0000-0000-000000000002', true);
 
+select results_eq(
+  $$ select count(*)::bigint from public.workspace_intelligence_settings where workspace_id = 'a0000000-0000-0000-0000-000000000001' $$,
+  array[0::bigint],
+  'another tenant cannot read the first workspace Intelligence settings'
+);
+select results_eq(
+  $$ select count(*)::bigint from public.evidence_items where workspace_id = 'a0000000-0000-0000-0000-000000000001' $$,
+  array[0::bigint],
+  'another tenant cannot read the first workspace evidence'
+);
 select results_eq(
   $$ select count(*)::bigint from public.campaigns where id = 'a1000000-0000-0000-0000-000000000001' $$,
   array[0::bigint],

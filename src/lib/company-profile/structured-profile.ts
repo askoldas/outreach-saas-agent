@@ -13,6 +13,60 @@ export const businessModelTypes = [
 export type BusinessModelType = (typeof businessModelTypes)[number];
 export type ProfileConfidence = "high" | "medium" | "low";
 export type FactOrigin = "explicit" | "inferred" | "user_provided";
+export type AudienceBusinessModel = "b2b" | "b2c" | "b2g" | "mixed" | "unclear";
+export type CustomerGroupKind =
+  | "consumer"
+  | "business"
+  | "public_institution"
+  | "partner"
+  | "distributor"
+  | "reseller"
+  | "supplier"
+  | "contractor"
+  | "other";
+
+export type CurrentCustomerGroup = {
+  id: string;
+  name: string;
+  kind: CustomerGroupKind;
+  evidence: string[];
+  confidence: ProfileConfidence;
+};
+
+export type PotentialB2BApplication = {
+  id: string;
+  name: string;
+  description: string;
+  supportedByCapabilityIds: string[];
+  confidence: ProfileConfidence;
+  requiresConfirmation: boolean;
+};
+
+export type ClarificationImpact =
+  | "offering_definition"
+  | "business_model"
+  | "target_segment"
+  | "delivery_constraint"
+  | "discovery_feasibility";
+
+export type ClarificationQuestion = {
+  id: string;
+  question: string;
+  reason: string;
+  impact: ClarificationImpact;
+  answerType: "single_select" | "multi_select" | "short_text" | "boolean";
+  options?: Array<{ id: string; label: string; description?: string }>;
+  required: boolean;
+  skippable: boolean;
+  priority: number;
+};
+
+export type CompanyProfileBusinessContext = {
+  businessModel: AudienceBusinessModel;
+  currentCustomerGroups: CurrentCustomerGroup[];
+  potentialB2BApplications: PotentialB2BApplication[];
+  unresolvedQuestions: ClarificationQuestion[];
+};
 
 export type SourceReference = {
   url?: string;
@@ -43,6 +97,9 @@ export type Capability = {
   name: string;
   description?: string;
   relatedOfferingIds: string[];
+  evidence?: string[];
+  confidence?: ProfileConfidence;
+  status?: "confirmed" | "inferred" | "rejected";
 };
 
 export type CommercialItemClassification =
@@ -130,7 +187,14 @@ export type Offering = {
   supportingProofIds: string[];
   adaptiveFields: Record<string, string | string[]>;
   priority: "primary" | "secondary" | "inactive";
-  status: "detected" | "confirmed" | "excluded";
+  status:
+    | "suggested"
+    | "confirmed"
+    | "inferred"
+    | "proposed"
+    | "rejected"
+    | "detected"
+    | "excluded";
   sourceReferences: SourceReference[];
 };
 
@@ -214,6 +278,7 @@ export type StructuredCompanyProfile = {
   capabilities: Capability[];
   commercialItems?: CommercialItem[];
   customerLandscape?: CustomerLandscape;
+  businessContext?: CompanyProfileBusinessContext;
   differentiators?: Differentiator[];
   companyProof: ProofPoint[];
   existingCustomers: CustomerReference[];
@@ -256,6 +321,12 @@ export function createEmptyStructuredProfile(input: {
       relationshipTypes: [],
       existingMarkets: [],
       potentialMarkets: [],
+    },
+    businessContext: {
+      businessModel: "unclear",
+      currentCustomerGroups: [],
+      potentialB2BApplications: [],
+      unresolvedQuestions: [],
     },
     differentiators: [],
     companyProof: [],
@@ -327,6 +398,7 @@ export function parseStructuredCompanyProfile(value: unknown): StructuredCompany
       parseCommercialItem,
     ),
     customerLandscape: parseCustomerLandscape(value.customerLandscape),
+    businessContext: parseBusinessContext(value.businessContext, capabilityIds),
     differentiators: deduplicateByTitle(
       array(value.differentiators ?? [], "differentiators").map(parseDifferentiator),
     ),
@@ -385,7 +457,10 @@ export function calculateReadiness(
   >,
 ): ProfileReadiness {
   const active = profile.offerings.filter(
-    (item) => item.status !== "excluded" && item.priority !== "inactive",
+    (item) =>
+      item.status !== "excluded" &&
+      item.status !== "rejected" &&
+      item.priority !== "inactive",
   );
   const scores = {
     companyUnderstanding:
@@ -553,7 +628,19 @@ function parseOffering(value: unknown): Offering {
       ? (value.adaptiveFields as Record<string, string | string[]>)
       : {},
     priority: enumValue(value.priority, ["primary", "secondary", "inactive"], "priority"),
-    status: enumValue(value.status, ["detected", "confirmed", "excluded"], "status"),
+    status: enumValue(
+      value.status,
+      [
+        "suggested",
+        "confirmed",
+        "inferred",
+        "proposed",
+        "rejected",
+        "detected",
+        "excluded",
+      ],
+      "status",
+    ),
     sourceReferences: array(value.sourceReferences, "sourceReferences").map(parseSource),
     ...optionalOfferingFields(value),
   };
@@ -568,6 +655,150 @@ function parseCapability(value: unknown): Capability {
     ...(optionalString(value.description)
       ? { description: optionalString(value.description) }
       : {}),
+    ...(Array.isArray(value.evidence)
+      ? { evidence: stringArray(value.evidence, "capability.evidence") }
+      : {}),
+    ...(value.confidence
+      ? {
+          confidence: enumValue(
+            value.confidence,
+            ["high", "medium", "low"],
+            "capability.confidence",
+          ) as ProfileConfidence,
+        }
+      : {}),
+    ...(value.status
+      ? {
+          status: enumValue(
+            value.status,
+            ["confirmed", "inferred", "rejected"],
+            "capability.status",
+          ) as Capability["status"],
+        }
+      : {}),
+  };
+}
+
+function parseBusinessContext(
+  value: unknown,
+  capabilityIds: ReadonlySet<string>,
+): CompanyProfileBusinessContext {
+  const row = isRecord(value) ? value : {};
+  const currentCustomerGroups = array(
+    row.currentCustomerGroups ?? [],
+    "businessContext.currentCustomerGroups",
+  ).map((item) => {
+    if (!isRecord(item)) throw new Error("Invalid current customer group.");
+    return {
+      id: id(item.id, "currentCustomerGroup.id"),
+      name: requiredString(item.name, "currentCustomerGroup.name"),
+      kind: enumValue(
+        item.kind,
+        [
+          "consumer",
+          "business",
+          "public_institution",
+          "partner",
+          "distributor",
+          "reseller",
+          "supplier",
+          "contractor",
+          "other",
+        ],
+        "currentCustomerGroup.kind",
+      ),
+      evidence: stringArray(item.evidence ?? [], "currentCustomerGroup.evidence"),
+      confidence: enumValue(
+        item.confidence,
+        ["high", "medium", "low"],
+        "currentCustomerGroup.confidence",
+      ),
+    };
+  });
+  const potentialB2BApplications = array(
+    row.potentialB2BApplications ?? [],
+    "businessContext.potentialB2BApplications",
+  ).map((item) => {
+    if (!isRecord(item)) throw new Error("Invalid potential B2B application.");
+    const supportedByCapabilityIds = stringArray(
+      item.supportedByCapabilityIds ?? [],
+      "potentialB2BApplication.supportedByCapabilityIds",
+    );
+    invalidRelations(supportedByCapabilityIds, capabilityIds, "capability");
+    return {
+      id: id(item.id, "potentialB2BApplication.id"),
+      name: requiredString(item.name, "potentialB2BApplication.name"),
+      description: requiredString(
+        item.description,
+        "potentialB2BApplication.description",
+      ),
+      supportedByCapabilityIds,
+      confidence: enumValue(
+        item.confidence,
+        ["high", "medium", "low"],
+        "potentialB2BApplication.confidence",
+      ),
+      requiresConfirmation: item.requiresConfirmation !== false,
+    };
+  });
+  const unresolvedQuestions = array(
+    row.unresolvedQuestions ?? [],
+    "businessContext.unresolvedQuestions",
+  )
+    .map(parseClarificationQuestion)
+    .sort((left, right) => right.priority - left.priority)
+    .slice(0, 3);
+  return {
+    businessModel: enumValue(
+      row.businessModel ?? "unclear",
+      ["b2b", "b2c", "b2g", "mixed", "unclear"],
+      "businessContext.businessModel",
+    ),
+    currentCustomerGroups,
+    potentialB2BApplications,
+    unresolvedQuestions,
+  };
+}
+
+function parseClarificationQuestion(value: unknown): ClarificationQuestion {
+  if (!isRecord(value)) throw new Error("Invalid clarification question.");
+  return {
+    id: id(value.id, "clarificationQuestion.id"),
+    question: requiredString(value.question, "clarificationQuestion.question"),
+    reason: requiredString(value.reason, "clarificationQuestion.reason"),
+    impact: enumValue(
+      value.impact,
+      [
+        "offering_definition",
+        "business_model",
+        "target_segment",
+        "delivery_constraint",
+        "discovery_feasibility",
+      ],
+      "clarificationQuestion.impact",
+    ),
+    answerType: enumValue(
+      value.answerType,
+      ["single_select", "multi_select", "short_text", "boolean"],
+      "clarificationQuestion.answerType",
+    ),
+    ...(Array.isArray(value.options)
+      ? {
+          options: value.options.slice(0, 6).map((option) => {
+            if (!isRecord(option)) throw new Error("Invalid clarification option.");
+            return {
+              id: id(option.id, "clarificationOption.id"),
+              label: requiredString(option.label, "clarificationOption.label"),
+              ...(optionalString(option.description)
+                ? { description: optionalString(option.description) }
+                : {}),
+            };
+          }),
+        }
+      : {}),
+    required: value.required === true,
+    skippable: value.skippable !== false,
+    priority: nonNegativeInteger(value.priority),
   };
 }
 
@@ -770,7 +1001,7 @@ function deduplicateByTitle<T extends { title: string }>(items: T[]) {
     return true;
   });
 }
-function invalidRelations(values: string[], allowed: Set<string>, label: string) {
+function invalidRelations(values: string[], allowed: ReadonlySet<string>, label: string) {
   if (values.some((value) => !allowed.has(value)))
     throw new Error(`Invalid related ${label} ID.`);
 }

@@ -1,0 +1,252 @@
+import { randomUUID } from "node:crypto";
+import {
+  candidateEvidenceExtractionPromptVersion,
+  candidateEvidenceExtractionSchemaVersion,
+  candidateEvidenceExtractionTaskDefinition,
+  compileCandidateClaims,
+  freshnessClassForQuestion,
+  normalizeCandidateEvidenceExtraction,
+  type CandidateEvidenceExtraction,
+  type CandidateResearchQuestion,
+} from "@/lib/candidate-intelligence-v2";
+import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
+import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
+import { generateTextResult } from "@/lib/providers/openrouter";
+import { executeValidatedAiTask } from "@/lib/intelligence/runtime/execute-ai-task";
+import { IntelligenceTaskRegistry } from "@/lib/intelligence/runtime/task-registry";
+import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
+import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
+import type { Json } from "@/types/database.types";
+import {
+  claimCandidateResearchMember,
+  completeCandidateResearchMember,
+  findCandidateResearchExtraction,
+  parseCandidateResearchMemberResult,
+  saveCandidateResearchExtraction,
+  type CandidateResearchMemberContext,
+} from "./repository";
+import { collectCandidateResearchSources } from "./source-service";
+
+const promptVersion = candidateEvidenceExtractionPromptVersion;
+const schemaVersion = candidateEvidenceExtractionSchemaVersion;
+
+export async function executeCandidateResearchMember(input: {
+  memberId: string;
+  triggerRunId: string;
+  workspaceId: string;
+}) {
+  const member = await claimCandidateResearchMember(input);
+  if (member.status === "completed" || member.status === "blocked") {
+    return parseCandidateResearchMemberResult(member.outputReference);
+  }
+
+  const { sources, warnings } = await collectCandidateResearchSources(member);
+  const evidenceContext = sources.map((source) => ({
+    evidenceId: source.evidenceId,
+    sourceUrl: source.sourceUrl,
+    pageKind: source.pageKind,
+    retrievedAt: source.retrievedAt,
+    content: source.content,
+  }));
+  const extractionRequestHash = hashCanonical({
+    memberInputHash: member.inputHash,
+    promptVersion,
+    schemaVersion,
+    sourceHashes: sources.map(({ contentHash, evidenceId }) => ({
+      contentHash,
+      evidenceId,
+    })),
+  });
+
+  let extraction: CandidateEvidenceExtraction;
+  let aiRequestIds: string[] = [];
+  if (sources.length === 0) {
+    extraction = normalizeCandidateEvidenceExtraction({
+      raw: {
+        claims: [],
+        questionFindings: [],
+        missingEvidence: [
+          ...warnings,
+          "No reusable or accessible first-party evidence was available.",
+        ],
+      },
+      plan: member.plan,
+      evidence: [],
+    });
+  } else {
+    const cached = await findCandidateResearchExtraction({
+      planId: member.researchPlanId,
+      requestHash: extractionRequestHash,
+      workspaceId: input.workspaceId,
+    });
+    if (cached) {
+      extraction = normalizeCandidateEvidenceExtraction({
+        raw: cached.output,
+        plan: member.plan,
+        evidence: evidenceContext,
+      });
+      aiRequestIds = [cached.aiRequestId];
+    } else {
+      const request = {
+        organization: {
+          id: member.organizationId,
+          name: member.organizationName,
+          organizationType: member.organizationType,
+          canonicalDomain: member.canonicalDomain,
+        },
+        campaign: member.strategyContext,
+        plan: member.plan,
+        evidence: evidenceContext,
+      };
+      const startedAt = new Date().toISOString();
+      assertIntelligenceExternalCallsAllowed("model");
+      const tasks = new IntelligenceTaskRegistry();
+      tasks.register(candidateEvidenceExtractionTaskDefinition);
+      const schemas = new IntelligenceSchemaRegistry();
+      schemas.register({
+        taskId: candidateEvidenceExtractionTaskDefinition.taskId,
+        schemaVersion: candidateEvidenceExtractionTaskDefinition.schemaVersion,
+        schema: candidateEvidenceExtractionTaskDefinition.outputSchema,
+        semanticValidators: [],
+      });
+      const generated = await executeValidatedAiTask<
+        typeof request,
+        CandidateEvidenceExtraction
+      >({
+        registry: tasks,
+        schemas,
+        taskId: candidateEvidenceExtractionTaskDefinition.taskId,
+        promptVersion,
+        modelRouteVersion: "candidate-research-extraction-route/v1",
+        request,
+        recordAttempt: createIntelligenceAttemptRecorder({
+          workspaceId: input.workspaceId,
+          frozenInputHash: extractionRequestHash,
+          metadata: {
+            memberId: member.memberId,
+            researchPlanId: member.researchPlanId,
+          },
+        }),
+        transport: async (transportRequest) => {
+          const call = await generateTextResult(transportRequest.messages, {
+            role: "website_extraction",
+            maxCompletionTokens: transportRequest.maxCompletionTokens,
+            reasoningEffort:
+              transportRequest.reasoningClass === "standard"
+                ? "medium"
+                : transportRequest.reasoningClass,
+            taskName: "V2 candidate evidence extraction",
+            ...(transportRequest.output.mode === "json_schema"
+              ? { jsonSchema: transportRequest.output }
+              : { jsonMode: true }),
+          });
+          return {
+            output: call.data,
+            requestedModel: call.requestedModel,
+            actualModel: call.actualModel ?? call.requestedModel,
+            fallbackUsed: call.fallbackUsed,
+            requestHash: hashCanonical(transportRequest.messages),
+            responseHash: hashCanonical(call.data),
+            latencyMs: call.latencyMs,
+            inputUnits: call.inputTokens,
+            outputUnits: call.outputTokens,
+            actualCost: call.providerReportedCost,
+            currency: call.providerCurrency,
+          };
+        },
+      });
+      extraction = normalizeCandidateEvidenceExtraction({
+        raw: generated.data,
+        plan: member.plan,
+        evidence: evidenceContext,
+      });
+      const modelCall = {
+        data: JSON.stringify(generated.data),
+        provider: "openrouter" as const,
+        requestedModel: generated.provenance.requestedModel,
+        actualModel: generated.provenance.actualModel,
+        fallbackUsed: generated.provenance.fallbackUsed,
+        inputTokens: generated.provenance.inputUnits,
+        outputTokens: generated.provenance.outputUnits,
+        providerReportedCost: generated.provenance.actualCost,
+        providerCurrency:
+          generated.provenance.currency === "USD" ? ("USD" as const) : undefined,
+        latencyMs: generated.provenance.latencyMs ?? 0,
+      };
+      const saved = await saveCandidateResearchExtraction({
+        memberId: member.memberId,
+        workspaceId: input.workspaceId,
+        requestHash: extractionRequestHash,
+        output: extraction as unknown as Json,
+        modelCall,
+        startedAt,
+      });
+      aiRequestIds = [saved.aiRequestId];
+    }
+  }
+
+  const persisted = preparePersistedResearch(member, extraction);
+  return completeCandidateResearchMember({
+    memberId: member.memberId,
+    workspaceId: input.workspaceId,
+    extractionRequestHash,
+    claims: persisted.claims as unknown as Json,
+    questionFindings: persisted.questionFindings as unknown as Json,
+    missingEvidence: [...new Set([...extraction.missingEvidence, ...warnings])] as Json,
+    evidenceIds: sources.map(({ evidenceId }) => evidenceId) as Json,
+    aiRequestIds: aiRequestIds as Json,
+    accessBlocked: sources.length === 0,
+  });
+}
+
+function preparePersistedResearch(
+  member: CandidateResearchMemberContext,
+  extraction: CandidateEvidenceExtraction,
+) {
+  const questionByKey = new Map(
+    member.plan.questions.map((question) => [question.key, question] as const),
+  );
+  const compiledClaims = compileCandidateClaims(
+    extraction.claims.map((claim) => {
+      const question = requiredQuestion(questionByKey, claim.questionKey);
+      return {
+        key: claim.questionKey,
+        fieldPath: claim.fieldPath,
+        statement: claim.statement,
+        ...(claim.value === undefined ? {} : { value: claim.value }),
+        directness: claim.directness,
+        confidence: claim.confidence,
+        evidenceIds: claim.evidenceIds,
+        freshnessClass: freshnessClassForQuestion(question),
+        sourceScope: "system_public" as const,
+      };
+    }),
+  );
+  const claims = compiledClaims.map((claim) => {
+    const question = requiredQuestion(questionByKey, claim.key);
+    return {
+      id: randomUUID(),
+      ...claim,
+      reusableScope: question.reusableScope,
+    };
+  });
+  const claimIdsByKey = new Map<string, string[]>();
+  for (const claim of claims) {
+    claimIdsByKey.set(claim.key, [...(claimIdsByKey.get(claim.key) ?? []), claim.id]);
+  }
+  const questionFindings = extraction.questionFindings.map((finding) => ({
+    ...finding,
+    claimIds: [
+      ...new Set(finding.claimKeys.flatMap((key) => claimIdsByKey.get(key) ?? [])),
+    ].sort(),
+  }));
+  return { claims, questionFindings };
+}
+
+function requiredQuestion(values: Map<string, CandidateResearchQuestion>, key: string) {
+  const question = values.get(key);
+  if (!question) {
+    throw new Error(`Candidate research question "${key}" is not frozen in the plan.`);
+  }
+  return question;
+}

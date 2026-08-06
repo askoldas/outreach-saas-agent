@@ -27,6 +27,8 @@ export default async function MarketAnalysisPage({
         candidateAudit: [],
         latestRun: null,
         marketAnalysis: null,
+        v2Strategy: null,
+        v2Discovery: null,
         discoveryPaths: [],
         classificationCounts: {},
         excludedCandidates: [],
@@ -50,7 +52,7 @@ export default async function MarketAnalysisPage({
           Adjust market and targeting
         </Link>
       </section>
-      {workflow.marketAnalysis ? (
+      {workflow.marketAnalysis || workflow.v2Strategy ? (
         <CampaignWorkflowSummary summary={workflow} view="market" />
       ) : (
         <p>Market analysis will appear here after the campaign starts.</p>

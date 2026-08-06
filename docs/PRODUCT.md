@@ -41,3 +41,37 @@ segment, or review step. Incomplete drafts may still be resumed.
 Website analysis now classifies and groups related commercial items before review. Company setup normally asks a small set of decisions about offering structure, active prospecting propositions, markets, relationship types, commercial requirements, and genuine source conflicts. Optional wording and additional proof do not block publishing. “Improve profile structure” creates a new draft while retaining published campaigns and user-defined prospecting preferences.
 
 Responsibility boundary: Company Profile explains the stable business and can be used immediately after successful analysis. It does not require prospecting markets, buyer-persona confirmation, campaign qualification, or messaging decisions. Campaign creation owns the selected offering, objective, relationship type, target markets, segment, buyer roles, qualification, exclusions, and discovery strategy. Campaign choices remain campaign-local unless the user explicitly selects “Save as offering defaults”; operating-market facts are never overwritten.
+
+# Organization-first discovery principle
+
+Opptium may store consumers as part of a company’s existing audience, but every
+discovery Campaign must target a searchable B2B relationship: customer organization,
+partner, distributor, reseller, supplier, contractor, or public institution.
+
+The Company Profile may truthfully record that a company currently serves individuals.
+That fact must not automatically become a Campaign target. A consumer business can
+instead confirm an organization-buyable offering and target supported relationships
+such as employers, corporate buyers, retailers, distributors, resellers, partners, or
+institutions.
+
+The organization that buys, the person who decides, and the person who uses or benefits
+from an Offering are separate concepts.
+
+# AI-guided setup interaction
+
+The canonical interaction is:
+
+> AI proposes → user selects and adjusts → AI interprets additions as structured
+> changes → user confirms → Opptium saves a versioned result.
+
+Natural-language input is never a direct database mutation. Additive language preserves
+confirmed items by default. Explicit replacement is shown as a replacement preview and
+still requires confirmation.
+
+## Intelligence V2 rollout status
+
+The accepted Intelligence V2 direction is documented under `docs/V2/`. It replaces
+fixed generic discovery refinement and holistic model scoring only when the
+corresponding V2 workflow stages pass their rollout gates. Existing campaigns remain
+V1 and keep their current behavior; new V2 behavior is stage-flagged, workspace-scoped,
+version-frozen, and disabled by default.

@@ -12,12 +12,13 @@
     "build": "next build",
     "lint": "eslint .",
     "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
-    "test:discovery-quality": "node --experimental-strip-types --test src/lib/discovery/quality-evaluation.test.ts src/lib/discovery/benchmark.test.ts",
+    "test:intelligence-v2": "node --experimental-strip-types --test \"src/lib/intelligence/**/*.test.ts\" \"src/server/intelligence-runtime/*.test.ts\" \"src/server/*-v2/runtime-migration-contract.test.ts\"",
     "test:e2e": "playwright test",
     "test:db": "supabase test db",
     "db:baseline:build": "node scripts/build-clean-baseline.mjs",
     "db:safety-check": "node scripts/assert-safe-supabase-target.mjs",
     "db:types": "node scripts/generate-supabase-types.mjs",
+    "debug:profile": "node scripts/inspect-company-intelligence-run.mjs",
     "trigger:dev": "trigger dev",
     "trigger:deploy": "trigger deploy",
     "trigger:deploy:check": "trigger deploy --dry-run",
@@ -32,7 +33,8 @@
     "@trigger.dev/sdk": "4.5.7",
     "next": "16.2.9",
     "react": "19.2.7",
-    "react-dom": "19.2.7"
+    "react-dom": "19.2.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.1",

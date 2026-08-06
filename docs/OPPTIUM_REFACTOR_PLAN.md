@@ -18,9 +18,12 @@ refactor is complete, but the complete updated product specification is not.
 
 ## Current priority
 
-1. Improve discovery precision and first-party evidence quality.
-2. Add semantic document retrieval after selecting an embedding provider.
-3. Connect a real contact enrichment provider when selected.
+The previous updated-specification phases remain the production V1 baseline.
+Intelligence V2 now follows the ordered packages in `docs/V2/09-refactor-execution-plan.md`.
+The exact implementation state is maintained in `docs/V2/IMPLEMENTATION_STATUS.md`.
+Intelligence V2 is now the canonical default for new product records. Historical V1
+records remain readable, but new V1 Profile, Campaign, and Campaign Run writes are
+frozen pending the explicitly approved WP-23 removal audit.
 
 Paid-operation budget gates and configurable campaign cost ceilings are deliberately
 deferred by product direction. Existing deterministic iteration, query, result, and

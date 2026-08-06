@@ -2,8 +2,8 @@ import { redirect } from "next/navigation";
 import { CampaignBriefForm } from "@/features/campaigns/CampaignBriefForm";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { getCurrentCompanyProfile } from "@/server/company-profile/repository";
 import { getGuidedDraft } from "@/server/guided/repository";
+import { getPublishedCampaignPlanningProfile } from "@/server/campaign-strategy-v2/repository";
 
 type SearchParams = {
   error?: string;
@@ -19,9 +19,8 @@ export default async function NewCampaignPage({
   }
 
   const params = await searchParams;
-  const profile = await getCurrentCompanyProfile(currentWorkspace.id);
-  if (!profile?.structuredProfile)
-    redirect("/company-profile?error=structured-profile-required");
+  const profile = await getPublishedCampaignPlanningProfile(currentWorkspace.id);
+  if (!profile) redirect("/company-profile?error=company-intelligence-required");
   const draft = await getGuidedDraft(currentWorkspace.id, "campaign", "new");
 
   return (

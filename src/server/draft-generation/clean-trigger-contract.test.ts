@@ -15,7 +15,7 @@ const trigger = readFileSync(
 test("draft generation dispatches selected clean Campaign contacts through Trigger", () => {
   const section = research.slice(
     research.indexOf("export async function enqueueCampaignDraftGenerationRun"),
-    research.indexOf("export async function enqueueCompanyProfileAnalysisRun"),
+    research.indexOf("export async function getCampaignResearchProgress"),
   );
   assert.match(section, /\.from\("campaign_contacts"\)/);
   assert.match(section, /\.from\("provider_executions"\)/);
@@ -25,6 +25,18 @@ test("draft generation dispatches selected clean Campaign contacts through Trigg
     /research_runs|research_tasks|lead_outreach_states|\.from\("leads"\)/,
   );
   assert.match(trigger, /executeDraftGeneration/);
+});
+
+test("outreach generation uses the shared audited intelligence runtime", () => {
+  const generator = readFileSync(
+    new URL("../../lib/ai/draft-generation.ts", import.meta.url),
+    "utf8",
+  );
+  assert.match(generator, /executeValidatedAiTask/);
+  assert.match(generator, /recordAttempt/);
+  assert.match(service, /createIntelligenceAttemptRecorder/);
+  assert.match(generator, /semanticValidators/);
+  assert.match(generator, /outreach\.grounded_draft/);
 });
 
 test("draft execution writes clean drafts, AI audit, state, and usage", () => {

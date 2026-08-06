@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
-import type { CompanyProfile } from "@/types/domain";
 import {
   createCampaignAction,
   proposeCampaignBriefAction,
@@ -10,6 +9,20 @@ import type {
   CampaignBriefProposal,
   ConfirmedCampaignBrief,
 } from "@/lib/campaign-workflow/contracts";
+import {
+  assessCampaignTargetDiscoverability,
+  type B2BRelationshipType,
+  type TargetSegment,
+} from "@/lib/campaign-workflow/target-segments";
+import type {
+  CampaignPlanningOffering,
+  CampaignPlanningProfile,
+} from "@/lib/intelligence/campaign-strategy-v2";
+import {
+  defaultRelationshipForObjective,
+  isObjectiveRelationshipCompatible,
+  parseCampaignObjective,
+} from "@/lib/campaign-workflow/objective-compatibility";
 import { Button } from "@/components/ui/Button";
 import form from "@/components/ui/FormControls.module.css";
 import shared from "@/features/shared/Feature.module.css";
@@ -18,6 +31,10 @@ import {
   GuidedOptionCard,
   GuidedStatus,
 } from "@/features/guided/AiGuidedWorkspace";
+import {
+  NativeOfferingSuggestionCard,
+  TargetSuggestionCard,
+} from "@/features/guided/SuggestionCards";
 import type { GuidedDraft } from "@/server/guided/repository";
 import styles from "./CampaignGuided.module.css";
 
@@ -68,7 +85,7 @@ export function CampaignBriefForm({
   profile,
 }: {
   error?: string;
-  profile: CompanyProfile;
+  profile: CampaignPlanningProfile;
   initialDraft: GuidedDraft | null;
 }) {
   const [step, setStep] = useState(1);
@@ -77,7 +94,11 @@ export function CampaignBriefForm({
   const [countryCodes, setCountryCodes] = useState<string[]>([]);
   const [result, setResult] = useState<ProposalResult | null>(null);
   const [proposal, setProposal] = useState<CampaignBriefProposal | null>(null);
-  const [selectedOfferingId, setSelectedOfferingId] = useState("");
+  const [selectedOfferingId, setSelectedOfferingId] = useState(
+    profile.offerings[0]?.stableKey ?? "",
+  );
+  const [campaignObjective, setCampaignObjective] = useState("direct_buyer");
+  const [selectedTargetSegmentIds, setSelectedTargetSegmentIds] = useState<string[]>([]);
   const [clarificationAnswer, setClarificationAnswer] = useState("");
   const [name, setName] = useState("");
   const [offeringTitle, setOfferingTitle] = useState("");
@@ -96,13 +117,68 @@ export function CampaignBriefForm({
   const [pending, startTransition] = useTransition();
 
   const geographyLabel = regionLabel || countryCodes.join(", ");
+  const editableTargetSegments = useMemo(() => {
+    if (!proposal) return [];
+    return proposal.targetSegments.map((segment, index) => {
+      const editedSegment: TargetSegment = {
+        ...segment,
+        ...(index === 0
+          ? {
+              organizationTypes: split(companyTypes),
+              industries: split(industries),
+              characteristics: split(characteristics),
+              buyingSignals: split(positiveSignals),
+              likelyBuyerRoles: split(roles),
+              exclusions: split(exclusions),
+              summary: targetSummary,
+            }
+          : {}),
+        geographies: countryCodes,
+      };
+      return {
+        ...editedSegment,
+        discoverability: assessCampaignTargetDiscoverability(editedSegment),
+      };
+    });
+  }, [
+    proposal,
+    companyTypes,
+    industries,
+    characteristics,
+    positiveSignals,
+    roles,
+    exclusions,
+    targetSummary,
+    countryCodes,
+  ]);
+  const incompatibleSelectedRelationship = editableTargetSegments.find(
+    (segment) =>
+      selectedTargetSegmentIds.includes(segment.id) &&
+      !isObjectiveRelationshipCompatible(
+        parseCampaignObjective(campaignObjective),
+        segment.relationshipType,
+      ),
+  )?.relationshipType;
+  const selectedLowDiscoverabilityTarget = editableTargetSegments.find(
+    (segment) =>
+      selectedTargetSegmentIds.includes(segment.id) && segment.discoverability === "low",
+  );
+  const lowDiscoverabilityTargets = editableTargetSegments.filter(
+    (segment) => segment.discoverability === "low",
+  );
   const targetClientIssue = !targetSummary.trim()
     ? "Add a target-client summary to continue."
     : !split(companyTypes).length
       ? "Add at least one company type to continue."
-      : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
-        ? "Answer the clarification above to continue."
-        : "";
+      : !selectedTargetSegmentIds.length
+        ? "Include at least one organization target to continue."
+        : selectedLowDiscoverabilityTarget
+          ? `“${selectedLowDiscoverabilityTarget.name}” is too broad or lacks enough searchable signals. Refine the target before continuing.`
+          : incompatibleSelectedRelationship
+            ? `The selected ${incompatibleSelectedRelationship.replaceAll("_", " ")} target is incompatible with the ${campaignObjective.replaceAll("_", " ")} objective. Generate target organizations again.`
+            : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
+              ? "Answer the clarification above to continue."
+              : "";
   const confirmedBrief = useMemo<ConfirmedCampaignBrief | null>(() => {
     if (!proposal) return null;
     return {
@@ -131,10 +207,16 @@ export function CampaignBriefForm({
         recommendedDecisionMakerRoles: split(roles),
         summary: targetSummary,
       },
+      targetSegments: editableTargetSegments.map((segment) => ({
+        ...segment,
+        status: selectedTargetSegmentIds.includes(segment.id) ? "confirmed" : "rejected",
+      })),
       desiredQualifiedCompanies,
     };
   }, [
     proposal,
+    editableTargetSegments,
+    selectedTargetSegmentIds,
     selectedOfferingId,
     countryCodes,
     regionLabel,
@@ -172,13 +254,18 @@ export function CampaignBriefForm({
     startTransition(async () => {
       setProposalError("");
       try {
-        const next = await proposeCampaignBriefAction({ countryCodes, regionLabel });
+        const next = await proposeCampaignBriefAction({
+          countryCodes,
+          regionLabel,
+          objective: campaignObjective,
+          selectedOfferingKey: selectedOfferingId,
+        });
         setResult(next);
         applyProposal(next.proposal);
         setName(
           `${next.proposal.offering.title} — ${regionLabel || countryCodes.join(", ")}`,
         );
-        setStep(2);
+        setStep(3);
       } catch (cause) {
         setProposalError(
           cause instanceof Error
@@ -190,30 +277,45 @@ export function CampaignBriefForm({
   }
 
   function startWithProfileDefaults() {
-    const offerings =
-      profile.structuredProfile?.offerings.filter(
-        (offering) => offering.status !== "excluded",
-      ) ?? [];
-    const preferred =
-      offerings.find((offering) => offering.priority === "primary") ?? offerings[0];
-    if (!preferred) {
+    const offerings = profile.offerings;
+    const selected = offerings.find(
+      (offering) => offering.stableKey === selectedOfferingId,
+    );
+    if (!selected) {
       setProposalError("The Company Profile has no campaign-ready offering.");
       return;
     }
     const next = buildProfileDefaultProposal(
       profile,
       { countryCodes, regionLabel },
-      preferred.id,
+      selected.stableKey,
+      campaignObjective,
     );
+    next.provenance = {
+      objective: parseCampaignObjective(campaignObjective),
+      selectedOfferingKey: selected.stableKey,
+      selectedOfferingVersionId: selected.offeringVersionId,
+      profileVersionId: profile.profileVersionId,
+      promptVersion: "campaign-brief-proposal-v4-objective-first",
+      inputHash: "server-verified-on-confirmation",
+    };
     setResult(null);
     applyProposal(next);
     setName(`${next.offering.title} — ${geographyLabel}`);
-    setStep(2);
+    setStep(3);
   }
 
   function applyProposal(next: CampaignBriefProposal) {
     setProposal(next);
     setSelectedOfferingId(next.offering.profileOfferingIds[0] ?? "");
+    setSelectedTargetSegmentIds(
+      next.targetSegments
+        .filter(
+          (segment) =>
+            segment.status !== "rejected" && segment.discoverability !== "low",
+        )
+        .map((segment) => segment.id),
+    );
     setClarificationAnswer("");
     setOfferingTitle(next.offering.title);
     setOfferingSummary(next.offering.summary);
@@ -231,8 +333,23 @@ export function CampaignBriefForm({
   function selectOffering(offeringId: string) {
     setSelectedOfferingId(offeringId);
     setResult(null);
-    applyProposal(
-      buildProfileDefaultProposal(profile, { countryCodes, regionLabel }, offeringId),
+    setProposal(null);
+  }
+
+  function toggleTargetSegment(segmentId: string) {
+    const segment = editableTargetSegments.find((candidate) => candidate.id === segmentId);
+    const selected = selectedTargetSegmentIds.includes(segmentId);
+    if (!selected && segment?.discoverability === "low") {
+      setProposalError(
+        `“${segment.name}” cannot be included yet. Refine its organization type and discovery signals, or generate another suggestion.`,
+      );
+      return;
+    }
+    setProposalError("");
+    setSelectedTargetSegmentIds((current) =>
+      current.includes(segmentId)
+        ? current.filter((id) => id !== segmentId)
+        : [...current, segmentId],
     );
   }
 
@@ -323,28 +440,44 @@ export function CampaignBriefForm({
               type="button"
               variant="primary"
               disabled={pending || !countryCodes.length}
-              onClick={startWithProfileDefaults}
+              onClick={() => setStep(2)}
             >
-              Continue with Company Profile defaults
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              disabled={pending || !countryCodes.length}
-              onClick={generateProposal}
-            >
-              {pending ? "Preparing recommendation…" : "Create or adapt target with AI"}
+              Continue
             </Button>
           </div>
         </section>
       ) : null}
 
-      {step === 2 && proposal ? (
+      {step === 2 ? (
         <section className={shared.stack}>
           <div>
-            <h2>Review the recommended offering</h2>
-            <p>{proposal.offering.rationale}</p>
+            <h2>Choose the commercial objective and primary offering</h2>
+            <p>
+              These frozen inputs determine which organization relationships may be
+              proposed.
+            </p>
           </div>
+          <label className={form.field}>
+            <span>Campaign objective</span>
+            <select
+              className={form.select}
+              value={campaignObjective}
+              onChange={(event) => {
+                setCampaignObjective(event.target.value);
+                setResult(null);
+                setProposal(null);
+              }}
+            >
+              <option value="direct_buyer">Find direct buyers</option>
+              <option value="distributor">Find distributors</option>
+              <option value="reseller">Find resellers</option>
+              <option value="channel_partner">Find channel partners</option>
+              <option value="implementation_partner">Find implementation partners</option>
+              <option value="referral_partner">Find referral partners</option>
+              <option value="supplier">Find suppliers</option>
+              <option value="strategic_partner">Find strategic partners</option>
+            </select>
+          </label>
           <div className={shared.stack}>
             <strong>Select one primary offering</strong>
             <p>
@@ -352,80 +485,118 @@ export function CampaignBriefForm({
               selected primary offering is the single Company Profile offering stored for
               this campaign. This does not change the Company Profile.
             </p>
+            <input
+              type="radio"
+              name="primaryOffering"
+              value={selectedOfferingId}
+              checked
+              readOnly
+              hidden
+            />
             <div className={styles.options}>
-              {profile.structuredProfile?.offerings
-                .filter((offering) => offering.status !== "excluded")
-                .map((offering) => (
-                  <label className={styles.option} key={offering.id}>
-                    <input
-                      type="radio"
-                      name="primaryOffering"
-                      checked={selectedOfferingId === offering.id}
-                      onChange={() => selectOffering(offering.id)}
-                    />
-                    <span>
-                      <strong>{offering.name}</strong>
-                      <br />
-                      {offering.shortDescription}
-                    </span>
-                  </label>
-                ))}
+              {profile.offerings.map((offering) => (
+                <NativeOfferingSuggestionCard
+                  key={offering.stableKey}
+                  offering={offering}
+                  primary={selectedOfferingId === offering.stableKey}
+                  onSelect={() => selectOffering(offering.stableKey)}
+                />
+              ))}
             </div>
           </div>
-          <Field
-            label="Campaign offering"
-            value={offeringTitle}
-            onChange={setOfferingTitle}
-          />
-          <Field
-            label="Offering summary"
-            value={offeringSummary}
-            onChange={setOfferingSummary}
-            multiline
-          />
-          <Field
-            label="Value proposition"
-            value={valueProposition}
-            onChange={setValueProposition}
-            multiline
-          />
-          <Navigation
-            back={() => setStep(1)}
-            next={() => setStep(3)}
-            disabled={
-              !selectedOfferingId ||
-              !offeringTitle.trim() ||
-              !offeringSummary.trim() ||
-              !valueProposition.trim()
-            }
-          />
+          <div className={styles.navigation}>
+            <Button type="button" variant="ghost" onClick={() => setStep(1)}>
+              Back
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              disabled={pending || !selectedOfferingId}
+              onClick={startWithProfileDefaults}
+            >
+              Adapt Company Profile targets
+            </Button>
+            <Button
+              type="button"
+              variant="primary"
+              disabled={pending || !selectedOfferingId}
+              onClick={generateProposal}
+            >
+              Generate target organizations
+            </Button>
+          </div>
         </section>
       ) : null}
 
       {step === 3 && proposal ? (
         <section className={shared.stack}>
           <div>
-            <h2>Review the recommended target client</h2>
+            <h2>Review the recommended target client organizations</h2>
             <p>
               Adjustments apply only to this campaign and never change the Company
               Profile.
             </p>
           </div>
-          <Field
-            label="Summary"
-            value={targetSummary}
-            onChange={setTargetSummary}
-            multiline
-          />
-          <Field label="Company types" value={companyTypes} onChange={setCompanyTypes} />
-          <Field label="Industries" value={industries} onChange={setIndustries} />
-          <details className={styles.proposal}>
-            <summary>Advanced targeting</summary>
+          {lowDiscoverabilityTargets.length ? (
+            <div className={styles.proposal}>
+              <strong>Some targets need refinement</strong>
+              <p>
+                Low-discoverability targets are not selected automatically. Add a concrete
+                organization type and useful discovery signals below, or generate another
+                suggestion.
+              </p>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={generateProposal}
+              >
+                Generate another suggestion
+              </Button>
+            </div>
+          ) : null}
+          <div className={styles.options}>
+            {editableTargetSegments.map((segment) => (
+              <TargetSuggestionCard
+                key={segment.id}
+                segment={segment}
+                selected={selectedTargetSegmentIds.includes(segment.id)}
+                disabled={segment.discoverability === "low"}
+                disabledReason={
+                  segment.discoverability === "low"
+                    ? "This target is too broad or lacks concrete discovery signals. Refine it in Advanced targeting before including it."
+                    : undefined
+                }
+                onToggle={() => toggleTargetSegment(segment.id)}
+              />
+            ))}
+          </div>
+          <details
+            className={styles.proposal}
+            open={lowDiscoverabilityTargets.length > 0 ? true : undefined}
+          >
+            <summary>
+              {lowDiscoverabilityTargets.length
+                ? "Improve target discoverability"
+                : "Advanced targeting"}
+            </summary>
             <div className={shared.stack}>
               <p>
-                Refine discovery signals and exclusions only when the recommended target
-                needs additional constraints.
+                Refine organization types, industries, business characteristics and buying
+                signals when the recommended target needs to become more searchable.
               </p>
+              <Field
+                label="Summary"
+                value={targetSummary}
+                onChange={setTargetSummary}
+                multiline
+              />
+              <Field
+                label="Company types"
+                value={companyTypes}
+                onChange={setCompanyTypes}
+              />
+              <Field label="Industries" value={industries} onChange={setIndustries} />
               <Field
                 label="Relevant business characteristics"
                 value={characteristics}
@@ -538,8 +709,28 @@ export function CampaignBriefForm({
               <strong>{offeringTitle}</strong>
             </p>
             <p>
-              <span>Recommended target client</span>
-              <strong>{targetSummary}</strong>
+              <span>Target organizations and relationships</span>
+              <strong>
+                {confirmedBrief.targetSegments
+                  .filter((segment) => segment.status === "confirmed")
+                  .map(
+                    (segment) =>
+                      `${segment.name} (${segment.relationshipType.replaceAll("_", " ")})`,
+                  )
+                  .join(", ")}
+              </strong>
+            </p>
+            <p>
+              <span>Likely decision makers</span>
+              <strong>
+                {Array.from(
+                  new Set(
+                    confirmedBrief.targetSegments.flatMap(
+                      (segment) => segment.likelyBuyerRoles,
+                    ),
+                  ),
+                ).join(", ") || "To be researched"}
+              </strong>
             </p>
             <p>
               <span>Exclude</span>
@@ -550,10 +741,12 @@ export function CampaignBriefForm({
               <strong>{desiredQualifiedCompanies}</strong>
             </p>
           </div>
+          {targetClientIssue ? <p className={styles.error}>{targetClientIssue}</p> : null}
           <form action={createCampaignAction}>
             <input type="hidden" name="name" value={name} />
             <input type="hidden" name="geography" value={geographyLabel} />
             <input type="hidden" name="selectedOfferingId" value={selectedOfferingId} />
+            <input type="hidden" name="campaignObjective" value={campaignObjective} />
             <input type="hidden" name="targetSegments" value={companyTypes} />
             <input type="hidden" name="industryTerms" value={industries} />
             <input type="hidden" name="qualificationCriteria" value={requiredCriteria} />
@@ -626,10 +819,18 @@ export function CampaignBriefForm({
               <Button type="button" variant="ghost" onClick={() => setStep(3)}>
                 Back
               </Button>
-              <Button type="submit" variant="primary" disabled={!name.trim()}>
-                Start campaign
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={!name.trim() || Boolean(targetClientIssue)}
+              >
+                Build campaign strategy
               </Button>
             </div>
+            <p className={styles.secondaryText}>
+              This creates a reviewable native Campaign Strategy V2 draft. Discovery
+              starts only after explicit strategy confirmation.
+            </p>
           </form>
         </section>
       ) : null}
@@ -638,89 +839,213 @@ export function CampaignBriefForm({
 }
 
 function buildProfileDefaultProposal(
-  profile: CompanyProfile,
+  profile: CampaignPlanningProfile,
   geography: { countryCodes: string[]; regionLabel: string },
   offeringId: string,
+  objectiveValue: string,
 ): CampaignBriefProposal {
-  const structured = profile.structuredProfile;
-  if (!structured) throw new Error("The Company Profile is not available.");
-  const offering = structured.offerings.find((item) => item.id === offeringId);
+  const offering = profile.offerings.find((item) => item.stableKey === offeringId);
   if (!offering) throw new Error("Select one Company Profile offering.");
-  const offerings = [offering];
   const unique = (values: string[]) => [...new Set(values.filter(Boolean))];
-  const companyTypes = unique(
-    offerings.flatMap((offering) => offering.targetCustomerTypes),
-  );
-  const industries = unique(offerings.flatMap((offering) => offering.targetIndustries));
-  const roles = unique(
-    offerings.flatMap((offering) =>
-      offering.buyerPersonas.flatMap((persona) => [
-        persona.titleGroup,
-        ...persona.exampleTitles,
-      ]),
-    ),
-  );
-  const title = offerings.map((offering) => offering.name).join(" + ");
+  const objective = parseCampaignObjective(objectiveValue);
+  const archetypes = offering.archetypes
+    .filter(
+      (archetype) =>
+        archetype.status !== "user_rejected" &&
+        archetype.status !== "superseded" &&
+        archetype.priority !== "avoid" &&
+        isObjectiveRelationshipCompatible(
+          objective,
+          briefRelationshipType(archetype.relationshipType),
+        ),
+    )
+    .slice(0, 5);
+  const roles = unique(archetypes.flatMap((archetype) => archetype.likelyDecisionRoles));
+  const title = offering.name;
   const market =
     geography.regionLabel || geography.countryCodes.join(", ") || "the selected market";
-  const targetLabel =
-    companyTypes.join(", ") || structured.customerLandscape?.customerTypes.join(", ");
+  const organizationTypes = archetypes.length
+    ? unique(archetypes.map((archetype) => archetype.name))
+    : [`Organizations commercially compatible with ${offering.name}`];
+  const targetLabel = organizationTypes.join(", ");
+  const characteristics = unique([
+    ...offering.commercialMechanics.customerProblems,
+    ...offering.buyerLogic.requiredConditions,
+    ...offering.buyerLogic.preferredConditions,
+  ]);
+  const positiveSignals = unique([
+    ...offering.commercialMechanics.expectedOutcomes,
+    ...offering.buyerLogic.likelyTriggers,
+    ...archetypes.flatMap((archetype) => archetype.positiveSignals),
+  ]);
+  const requiredCriteria = unique([
+    ...offering.buyerLogic.requiredConditions,
+    ...archetypes.flatMap((archetype) => archetype.requiredEvidence),
+  ]);
+  const exclusions = unique([
+    ...offering.buyerLogic.incompatibleConditions,
+    ...archetypes.flatMap((archetype) => archetype.negativeSignals),
+  ]);
+  const targetSegments = archetypes.length
+    ? archetypes.map((archetype, index) =>
+        profileArchetypeSegment({
+          archetype,
+          geography,
+          offering,
+          index,
+          objective,
+        }),
+      )
+    : [
+        fallbackOfferingSegment({
+          geography,
+          offering,
+          organizationTypes,
+          roles,
+          objective,
+        }),
+      ];
   return {
     geography: {
       countryCodes: geography.countryCodes,
       ...(geography.regionLabel ? { regionLabel: geography.regionLabel } : {}),
-      ...(structured.outreachLanguages[0] || structured.supportedLanguages[0]
-        ? {
-            primaryLanguage:
-              structured.outreachLanguages[0] ?? structured.supportedLanguages[0],
-          }
-        : {}),
+      primaryLanguage: profile.primaryLanguage,
     },
     offering: {
-      profileOfferingIds: offerings.map((offering) => offering.id),
+      profileOfferingIds: [offering.stableKey],
       title,
-      summary: offerings
-        .map((offering) => offering.shortDescription)
-        .filter(Boolean)
-        .join(" "),
-      valueProposition: offerings
-        .map(
-          (offering) =>
-            offering.valueProposition ||
-            offering.expectedOutcomes.join(", ") ||
-            offering.shortDescription,
-        )
-        .join(" "),
+      summary: offering.shortDescription,
+      valueProposition:
+        offering.commercialMechanics.valueProposition.join(" ") ||
+        offering.commercialMechanics.expectedOutcomes.join(", ") ||
+        offering.shortDescription,
       rationale:
-        "Loaded from the selected Company Profile offering defaults. Adjustments remain campaign-specific.",
+        "Loaded from the selected published Company Intelligence V3 offering. Campaign adjustments do not mutate the profile.",
     },
     targetClient: {
-      companyTypes: companyTypes.length
-        ? companyTypes
-        : (structured.customerLandscape?.customerTypes ?? []),
-      industries: industries.length
-        ? industries
-        : (structured.customerLandscape?.buyerIndustries ?? []),
-      characteristics: unique(
-        offerings.flatMap((offering) => [
-          ...offering.customerProblems,
-          ...offering.useCases,
-          ...offering.targetCompanySizes,
-        ]),
-      ),
-      positiveSignals: unique(offerings.flatMap((offering) => offering.expectedOutcomes)),
-      requiredCriteria: unique(
-        offerings.flatMap((offering) => offering.qualificationRequirements),
-      ),
-      exclusions: unique(
-        offerings.flatMap((offering) => offering.disqualifyingConditions),
-      ),
+      companyTypes: organizationTypes,
+      industries: [],
+      characteristics,
+      positiveSignals,
+      requiredCriteria,
+      exclusions,
       recommendedDecisionMakerRoles: roles,
       summary: `${targetLabel || "Relevant B2B companies"} in ${market} for ${title}.`,
     },
+    targetSegments,
     ambiguity: { requiresClarification: false },
-    confidence: 0.75,
+    confidence: offering.confidence,
   };
+}
+
+function profileArchetypeSegment(input: {
+  archetype: CampaignPlanningOffering["archetypes"][number];
+  geography: { countryCodes: string[]; regionLabel: string };
+  offering: CampaignPlanningOffering;
+  index: number;
+  objective: ReturnType<typeof parseCampaignObjective>;
+}): TargetSegment {
+  const market =
+    input.geography.regionLabel ||
+    input.geography.countryCodes.join(", ") ||
+    "the selected market";
+  return {
+    id: campaignKey(input.archetype.key || `profile-archetype-${input.index + 1}`),
+    name: input.archetype.name,
+    summary: `${input.archetype.description} Target market: ${market}.`,
+    relationshipType: defaultRelationshipForObjective(input.objective),
+    organizationTypes: [input.archetype.name],
+    industries: [],
+    geographies: input.geography.countryCodes,
+    characteristics: uniqueStrings([
+      ...input.offering.buyerLogic.requiredConditions,
+      ...input.offering.buyerLogic.preferredConditions,
+    ]),
+    buyingSignals: uniqueStrings([
+      ...input.archetype.positiveSignals,
+      ...input.offering.buyerLogic.likelyTriggers,
+    ]),
+    likelyBuyerRoles: input.archetype.likelyDecisionRoles,
+    exclusions: uniqueStrings([
+      ...input.archetype.negativeSignals,
+      ...input.offering.buyerLogic.incompatibleConditions,
+    ]),
+    rationale: input.archetype.whyCompatible.join(" ") || input.archetype.description,
+    supportingEvidence: input.archetype.whyCompatible,
+    discoverability: "medium",
+    source: "saved_template",
+    confidence:
+      input.archetype.confidence >= 0.75
+        ? "high"
+        : input.archetype.confidence >= 0.45
+          ? "medium"
+          : "low",
+    status: "suggested",
+  };
+}
+
+function fallbackOfferingSegment(input: {
+  geography: { countryCodes: string[]; regionLabel: string };
+  offering: CampaignPlanningOffering;
+  organizationTypes: string[];
+  roles: string[];
+  objective: ReturnType<typeof parseCampaignObjective>;
+}): TargetSegment {
+  const relationship =
+    input.offering.relationshipOptions.find((option) => option.relevance === "primary") ??
+    input.offering.relationshipOptions[0];
+  return {
+    id: "primary-organization-segment",
+    name: input.organizationTypes[0] ?? "Target organizations",
+    summary: `Organizations in ${
+      input.geography.regionLabel || input.geography.countryCodes.join(", ")
+    } with a plausible commercial fit for ${input.offering.name}.`,
+    relationshipType: defaultRelationshipForObjective(input.objective),
+    organizationTypes: input.organizationTypes,
+    industries: [],
+    geographies: input.geography.countryCodes,
+    characteristics: uniqueStrings([
+      ...input.offering.commercialMechanics.customerProblems,
+      ...input.offering.buyerLogic.requiredConditions,
+    ]),
+    buyingSignals: uniqueStrings([
+      ...input.offering.commercialMechanics.expectedOutcomes,
+      ...input.offering.buyerLogic.likelyTriggers,
+    ]),
+    likelyBuyerRoles: input.roles,
+    exclusions: input.offering.buyerLogic.incompatibleConditions,
+    rationale:
+      relationship?.rationale ?? "Derived directly from the selected published offering.",
+    supportingEvidence: [],
+    discoverability: "medium",
+    source: "saved_template",
+    confidence: input.offering.confidence >= 0.7 ? "high" : "medium",
+    status: "suggested",
+  };
+}
+
+function briefRelationshipType(value: string): B2BRelationshipType {
+  if (value === "direct_buyer" || value === "end_user") return "customer";
+  if (value === "distributor" || value === "reseller" || value === "supplier") {
+    return value;
+  }
+  if (value === "implementation_partner") return "contractor";
+  return "partner";
+}
+
+function campaignKey(value: string) {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80) || "target-segment"
+  );
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values.filter(Boolean))];
 }
 
 function Field({

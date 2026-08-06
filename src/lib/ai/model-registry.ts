@@ -2,6 +2,7 @@ import type { ModelRole } from "./model-roles.ts";
 
 export const initialModelDefaults: Readonly<Record<ModelRole, string>> = {
   campaign_planning: "anthropic/claude-sonnet-4.6",
+  campaign_strategy_compilation: "google/gemini-2.5-flash",
   profile_analysis: "anthropic/claude-sonnet-4.6",
   company_qualification: "anthropic/claude-sonnet-4.6",
   outreach_generation: "anthropic/claude-sonnet-4.6",
@@ -14,6 +15,7 @@ export const initialModelDefaults: Readonly<Record<ModelRole, string>> = {
 
 export const modelEnvironmentVariables: Readonly<Record<ModelRole, string>> = {
   campaign_planning: "OPENROUTER_MODEL_CAMPAIGN_PLANNING",
+  campaign_strategy_compilation: "OPENROUTER_MODEL_CAMPAIGN_STRATEGY_COMPILATION",
   profile_analysis: "OPENROUTER_MODEL_PROFILE_ANALYSIS",
   company_qualification: "OPENROUTER_MODEL_COMPANY_QUALIFICATION",
   outreach_generation: "OPENROUTER_MODEL_OUTREACH_GENERATION",

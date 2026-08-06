@@ -10,6 +10,7 @@ test("Tavily search requests and prefers extracted raw website content", async (
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     assert.equal(body.include_raw_content, "text");
     assert.deepEqual(body.include_domains, ["example.test"]);
+    assert.equal(body.country, "lithuania");
     return Response.json({
       results: [
         {
@@ -25,6 +26,7 @@ test("Tavily search requests and prefers extracted raw website content", async (
     const results = await searchWeb("example", 8, {
       includeDomains: ["example.test"],
       includeRawContent: true,
+      country: "Lithuania",
     });
     assert.equal(results[0]?.content, "Complete extracted website content");
   } finally {
@@ -45,6 +47,29 @@ test("Tavily extract provides direct URL fallback content", async () => {
   try {
     const results = await extractWebPages(["https://example.test/"]);
     assert.equal(results[0]?.content, "Homepage content");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("Tavily plan-limit failures preserve an actionable provider error", async () => {
+  const originalFetch = globalThis.fetch;
+  process.env.TAVILY_API_KEY = "test-key";
+  globalThis.fetch = async () =>
+    Response.json(
+      {
+        detail: {
+          error:
+            "This request exceeds your plan's set usage limit. Please upgrade your plan.",
+        },
+      },
+      { status: 432 },
+    );
+  try {
+    await assert.rejects(
+      searchWeb("example"),
+      /Tavily search failed: plan usage limit exceeded \(status 432\)/,
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -9,23 +9,26 @@ import { CampaignClarification } from "@/features/campaigns/CampaignClarificatio
 import { getOpenCampaignQuestion } from "@/server/campaign-questions/repository";
 import { CampaignLearnings } from "@/features/campaigns/CampaignLearnings";
 import { listCampaignMemories } from "@/server/campaign-memories/repository";
+import { CampaignV2Results } from "@/features/campaigns/CampaignV2Results";
+import { getCampaignV2Results } from "@/server/campaign-results-v2/repository";
 export default async function LeadsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ view?: ReviewState }>;
+  searchParams: Promise<{ run?: string; view?: ReviewState }>;
 }) {
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const campaign = await loadCampaignPage(id);
   const { currentWorkspace } = await getWorkspaceContext();
-  const [leads, openQuestion, memories] = currentWorkspace
+  const [leads, openQuestion, memories, v2Results] = currentWorkspace
     ? await Promise.all([
         listCampaignLeads(currentWorkspace.id, id),
         getOpenCampaignQuestion({ campaignId: id, workspaceId: currentWorkspace.id }),
         listCampaignMemories({ campaignId: id, workspaceId: currentWorkspace.id }),
+        getCampaignV2Results(currentWorkspace.id, id, query.run),
       ])
-    : [[], null, []];
+    : [[], null, [], null];
   return (
     <CampaignShell campaign={campaign} active="companies">
       <CampaignControls
@@ -38,7 +41,15 @@ export default async function LeadsPage({
         <CampaignClarification campaignId={campaign.id} question={openQuestion} />
       ) : null}
       <CampaignLearnings campaignId={campaign.id} memories={memories} />
-      <CampaignLeadReview initialLeads={leads} campaignId={id} initialView={query.view} />
+      {v2Results ? (
+        <CampaignV2Results campaignId={id} results={v2Results} />
+      ) : (
+        <CampaignLeadReview
+          initialLeads={leads}
+          campaignId={id}
+          initialView={query.view}
+        />
+      )}
     </CampaignShell>
   );
 }

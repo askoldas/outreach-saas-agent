@@ -34,6 +34,15 @@ route-level verification provenance.
 
 The application uses Company Profiles and immutable Campaign Strategy versions exclusively. Discovery and qualification consume immutable campaign profile snapshots and frozen strategy versions. Migration `20260719000600` completed the audited retirement of the former Offer schema and duplicated campaign strategy columns.
 
+## Intelligence V2 rollout
+
+The Intelligence V2 specification is maintained under `docs/V2/`. Its implementation
+is incremental and disabled by default. Existing profiles, campaigns, and runs remain
+Intelligence V1. Campaign and run workflow versions are persisted so later V2 stages
+can be enabled for selected workspaces without reinterpreting historical V1 records.
+The exact package status and verification record is maintained in
+`docs/V2/IMPLEMENTATION_STATUS.md`.
+
 ## Routes
 
 - Public: `/`, `/product`, `/use-cases`, `/features/*`, `/pricing`, `/security`, `/resources`, `/about`, `/contact`, `/privacy`, `/terms`

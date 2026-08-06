@@ -76,6 +76,42 @@ export type ProposedChange = {
   requiresConfirmation: boolean;
 };
 
+export type ConfidenceLevel = "high" | "medium" | "low";
+export type ChangeOperation = "add" | "update" | "remove" | "restore" | "keep";
+export type UserModificationIntent =
+  | "add"
+  | "update"
+  | "remove"
+  | "replace"
+  | "combine"
+  | "restore"
+  | "request_more"
+  | "request_explanation"
+  | "reject_all"
+  | "unclear";
+
+export type StructuredChange<T> = {
+  operation: ChangeOperation;
+  entityId?: string;
+  proposedValue?: T;
+  reason: string;
+  confidence: ConfidenceLevel;
+};
+
+export type StructuredChangeSet<T> = {
+  summary: string;
+  changes: StructuredChange<T>[];
+  requiresConfirmation: boolean;
+  ambiguity?: string;
+};
+
+export type InterpretedStructuredChanges<T> = {
+  detectedIntents: UserModificationIntent[];
+  changeSet: StructuredChangeSet<T>;
+  keptEntityIds: string[];
+  explanation?: string;
+};
+
 export type StructuredSummaryItem = {
   label: string;
   value: string | string[];

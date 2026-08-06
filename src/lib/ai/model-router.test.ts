@@ -25,6 +25,10 @@ test("high-impact roles use the controlled paid fallback", () => {
     assert.deepEqual(getModelRoute(role).fallbackModels, ["openai/gpt-5-mini"]);
   }
   assert.deepEqual(getModelRoute("guided_interpretation").fallbackModels, []);
+  assert.equal(
+    getModelRoute("campaign_strategy_compilation").primaryModel,
+    "google/gemini-2.5-flash",
+  );
 });
 
 test("free and moving model aliases are rejected", () => {
@@ -39,11 +43,8 @@ test("free and moving model aliases are rejected", () => {
 
 test("AI call sites request roles and do not duplicate raw production model IDs", async () => {
   const files = [
-    "company-profile-analysis.ts",
-    "strategy-generation.ts",
-    "lead-evaluation.ts",
     "draft-generation.ts",
-    "guided-interpretation.ts",
+    "campaign-brief-proposal.ts",
   ];
   for (const file of files) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");
@@ -61,24 +62,9 @@ test("no OpenRouter secret uses a public environment variable", async () => {
   assert.doesNotMatch(source, /NEXT_PUBLIC_OPENROUTER/);
 });
 
-test("qualification persists the actual model selected by OpenRouter", async () => {
-  const service = await readFile(
-    new URL("../../server/campaign-discovery/service.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(
-    service,
-    /selected_model:\s*generated\.modelCall\.actualModel\s*\?\?\s*generated\.modelCall\.requestedModel/,
-  );
-});
-
-test("current AI prompt versions remain unchanged", async () => {
+test("current AI prompt versions match the approved structured contracts", async () => {
   const expectations = new Map([
-    ["company-profile-analysis.ts", "company-profile-website-v3-grouped"],
-    ["strategy-generation.ts", "campaign-strategy-v1"],
-    ["lead-evaluation.ts", "lead-evaluator-v1"],
-    ["draft-generation.ts", "grounded-outreach-draft-v1"],
-    ["guided-interpretation.ts", "guided-change-v1"],
+    ["draft-generation.ts", "grounded-outreach-draft-v2-shared-runtime"],
   ]);
   for (const [file, promptVersion] of expectations) {
     const source = await readFile(new URL(file, import.meta.url), "utf8");

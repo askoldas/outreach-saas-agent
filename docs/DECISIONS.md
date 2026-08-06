@@ -20,6 +20,9 @@ Only decisions that govern the current implementation are retained here. Migrati
 - Every successful Campaign Agent planning call is linked to its iteration execution
   through an `ai_requests` audit record before provider-backed discovery begins.
 - Ordered migrations are append-only. Applied migrations are not rewritten.
+- Intelligence V2 is introduced beside V1 through deployment flags, workspace rollout
+  settings, and immutable campaign/run workflow versions. V2 flags default to disabled;
+  historical V1 records are never silently reinterpreted through V2 logic.
 - The new project starts from `supabase/baseline/`. Files under
   `supabase/migrations-legacy/` reconstruct only the locked legacy schema and must not
   be applied to the new project.
@@ -35,6 +38,10 @@ Only decisions that govern the current implementation are retained here. Migrati
   separately; campaign adjustments never mutate Company Profile.
 - Preferred outreach language controls generated messages only. Discovery languages are
   derived independently from the target market and persisted on Campaign Strategy.
+- Multi-country discovery must create explicit query coverage for every frozen country.
+  A provider country parameter is a retrieval priority only; target-market eligibility
+  requires independent first-party, registry, official-document, or trusted-directory
+  evidence during candidate research and qualification.
 - Market adjustments are immutable Campaign Strategy revisions. Saving a revision
   atomically synchronizes the Campaign targeting fields and confirmed brief; active runs
   remain frozen and must be paused before a revision can be saved.
@@ -42,8 +49,10 @@ Only decisions that govern the current implementation are retained here. Migrati
   candidates. Classification cheaply removes obvious bad candidates. Evaluation deeply
   judges fit with evidence. Only promising and policy-selected possible candidates may
   be evaluated.
-- Discovery is bounded to five iterations, ten queries per iteration, and fifty results
-  per query. Continuation is deterministic; there is no unrestricted agent loop.
+- The current V1 discovery workflow remains bounded to five iterations, ten queries per
+  iteration, and fifty results per query. Intelligence V2 supersedes fixed iteration
+  count as the intelligence policy with typed coverage and marginal-yield stopping, but
+  retains deterministic hard execution ceilings. There is no unrestricted agent loop.
 
 ## Providers and AI
 

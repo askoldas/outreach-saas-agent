@@ -77,6 +77,8 @@ function emptyWorkflow() {
     candidateAudit: [],
     latestRun: null,
     marketAnalysis: null,
+    v2Strategy: null,
+    v2Discovery: null,
     discoveryPaths: [],
     classificationCounts: {},
     excludedCandidates: [],

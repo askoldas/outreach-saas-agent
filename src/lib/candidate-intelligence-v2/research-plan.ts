@@ -1,0 +1,218 @@
+import type {
+  CandidateResearchPlan,
+  CandidateResearchQuestion,
+  ResearchPurpose,
+  WebsitePageKind,
+} from "./contracts.ts";
+
+export type ResearchPlanInput = {
+  organizationId: string;
+  campaignCandidateId?: string;
+  strategyVersionId?: string;
+  requiredQuestionKeys: string[];
+  optionalQuestionKeys?: string[];
+  resolvedQuestionKeys?: string[];
+  staleQuestionKeys?: string[];
+  conflictQuestionKeys?: string[];
+  reusableQuestionKeys?: string[];
+  procurementUnknown?: boolean;
+  pageBudget?: number;
+  questionOverrides?: Record<
+    string,
+    Omit<CandidateResearchQuestion, "id" | "key" | "required" | "priority">
+  >;
+};
+
+const QUESTION_CATALOG: Record<
+  string,
+  Omit<CandidateResearchQuestion, "id" | "key" | "required" | "priority">
+> = {
+  business_model: {
+    question: "What business model and value-chain roles does the organization operate?",
+    purpose: "business_model",
+    reusableScope: "organization",
+    expectedEvidenceTypes: ["official_web_page", "official_document"],
+  },
+  products_services: {
+    question: "Which products and services does the organization currently offer?",
+    purpose: "business_model",
+    reusableScope: "organization",
+    expectedEvidenceTypes: ["official_web_page", "official_document"],
+  },
+  operating_markets: {
+    question: "In which markets and locations does the organization operate?",
+    purpose: "identity",
+    reusableScope: "organization",
+    expectedEvidenceTypes: ["official_web_page", "legal_registry", "map_listing"],
+  },
+  ownership_structure: {
+    question: "What parent, subsidiary, brand, or operating relationships are public?",
+    purpose: "relationship",
+    reusableScope: "organization",
+    expectedEvidenceTypes: ["official_document", "legal_registry", "official_web_page"],
+  },
+  procurement_authority: {
+    question: "Which organization appears to control procurement and with what autonomy?",
+    purpose: "procurement",
+    reusableScope: "organization",
+    expectedEvidenceTypes: ["official_web_page", "job_posting", "official_document"],
+  },
+};
+
+const PURPOSE_PAGES: Record<ResearchPurpose, WebsitePageKind[]> = {
+  identity: ["locations", "contact", "about", "legal", "home"],
+  business_model: ["products_services", "wholesale_b2b", "about", "home"],
+  relationship: ["brands_partners", "about", "investor_relations", "legal"],
+  procurement: ["supplier_procurement", "careers", "about", "contact"],
+  freshness: ["news", "home", "products_services"],
+  conflict_resolution: ["legal", "about", "contact"],
+  eligibility: ["products_services", "about"],
+  qualification_factor: ["products_services", "about", "news"],
+  commercial_potential: ["products_services", "locations", "news"],
+};
+
+export function preferredPageKindsForQuestion(
+  question: Pick<CandidateResearchQuestion, "key" | "purpose">,
+): WebsitePageKind[] {
+  if (question.key === "products_services") return ["products_services"];
+  if (question.key === "operating_markets") return ["locations", "contact"];
+  if (question.key === "procurement_authority") {
+    return ["supplier_procurement", "careers", "contact"];
+  }
+  if (/partner|distribution|relationship/.test(question.key)) {
+    return ["brands_partners", "wholesale_b2b", "about"];
+  }
+  return PURPOSE_PAGES[question.purpose];
+}
+
+function buildQuestion(
+  key: string,
+  required: boolean,
+  priority: number,
+  override?: Omit<CandidateResearchQuestion, "id" | "key" | "required" | "priority">,
+  purposeOverride?: ResearchPurpose,
+  reusableScopeOverride?: CandidateResearchQuestion["reusableScope"],
+): CandidateResearchQuestion {
+  const catalog = QUESTION_CATALOG[key];
+  return {
+    id: `research:${key}`,
+    key,
+    question:
+      override?.question ??
+      catalog?.question ??
+      `Resolve the research question: ${key.replaceAll("_", " ")}.`,
+    purpose:
+      purposeOverride ?? override?.purpose ?? catalog?.purpose ?? "qualification_factor",
+    required,
+    priority,
+    reusableScope:
+      reusableScopeOverride ??
+      override?.reusableScope ??
+      catalog?.reusableScope ??
+      "campaign_only",
+    expectedEvidenceTypes: override?.expectedEvidenceTypes ??
+      catalog?.expectedEvidenceTypes ?? ["official_web_page"],
+  };
+}
+
+export function compileCandidateResearchPlan(
+  input: ResearchPlanInput,
+): CandidateResearchPlan {
+  const resolved = new Set(input.resolvedQuestionKeys ?? []);
+  const reusable = new Set(input.reusableQuestionKeys ?? []);
+  const questions = new Map<string, CandidateResearchQuestion>();
+  input.requiredQuestionKeys
+    .filter((key) => !resolved.has(key))
+    .forEach((key, index) =>
+      questions.set(
+        key,
+        buildQuestion(
+          key,
+          true,
+          90 - index,
+          input.questionOverrides?.[key],
+          undefined,
+          reusable.has(key) ? "organization" : undefined,
+        ),
+      ),
+    );
+  (input.optionalQuestionKeys ?? [])
+    .filter((key) => !resolved.has(key) && !questions.has(key))
+    .forEach((key, index) =>
+      questions.set(
+        key,
+        buildQuestion(
+          key,
+          false,
+          60 - index,
+          input.questionOverrides?.[key],
+          undefined,
+          reusable.has(key) ? "organization" : undefined,
+        ),
+      ),
+    );
+  (input.staleQuestionKeys ?? []).forEach((key, index) =>
+    questions.set(
+      key,
+      buildQuestion(
+        key,
+        true,
+        95 - index,
+        input.questionOverrides?.[key],
+        "freshness",
+        reusable.has(key) ? "organization" : undefined,
+      ),
+    ),
+  );
+  (input.conflictQuestionKeys ?? []).forEach((key, index) =>
+    questions.set(
+      key,
+      buildQuestion(
+        key,
+        true,
+        100 - index,
+        input.questionOverrides?.[key],
+        "conflict_resolution",
+        reusable.has(key) ? "organization" : undefined,
+      ),
+    ),
+  );
+  if (input.procurementUnknown && !questions.has("procurement_authority")) {
+    questions.set(
+      "procurement_authority",
+      buildQuestion(
+        "procurement_authority",
+        false,
+        70,
+        input.questionOverrides?.procurement_authority,
+      ),
+    );
+  }
+
+  const ordered = [...questions.values()]
+    .sort(
+      (left, right) =>
+        Number(right.required) - Number(left.required) ||
+        right.priority - left.priority ||
+        left.key.localeCompare(right.key),
+    )
+    .slice(0, 12);
+  const preferredPages = [...new Set(ordered.flatMap(preferredPageKindsForQuestion))];
+  const pageBudget = Math.max(1, Math.min(input.pageBudget ?? 8, 15));
+
+  return {
+    organizationId: input.organizationId,
+    campaignCandidateId: input.campaignCandidateId,
+    strategyVersionId: input.strategyVersionId,
+    researchType: input.campaignCandidateId ? "campaign_specific" : "reusable",
+    questions: ordered,
+    preferredPages: preferredPages.slice(0, pageBudget),
+    pageBudget,
+    stopPolicy: {
+      stopWhenRequiredQuestionsResolved: true,
+      minimumEvidenceQuality: "strong",
+      maximumPages: pageBudget,
+      maximumRuntimeSeconds: 180,
+    },
+  };
+}

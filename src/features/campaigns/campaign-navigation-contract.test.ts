@@ -31,6 +31,7 @@ test("campaign navigation exposes the canonical product sections", async () => {
   for (const label of [
     "Overview",
     "Market Analysis",
+    "Strategy",
     "Discovery",
     "Companies",
     "Contacts",
@@ -94,6 +95,10 @@ test("campaign root is a real overview and stage artifacts have dedicated pages"
   assert.match(discovery, /view="discovery"/);
   assert.match(discovery, /CampaignCandidateAudit/);
   assert.match(discovery, /CampaignRunTimeline/);
+  assert.match(workflowRepository, /campaign_strategy_versions/);
+  assert.match(workflowRepository, /discovery_plans_v2/);
+  assert.match(workflowRepository, /discovery_segments_v2/);
+  assert.match(workflowRepository, /discovery_query_plans_v2/);
   assert.match(candidateAudit, /Raw candidate audit/);
   assert.match(candidateAudit, /sourceQuery/);
   assert.match(candidateAudit, /shouldEvaluate/);

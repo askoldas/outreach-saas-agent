@@ -1,14 +1,47 @@
 import { runs, tasks } from "@trigger.dev/sdk";
 import { createServiceRoleClient } from "@/lib/supabase/service";
-import type { analyzeCompanyProfileTask } from "@/trigger/analyze-company-profile";
 import type { enrichCompanyContactsTask } from "@/trigger/enrich-company-contacts";
-import type { executeCampaignTask } from "@/trigger/execute-campaign";
+import type { executeCampaignV2Task } from "@/trigger/execute-campaign-v2";
 import type { generateOutreachDraftTask } from "@/trigger/generate-outreach-draft";
+import type { compileCampaignStrategyV2Task } from "@/trigger/compile-campaign-strategy-v2";
+import {
+  failCampaignStrategyV2Draft,
+  markCampaignStrategyV2Building,
+} from "@/server/campaign-strategy-v2/repository";
 
 const staleDispatchMs = 2 * 60 * 1_000;
 
 async function createOperationalDatabaseClient() {
   return { supabase: createServiceRoleClient() };
+}
+
+export async function dispatchCampaignStrategyV2Compilation(input: {
+  workspaceId: string;
+  campaignExternalId: string;
+  strategyDraftId: string;
+  idempotencyKey?: string;
+}) {
+  await markCampaignStrategyV2Building(input);
+  try {
+    const handle = await tasks.trigger<typeof compileCampaignStrategyV2Task>(
+      "compile-campaign-strategy-v2",
+      input,
+      {
+        idempotencyKey:
+          input.idempotencyKey ??
+          `campaign-strategy-v2:${input.strategyDraftId}:initial-v1`,
+        tags: [
+          `workspace:${input.workspaceId}`,
+          `campaign:${input.campaignExternalId}`,
+          `strategy_draft:${input.strategyDraftId}`,
+        ],
+      },
+    );
+    return handle.id;
+  } catch (error) {
+    await failCampaignStrategyV2Draft({ ...input, error });
+    throw error;
+  }
 }
 
 export async function cancelTriggerRuns(triggerRunIds: string[]) {
@@ -31,7 +64,21 @@ export async function dispatchCampaignRun(input: {
   workspaceId: string;
 }) {
   const { supabase } = await createOperationalDatabaseClient();
-  const dispatchKey = input.idempotencyKey ?? `execute-campaign:${input.campaignRunId}`;
+  const { data: campaignRun, error: runError } = await supabase
+    .from("campaign_runs")
+    .select("workflow_version")
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.campaignRunId)
+    .single();
+  if (runError)
+    throw new Error(`Could not load Campaign workflow version: ${runError.message}`);
+  if (campaignRun.workflow_version !== "v2") {
+    throw new Error(
+      "Historical V1 Campaign Runs are read-only and cannot be dispatched.",
+    );
+  }
+  const dispatchKey =
+    input.idempotencyKey ?? `execute-campaign-v2:${input.campaignRunId}`;
   await markDispatching(
     "campaign_runs",
     input.campaignRunId,
@@ -39,17 +86,22 @@ export async function dispatchCampaignRun(input: {
     dispatchKey,
   );
   try {
-    const handle = await tasks.trigger<typeof executeCampaignTask>(
-      "execute-campaign",
-      { campaignRunId: input.campaignRunId },
+    const options = {
+      idempotencyKey: dispatchKey,
+      tags: [
+        `workspace:${input.workspaceId}`,
+        `campaign_run:${input.campaignRunId}`,
+        `workflow:${campaignRun.workflow_version}`,
+        ...(input.tags ?? []),
+      ],
+    };
+    const handle = await tasks.trigger<typeof executeCampaignV2Task>(
+      "execute-campaign-v2",
       {
-        idempotencyKey: dispatchKey,
-        tags: [
-          `workspace:${input.workspaceId}`,
-          `campaign_run:${input.campaignRunId}`,
-          ...(input.tags ?? []),
-        ],
+        campaignRunId: input.campaignRunId,
+        workspaceId: input.workspaceId,
       },
+      options,
     );
     const { error } = await supabase
       .from("campaign_runs")
@@ -72,6 +124,31 @@ export async function dispatchCampaignRun(input: {
     );
     throw error;
   }
+}
+
+export async function dispatchCampaignV2Resume(input: {
+  campaignRunId: string;
+  commandId: string;
+  workspaceId: string;
+}) {
+  return (
+    await tasks.trigger<typeof executeCampaignV2Task>(
+      "execute-campaign-v2",
+      {
+        campaignRunId: input.campaignRunId,
+        workspaceId: input.workspaceId,
+      },
+      {
+        idempotencyKey: `execute-campaign-v2-resume:${input.campaignRunId}:${input.commandId}`,
+        tags: [
+          `workspace:${input.workspaceId}`,
+          `campaign_run:${input.campaignRunId}`,
+          "workflow:v2",
+          "campaign_resume",
+        ],
+      },
+    )
+  ).id;
 }
 
 export async function dispatchProviderExecution(input: {
@@ -129,6 +206,7 @@ export async function reconcileTriggerDispatches(input: { workspaceId: string })
         .from("campaign_runs")
         .select("id,dispatch_state,dispatch_updated_at")
         .eq("workspace_id", input.workspaceId)
+        .eq("workflow_version", "v2")
         .in("dispatch_state", [
           "created",
           "dispatching",
@@ -200,14 +278,6 @@ async function triggerProviderTask(input: {
     idempotencyKey: `provider-dispatch:${input.execution.idempotency_key}`,
     tags: [`workspace:${input.workspaceId}`, `provider_execution:${input.execution.id}`],
   };
-  if (input.execution.operation === "company_profile_analysis")
-    return (
-      await tasks.trigger<typeof analyzeCompanyProfileTask>(
-        "analyze-company-profile",
-        { providerExecutionId: input.execution.id },
-        options,
-      )
-    ).id;
   if (input.execution.operation === "contact_enrichment")
     return (
       await tasks.trigger<typeof enrichCompanyContactsTask>(

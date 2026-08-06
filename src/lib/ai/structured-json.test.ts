@@ -23,17 +23,11 @@ test("does not complete truncated provider JSON", () => {
   );
 });
 
-test("campaign recommendation and market planning use the tolerant parser", () => {
+test("campaign recommendation uses the tolerant parser", () => {
   const campaign = readFileSync(
     new URL("./campaign-brief-proposal.ts", import.meta.url),
     "utf8",
   );
-  const market = readFileSync(
-    new URL("../campaign-workflow/market-planning.ts", import.meta.url),
-    "utf8",
-  );
   assert.match(campaign, /parseCompleteJsonObject\(rawOutput\)/);
-  assert.match(market, /parseCompleteJsonObject\(modelCall\.data\)/);
   assert.doesNotMatch(campaign, /JSON\.parse\(modelCall\.data\)/);
-  assert.doesNotMatch(market, /JSON\.parse\(modelCall\.data\)/);
 });

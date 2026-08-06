@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
-import type { EvaluatedLeadCandidate } from "@/lib/providers/lead-evaluator";
 import type { SearchResult } from "@/lib/providers/tavily";
 import type {
   Confidence,
@@ -10,6 +9,17 @@ import type {
   LeadQualificationStatus,
   LeadStatus,
 } from "@/types/domain";
+
+type EvaluatedLeadCandidate = {
+  companyName: string;
+  companyType: string;
+  confidence: Confidence;
+  fitScore: number;
+  industry: string;
+  reason: string;
+  result: SearchResult;
+  summary: string;
+};
 import {
   getCleanCampaignLeadCounts,
   getCleanLead,

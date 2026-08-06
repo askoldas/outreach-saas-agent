@@ -10,6 +10,14 @@ const legacyMigrationUrl = new URL(
   "../../../supabase/migrations/20260726000600_clear_clean_workspace_data.sql",
   import.meta.url,
 );
+const candidateResearchMigrationUrl = new URL(
+  "../../../supabase/migrations/20260728002300_retry_safe_candidate_research_stage.sql",
+  import.meta.url,
+);
+const publishedV3CleanupMigrationUrl = new URL(
+  "../../../supabase/migrations/20260729001000_allow_workspace_clear_of_published_v3.sql",
+  import.meta.url,
+);
 const repositoryUrl = new URL("./repository.ts", import.meta.url);
 
 test("workspace cleanup restores the required empty profile container", async () => {
@@ -38,6 +46,36 @@ test("workspace cleanup restores the required empty profile container", async ()
   assert.match(
     migration,
     /grant execute on function public\.clear_workspace_data\(uuid\) to authenticated/,
+  );
+});
+
+test("workspace cleanup can delete published V3 children only inside its scoped transaction", async () => {
+  const candidateResearchMigration = await readFile(
+    candidateResearchMigrationUrl,
+    "utf8",
+  );
+  const publishedV3CleanupMigration = await readFile(
+    publishedV3CleanupMigrationUrl,
+    "utf8",
+  );
+
+  assert.match(
+    candidateResearchMigration,
+    /perform set_config\(\s*'app\.workspace_cleanup_id',\s*target_workspace_id::text,\s*true\s*\)/,
+  );
+  assert.match(
+    publishedV3CleanupMigration,
+    /create or replace function public\.prevent_published_v3_child_mutation\(\)/,
+  );
+  assert.match(publishedV3CleanupMigration, /if tg_op = 'DELETE'/);
+  assert.match(
+    publishedV3CleanupMigration,
+    /current_setting\('app\.workspace_cleanup_id', true\) =\s*old\.workspace_id::text/,
+  );
+  assert.match(publishedV3CleanupMigration, /return old;/);
+  assert.match(
+    publishedV3CleanupMigration,
+    /Published Company Intelligence V3 records are immutable\./,
   );
 });
 

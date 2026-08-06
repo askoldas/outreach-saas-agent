@@ -20,20 +20,24 @@ test("reports finish reason and token usage for empty completions", () => {
   assert.match(message, /prompt tokens: 48000/);
 });
 
-test("Company Profile extraction disables expensive reasoning", () => {
+test("native Company Intelligence extraction uses bounded structured generation", () => {
   const source = readFileSync(
-    new URL("../ai/company-profile-analysis.ts", import.meta.url),
+    new URL("../../server/company-profile-v3/stage-service.ts", import.meta.url),
     "utf8",
   );
-  assert.match(source, /reasoningEffort:\s*"none"/);
+  assert.match(source, /generateTextResult/);
+  assert.match(source, /maxCompletionTokens: request\.maxCompletionTokens/);
+  assert.match(source, /executeValidatedAiTask/);
+  assert.match(source, /createIntelligenceAttemptRecorder/);
+  assert.match(source, /jsonSchema/);
+  assert.match(source, /IntelligenceSchemaRegistry/);
 });
 
-test("Company Profile extraction reserves enough output for structured JSON", () => {
-  const source = readFileSync(
-    new URL("../ai/company-profile-analysis.ts", import.meta.url),
-    "utf8",
-  );
-  assert.match(source, /maxCompletionTokens:\s*6_000/);
+test("OpenRouter can require strict JSON Schema output from compatible providers", () => {
+  const source = readFileSync(new URL("./openrouter.ts", import.meta.url), "utf8");
+  assert.match(source, /type: "json_schema"/);
+  assert.match(source, /strict: options\.jsonSchema\.strict \?\? true/);
+  assert.doesNotMatch(source, /require_parameters: true/);
 });
 
 test("critical OpenRouter roles use only the configured paid fallback", () => {

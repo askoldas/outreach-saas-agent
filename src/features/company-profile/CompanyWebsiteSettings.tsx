@@ -1,4 +1,3 @@
-import type { CompanyProfile } from "@/types/domain";
 import { updateCompanyWebsiteAction } from "@/server/company-profile/actions";
 import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
@@ -6,8 +5,8 @@ import form from "@/components/ui/FormControls.module.css";
 import styles from "@/features/shared/Feature.module.css";
 
 export function CompanyWebsiteSettings({
-  profile,
-}: Readonly<{ profile: CompanyProfile }>) {
+  website,
+}: Readonly<{ website: string | null }>) {
   return (
     <Card>
       <CardHeader title="Company website" eyebrow="Website analysis source" />
@@ -20,7 +19,7 @@ export function CompanyWebsiteSettings({
           <input
             className={form.input}
             name="website"
-            defaultValue={profile.website ?? ""}
+            defaultValue={website ?? ""}
             inputMode="url"
             placeholder="https://example.com"
             required

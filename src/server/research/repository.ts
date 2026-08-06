@@ -3,7 +3,6 @@ import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { ResearchProgress } from "@/types/domain";
 import {
-  cancelTriggerRuns,
   dispatchCampaignRun,
   dispatchProviderExecution,
 } from "@/server/trigger/dispatch";
@@ -47,189 +46,6 @@ export async function enqueueCampaignDiscoveryRun(input: {
     workspaceId: input.workspaceId,
   });
   return { runId: campaignRun.id };
-}
-
-export async function enqueueCampaignAgentResume(input: {
-  campaignRunId: string;
-  questionId: string;
-  workspaceId: string;
-}) {
-  const supabase = createServiceRoleClient();
-  const { data: run, error: stateError } = await supabase
-    .from("campaign_runs")
-    .update({
-      status: "queued",
-      current_phase: "discovery_queued",
-      error_code: null,
-      error_message: null,
-    })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", input.campaignRunId)
-    .eq("status", "waiting_for_input")
-    .select("id")
-    .maybeSingle();
-  if (stateError)
-    throw new Error(`Could not queue Campaign Agent resume: ${stateError.message}`);
-  if (!run) throw new Error("Campaign Run is no longer waiting for this clarification.");
-
-  try {
-    return await dispatchCampaignRun({
-      campaignRunId: input.campaignRunId,
-      idempotencyKey: `execute-campaign-resume:${input.campaignRunId}:${input.questionId}`,
-      tags: [`campaign_question:${input.questionId}`],
-      workspaceId: input.workspaceId,
-    });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message.slice(0, 2_000) : "Trigger dispatch failed.";
-    await supabase
-      .from("campaign_runs")
-      .update({
-        status: "waiting_for_input",
-        current_phase: "waiting_for_input",
-        last_dispatch_error: message,
-      })
-      .eq("workspace_id", input.workspaceId)
-      .eq("id", input.campaignRunId)
-      .eq("status", "queued");
-    throw error;
-  }
-}
-
-export async function resumePausedCampaignRun(input: {
-  campaignId: string;
-  workspaceId: string;
-}): Promise<{ runId: string } | null> {
-  const { supabase } = await createOperationalDatabaseClient();
-  const { data: campaign, error: campaignError } = await supabase
-    .from("campaigns")
-    .select("id")
-    .eq("workspace_id", input.workspaceId)
-    .eq("external_id", input.campaignId)
-    .single();
-  if (campaignError)
-    throw new Error(`Could not resolve paused Campaign: ${campaignError.message}`);
-  const { data: run, error: runError } = await supabase
-    .from("campaign_runs")
-    .select("id,current_iteration,status,current_phase")
-    .eq("workspace_id", input.workspaceId)
-    .eq("campaign_id", campaign.id)
-    .eq("status", "waiting_for_input")
-    .eq("current_phase", "paused")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (runError)
-    throw new Error(`Could not load paused Campaign Run: ${runError.message}`);
-  if (!run) return null;
-  const { error: stateError } = await supabase
-    .from("campaign_runs")
-    .update({
-      status: "planning",
-      current_phase: "discovery_planning",
-      error_code: null,
-      error_message: null,
-    })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", run.id);
-  if (stateError) throw new Error(`Could not resume Campaign Run: ${stateError.message}`);
-  await dispatchCampaignRun({
-    campaignRunId: run.id,
-    idempotencyKey: `execute-campaign-resume:${run.id}:${run.current_iteration}`,
-    tags: ["campaign_resume"],
-    workspaceId: input.workspaceId,
-  });
-  return { runId: run.id };
-}
-
-export async function stopActiveCampaignRun(input: {
-  campaignId: string;
-  workspaceId: string;
-}) {
-  const { supabase } = await createOperationalDatabaseClient();
-  const { data: campaign, error: campaignError } = await supabase
-    .from("campaigns")
-    .select("id")
-    .eq("workspace_id", input.workspaceId)
-    .eq("external_id", input.campaignId)
-    .single();
-  if (campaignError)
-    throw new Error(`Could not resolve Campaign to stop: ${campaignError.message}`);
-  const { data: run, error: runError } = await supabase
-    .from("campaign_runs")
-    .select("id,trigger_run_id")
-    .eq("workspace_id", input.workspaceId)
-    .eq("campaign_id", campaign.id)
-    .not("status", "in", '("completed","partially_completed","failed","cancelled")')
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (runError)
-    throw new Error(`Could not load active Campaign Run: ${runError.message}`);
-  if (!run) return { cancelledTriggerRuns: 0, runId: null };
-
-  const stoppedAt = new Date().toISOString();
-  const { data: executions, error: executionLoadError } = await supabase
-    .from("provider_executions")
-    .select("id,trigger_run_id")
-    .eq("workspace_id", input.workspaceId)
-    .eq("campaign_run_id", run.id)
-    .in("status", ["pending", "running"]);
-  if (executionLoadError)
-    throw new Error(
-      `Could not load active provider executions: ${executionLoadError.message}`,
-    );
-  const [{ error: runUpdateError }, { error: executionUpdateError }] = await Promise.all([
-    supabase
-      .from("campaign_runs")
-      .update({
-        status: "cancelled",
-        current_phase: "cancelled",
-        cancelled_at: stoppedAt,
-        error_code: "campaign_cancelled",
-        error_message: "Campaign stopped by the user.",
-      })
-      .eq("workspace_id", input.workspaceId)
-      .eq("id", run.id),
-    supabase
-      .from("provider_executions")
-      .update({
-        status: "cancelled",
-        completed_at: stoppedAt,
-        error_code: "campaign_cancelled",
-        error_message: "Campaign stopped by the user.",
-      })
-      .eq("workspace_id", input.workspaceId)
-      .eq("campaign_run_id", run.id)
-      .in("status", ["pending", "running"]),
-  ]);
-  if (runUpdateError || executionUpdateError) {
-    throw new Error(
-      `Could not persist Campaign cancellation: ${
-        runUpdateError?.message ?? executionUpdateError?.message
-      }`,
-    );
-  }
-
-  const cancellation = await cancelTriggerRuns([
-    run.trigger_run_id ?? "",
-    ...(executions ?? []).map((item) => item.trigger_run_id ?? ""),
-  ]);
-  if (cancellation.failures.length) {
-    const { error } = await supabase
-      .from("campaign_runs")
-      .update({
-        last_dispatch_error: cancellation.failures
-          .map((item) => `${item.runId}: ${item.message}`)
-          .join("; ")
-          .slice(0, 2_000),
-      })
-      .eq("workspace_id", input.workspaceId)
-      .eq("id", run.id);
-    if (error)
-      throw new Error(`Could not record Trigger cancellation result: ${error.message}`);
-  }
-  return { cancelledTriggerRuns: cancellation.cancelled, runId: run.id };
 }
 
 export async function enqueueLeadContactEnrichmentRun(input: {
@@ -486,109 +302,13 @@ export async function enqueueCampaignDraftGenerationRun(input: {
   };
 }
 
-export async function enqueueCompanyProfileAnalysisRun(input: {
-  workspaceId: string;
-  profileVersionId: string;
-  website: string;
-}) {
-  const { supabase } = await createOperationalDatabaseClient();
-  const idempotencyKey = `company-profile-analysis:${input.profileVersionId}`;
-  const requestHash = createHash("sha256")
-    .update(JSON.stringify({ profileVersionId: input.profileVersionId }))
-    .digest("hex");
-  const { data: previous, error: previousError } = await supabase
-    .from("provider_executions")
-    .select("id,status,dispatch_state")
-    .eq("workspace_id", input.workspaceId)
-    .eq("operation", "company_profile_analysis")
-    .eq("idempotency_key", idempotencyKey)
-    .maybeSingle();
-  if (previousError)
-    throw new Error(
-      `Could not check Company Profile analysis execution: ${previousError.message}`,
-    );
-  if (
-    previous &&
-    ["pending", "running", "completed"].includes(previous.status) &&
-    !["created", "dispatch_failed"].includes(previous.dispatch_state)
-  )
-    return { runId: previous.id };
-
-  const executionValues = {
-    workspace_id: input.workspaceId,
-    provider: "tavily_openrouter",
-    operation: "company_profile_analysis",
-    idempotency_key: idempotencyKey,
-    request_hash: requestHash,
-    status: "pending",
-    dispatch_state: "created",
-    error_code: null,
-    error_message: null,
-    completed_at: null,
-    metadata: {
-      profileVersionId: input.profileVersionId,
-      website: input.website,
-    },
-  };
-  const executionQuery = previous
-    ? supabase
-        .from("provider_executions")
-        .update(executionValues)
-        .eq("workspace_id", input.workspaceId)
-        .eq("id", previous.id)
-    : supabase.from("provider_executions").insert(executionValues);
-  const { data: execution, error: executionError } = await executionQuery
-    .select("id")
-    .single();
-  if (executionError)
-    throw new Error(
-      `Could not create Company Profile analysis execution: ${executionError.message}`,
-    );
-
-  const runId = execution.id;
-  await dispatchProviderExecution({
-    providerExecutionId: runId,
-    workspaceId: input.workspaceId,
-  });
-
-  return { runId };
-}
-
 export async function getCampaignResearchProgress(input: {
   campaignId: string;
   workspaceId: string;
 }): Promise<ResearchProgress | null> {
   const { supabase } = await createOperationalDatabaseClient();
   if (input.campaignId === "company-profile") {
-    const { data, error } = await supabase
-      .from("provider_executions")
-      .select("id,status,error_message")
-      .eq("workspace_id", input.workspaceId)
-      .eq("operation", "company_profile_analysis")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    if (error)
-      throw new Error(`Could not load profile analysis progress: ${error.message}`);
-    if (!data) return null;
-    const status = data.status as ResearchProgress["status"];
-    return {
-      completedTasks: status === "completed" ? 1 : 0,
-      currentStep:
-        status === "pending"
-          ? "Queued website analysis"
-          : status === "running"
-            ? "Analyzing company website"
-            : status === "completed"
-              ? "Company Profile analysis completed"
-              : "Company Profile analysis failed",
-      failedTasks: status === "failed" ? 1 : 0,
-      lastError: data.error_message ?? "",
-      progress: status === "completed" ? 100 : status === "running" ? 50 : 0,
-      runId: data.id,
-      status,
-      totalTasks: 1,
-    };
+    return getNativeCompanyProfileProgress(input.workspaceId, supabase);
   }
 
   const { data: campaign, error: campaignError } = await supabase
@@ -644,6 +364,136 @@ export async function getCampaignResearchProgress(input: {
     status,
     totalTasks: desired,
   };
+}
+
+async function getNativeCompanyProfileProgress(
+  workspaceId: string,
+  supabase: ReturnType<typeof createServiceRoleClient>,
+): Promise<ResearchProgress | null> {
+  const { data: profile, error: profileError } = await supabase
+    .from("company_profiles")
+    .select("current_v3_draft_id")
+    .eq("workspace_id", workspaceId)
+    .single();
+  if (profileError)
+    throw new Error(
+      `Could not load native profile analysis context: ${profileError.message}`,
+    );
+  if (!profile.current_v3_draft_id) return null;
+
+  const draftId = profile.current_v3_draft_id;
+  const [
+    { data: draft, error: draftError },
+    { data: taskRuns, error: taskError },
+    { data: failureEvent, error: eventError },
+  ] = await Promise.all([
+    supabase
+      .from("company_profile_drafts")
+      .select("id,state,created_by_run_id")
+      .eq("workspace_id", workspaceId)
+      .eq("id", draftId)
+      .single(),
+    supabase
+      .from("profile_task_runs")
+      .select("task_id,status,error_message,created_at")
+      .eq("workspace_id", workspaceId)
+      .eq("profile_draft_id", draftId)
+      .order("created_at", { ascending: true }),
+    supabase
+      .from("profile_change_events")
+      .select("details_json")
+      .eq("workspace_id", workspaceId)
+      .eq("profile_draft_id", draftId)
+      .eq("event_type", "workflow_failed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+  const loadError = draftError ?? taskError ?? eventError;
+  if (loadError)
+    throw new Error(`Could not load native profile progress: ${loadError.message}`);
+  if (!draft)
+    throw new Error("Could not load the current native Company Intelligence draft.");
+
+  const stages = taskRuns ?? [];
+  const completedTasks = stages.filter(({ status }) => status === "completed").length;
+  const failedTasks = stages.filter(({ status }) => status === "failed").length;
+  const failedTask = [...stages].reverse().find(({ status }) => status === "failed");
+  const activeTask = [...stages]
+    .reverse()
+    .find(({ status }) => ["pending", "running"].includes(status));
+  const terminal = ["needs_input", "ready_for_review", "approved"].includes(draft.state);
+  const status: ResearchProgress["status"] =
+    draft.state === "failed"
+      ? "failed"
+      : draft.state === "abandoned"
+        ? "cancelled"
+        : draft.state === "needs_input"
+          ? "waiting_for_input"
+          : terminal
+            ? "completed"
+            : draft.created_by_run_id
+              ? "running"
+              : "pending";
+  const progress =
+    status === "completed" || status === "waiting_for_input"
+      ? 100
+      : status === "failed"
+        ? Math.round((completedTasks / profileV3StageOrder.length) * 100)
+        : Math.max(5, Math.round((completedTasks / profileV3StageOrder.length) * 100));
+  const failureDetails = objectValue(failureEvent?.details_json);
+  const lastError =
+    failedTask?.error_message ?? stringValue(failureDetails.errorMessage) ?? "";
+
+  return {
+    completedTasks,
+    currentStep:
+      status === "completed"
+        ? "Company Intelligence review is ready"
+        : status === "waiting_for_input"
+          ? "Company Intelligence needs your review"
+          : status === "failed"
+            ? "Company Intelligence analysis failed"
+            : activeTask
+              ? (profileV3StageLabels[activeTask.task_id] ?? activeTask.task_id)
+              : completedTasks
+                ? "Finalizing Company Intelligence"
+                : "Collecting official website evidence",
+    failedTasks: status === "failed" ? Math.max(1, failedTasks) : failedTasks,
+    lastError,
+    progress,
+    runId: draft.created_by_run_id ?? draft.id,
+    status,
+    totalTasks: profileV3StageOrder.length,
+  };
+}
+
+const profileV3StageOrder = [
+  "profile.fact_extraction",
+  "profile.commercial_synthesis",
+  "profile.offering_decomposition",
+  "profile.buyer_logic",
+  "profile.clarification",
+  "profile.consistency_audit",
+] as const;
+
+const profileV3StageLabels: Record<string, string> = {
+  "profile.fact_extraction": "Extracting official website facts",
+  "profile.commercial_synthesis": "Synthesizing the commercial model",
+  "profile.offering_decomposition": "Structuring campaign-worthy offerings",
+  "profile.buyer_logic": "Building offering-specific buyer logic",
+  "profile.clarification": "Preparing focused clarification questions",
+  "profile.consistency_audit": "Auditing evidence and consistency",
+};
+
+function objectValue(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(value: unknown) {
+  return typeof value === "string" ? value : null;
 }
 
 function positiveInteger(value: unknown) {

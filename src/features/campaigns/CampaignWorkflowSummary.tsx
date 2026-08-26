@@ -101,7 +101,7 @@ export function CampaignWorkflowSummary({
               <p>
                 {segment.passCount} passes · {segment.providerRecords} source records ·{" "}
                 {segment.normalizedCandidates} normalized · {segment.uniqueCandidates}{" "}
-                unique · target {segment.targetCandidateCount}
+                unique organizations
               </p>
             </div>
           ))}

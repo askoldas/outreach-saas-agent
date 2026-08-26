@@ -342,27 +342,79 @@ export async function getCampaignResearchProgress(input: {
 
   const runRow = run as CampaignRunRow;
   const status = toResearchProgressStatus(runRow.status);
-  const desired = positiveInteger(runRow.metadata.desiredCompanyCount);
-  const completed =
-    runRow.status === "completed" || runRow.status === "partially_completed"
-      ? desired
-      : Math.min(runRow.companies_qualified, desired);
+  const totalTasks = 100;
+  const liveResearch = await loadLiveCandidateResearchProgress({
+    campaignRunId: runRow.id,
+    currentPhase: runRow.current_phase,
+    supabase,
+    workspaceId: input.workspaceId,
+  });
+  const projectedProgress = liveResearch
+    ? Math.max(
+        runRow.progress_percentage,
+        Math.min(
+          66,
+          50 + Math.round((liveResearch.completed / liveResearch.total) * 17),
+        ),
+      )
+    : runRow.progress_percentage;
+  const completedTasks = Math.max(0, Math.min(100, projectedProgress));
 
   return {
     candidatesDiscovered: runRow.candidates_discovered,
     candidatesUnique: runRow.candidates_unique,
     candidatesClassified: runRow.candidates_classified,
-    companiesEvaluated: runRow.companies_evaluated,
+    companiesEvaluated: Math.max(
+      runRow.companies_evaluated,
+      liveResearch?.completed ?? 0,
+    ),
     companiesQualified: runRow.companies_qualified,
     currentIteration: runRow.current_iteration,
-    completedTasks: completed,
-    currentStep: campaignPhaseLabel(runRow.current_phase),
+    completedTasks,
+    currentStep: liveResearch
+      ? `Researching candidates (${liveResearch.completed}/${liveResearch.total})`
+      : campaignPhaseLabel(runRow.current_phase),
     failedTasks: status === "failed" ? 1 : 0,
     lastError: runRow.error_message ?? "",
-    progress: runRow.progress_percentage,
+    progress: projectedProgress,
     runId: runRow.id,
     status,
-    totalTasks: desired,
+    totalTasks,
+  };
+}
+
+async function loadLiveCandidateResearchProgress(input: {
+  campaignRunId: string;
+  currentPhase: string;
+  supabase: ReturnType<typeof createServiceRoleClient>;
+  workspaceId: string;
+}) {
+  if (input.currentPhase !== "evaluating_candidates") return null;
+  const { data: batch, error: batchError } = await input.supabase
+    .from("candidate_research_batches_v2")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .maybeSingle();
+  if (batchError)
+    throw new Error(`Could not load live Candidate Research batch: ${batchError.message}`);
+  if (!batch) return null;
+  const { data: members, error: memberError } = await input.supabase
+    .from("candidate_research_batch_members_v2")
+    .select("status")
+    .eq("workspace_id", input.workspaceId)
+    .eq("candidate_research_batch_id", batch.id);
+  if (memberError)
+    throw new Error(
+      `Could not load live Candidate Research members: ${memberError.message}`,
+    );
+  const total = members?.length ?? 0;
+  if (!total) return null;
+  return {
+    completed: members!.filter(({ status: memberStatus }) =>
+      ["completed", "blocked"].includes(memberStatus),
+    ).length,
+    total,
   };
 }
 
@@ -416,10 +468,21 @@ async function getNativeCompanyProfileProgress(
     throw new Error("Could not load the current native Company Intelligence draft.");
 
   const stages = taskRuns ?? [];
-  const completedTasks = stages.filter(({ status }) => status === "completed").length;
-  const failedTasks = stages.filter(({ status }) => status === "failed").length;
-  const failedTask = [...stages].reverse().find(({ status }) => status === "failed");
-  const activeTask = [...stages]
+  const latestStageByTask = new Map(
+    stages.map((stage) => [stage.task_id, stage] as const),
+  );
+  const latestStages = profileV3StageOrder.flatMap((taskId) => {
+    const stage = latestStageByTask.get(taskId);
+    return stage ? [stage] : [];
+  });
+  const completedStageCount = latestStages.filter(
+    ({ status }) => status === "completed",
+  ).length;
+  const failedStageCount = latestStages.filter(({ status }) => status === "failed").length;
+  const failedTask = [...latestStages]
+    .reverse()
+    .find(({ status }) => status === "failed");
+  const activeTask = [...latestStages]
     .reverse()
     .find(({ status }) => ["pending", "running"].includes(status));
   const terminal = ["needs_input", "ready_for_review", "approved"].includes(draft.state);
@@ -435,6 +498,7 @@ async function getNativeCompanyProfileProgress(
             : draft.created_by_run_id
               ? "running"
               : "pending";
+  const completedTasks = terminal ? profileV3StageOrder.length : completedStageCount;
   const progress =
     status === "completed" || status === "waiting_for_input"
       ? 100
@@ -443,7 +507,9 @@ async function getNativeCompanyProfileProgress(
         : Math.max(5, Math.round((completedTasks / profileV3StageOrder.length) * 100));
   const failureDetails = objectValue(failureEvent?.details_json);
   const lastError =
-    failedTask?.error_message ?? stringValue(failureDetails.errorMessage) ?? "";
+    status === "failed"
+      ? (failedTask?.error_message ?? stringValue(failureDetails.errorMessage) ?? "")
+      : "";
 
   return {
     completedTasks,
@@ -459,7 +525,7 @@ async function getNativeCompanyProfileProgress(
               : completedTasks
                 ? "Finalizing Company Intelligence"
                 : "Collecting official website evidence",
-    failedTasks: status === "failed" ? Math.max(1, failedTasks) : failedTasks,
+    failedTasks: status === "failed" ? Math.max(1, failedStageCount) : 0,
     lastError,
     progress,
     runId: draft.created_by_run_id ?? draft.id,
@@ -496,10 +562,6 @@ function stringValue(value: unknown) {
   return typeof value === "string" ? value : null;
 }
 
-function positiveInteger(value: unknown) {
-  return typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 1;
-}
-
 function toResearchProgressStatus(status: string): ResearchProgress["status"] {
   if (status === "queued" || status === "draft") return "pending";
   if (status === "completed" || status === "partially_completed") return "completed";
@@ -511,14 +573,14 @@ function toResearchProgressStatus(status: string): ResearchProgress["status"] {
 
 function campaignPhaseLabel(phase: string) {
   const labels: Record<string, string> = {
-    discovery_queued: "Queued company discovery",
+    discovery_queued: "Queued market exploration",
     market_analysis: "Analyzing the selected market",
     discovery_planning: "Building discovery paths",
-    discovering: "Discovering companies",
-    evaluating: "Classifying candidates",
-    qualifying: "Evaluating promising companies",
+    discovering: "Exploring market sources",
+    evaluating: "Resolving plausible organizations",
+    qualifying: "Researching and evaluating candidates",
     paused: "Campaign paused",
-    ready_for_review: "Qualified companies ready for review",
+    ready_for_review: "Research results ready for review",
     waiting_for_enrichment_approval: "Waiting for enrichment approval",
     waiting_for_input: "Waiting for your targeting clarification",
     enriching: "Finding company contacts",

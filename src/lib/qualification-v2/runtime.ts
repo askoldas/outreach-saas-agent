@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { hashCanonical } from "../intelligence/campaign-strategy-v2/context-compiler.ts";
 import type { CampaignStrategyV2 } from "../intelligence/campaign-strategy-v2/schemas.ts";
+import type { CommercialRelationshipAssessment } from "../intelligence/core/commercial-relationships.ts";
 import type { IntelligenceRule } from "../intelligence/contracts/rules.ts";
 import type { PromptDefinition } from "../intelligence/runtime/task-registry.ts";
 import type {
@@ -15,9 +16,10 @@ import {
   STANDARD_FACTOR_LIBRARY_VERSION,
 } from "./factor-library.ts";
 
-export const QUALIFICATION_RUNTIME_CONTRACT_VERSION = "candidate-qualification-v2.3";
+export const QUALIFICATION_RUNTIME_CONTRACT_VERSION =
+  "candidate-qualification-v2.5-relationship-assessment";
 export const QUALIFICATION_RELATIONSHIP_PROMPT_VERSION =
-  "candidate-relationship-classification-v2.3-shared-runtime";
+  "candidate-relationship-classification-v2.4-multidimensional";
 export const QUALIFICATION_FACTOR_PROMPT_VERSION =
   "candidate-factor-evaluation-v2.3-shared-runtime";
 export const QUALIFICATION_SCORING_POLICY_VERSION = "qualification-scoring-v2.2";
@@ -171,6 +173,8 @@ export type PreparedQualificationCandidate = {
   campaignCandidateId: string;
   organizationId: string;
   candidateIntelligenceVersionId: string;
+  companyIntelligenceVersionId?: string;
+  commercialRelationshipAssessmentVersionId?: string;
   inputHash: string;
   validEntity: boolean;
   merged: boolean;
@@ -286,6 +290,10 @@ export function prepareQualificationCandidates(input: {
     campaignCandidateId: string;
     organizationId: string;
     candidateIntelligenceVersionId: string;
+    companyIntelligenceVersionId?: string;
+    companyIntelligenceContentHash?: string;
+    commercialRelationshipAssessmentVersionId?: string;
+    commercialRelationshipAssessmentContentHash?: string;
     intelligenceContentHash: string;
     state: string;
     identityConfidence: number;
@@ -316,6 +324,15 @@ export function prepareQualificationCandidates(input: {
         campaignCandidateId: candidate.campaignCandidateId,
         organizationId: candidate.organizationId,
         candidateIntelligenceVersionId: candidate.candidateIntelligenceVersionId,
+        ...(candidate.companyIntelligenceVersionId
+          ? { companyIntelligenceVersionId: candidate.companyIntelligenceVersionId }
+          : {}),
+        ...(candidate.commercialRelationshipAssessmentVersionId
+          ? {
+              commercialRelationshipAssessmentVersionId:
+                candidate.commercialRelationshipAssessmentVersionId,
+            }
+          : {}),
         validEntity,
         merged,
         identityConfidence: candidate.identityConfidence,
@@ -331,6 +348,13 @@ export function prepareQualificationCandidates(input: {
           campaignCandidateId: candidate.campaignCandidateId,
           candidateIntelligenceVersionId: candidate.candidateIntelligenceVersionId,
           intelligenceContentHash: candidate.intelligenceContentHash,
+          companyIntelligenceVersionId: candidate.companyIntelligenceVersionId ?? null,
+          companyIntelligenceContentHash:
+            candidate.companyIntelligenceContentHash ?? null,
+          commercialRelationshipAssessmentVersionId:
+            candidate.commercialRelationshipAssessmentVersionId ?? null,
+          commercialRelationshipAssessmentContentHash:
+            candidate.commercialRelationshipAssessmentContentHash ?? null,
           rubricContentHash: input.rubric.contentHash,
           identityConfidence: candidate.identityConfidence,
           identityReviewState: candidate.identityReviewState,
@@ -559,6 +583,7 @@ export function buildRelationshipClassificationMessages(input: {
   organization: unknown;
   claims: QualificationClaim[];
   evidence: QualificationEvidence[];
+  commercialRelationshipAssessment?: CommercialRelationshipAssessment;
 }) {
   return [
     {
@@ -567,6 +592,7 @@ export function buildRelationshipClassificationMessages(input: {
         "Classify one candidate organization's commercial relationship to the seller for the frozen campaign objective.",
         "Industry similarity is not enough.",
         "Use only supplied claims and evidence metadata.",
+        "Treat the supplied multi-dimensional relationship assessment as a frozen evidence-bounded prior, not as a final eligibility decision.",
         "Use a claim only for the Campaign dimensions listed in its applicability object.",
         "A relationship requires a verifiable explicit fact or evidence-backed inference whose cited evidence is linked to that claim.",
         "Do not apply final eligibility rules or calculate fit.",
@@ -581,6 +607,7 @@ export function buildRelationshipClassificationMessages(input: {
         desiredRelationships: input.desiredRelationships,
         normallyExcludedRelationships: input.normallyExcludedRelationships,
         organization: input.organization,
+        commercialRelationshipAssessment: input.commercialRelationshipAssessment ?? null,
         claims: input.claims,
         evidence: input.evidence,
         outputSchema: {
@@ -661,10 +688,11 @@ export const qualificationRelationshipTaskDefinition: PromptDefinition<
   taskId: "candidate.relationship_classification",
   promptVersion: QUALIFICATION_RELATIONSHIP_PROMPT_VERSION,
   schemaVersion: "candidate-relationship-output/v2.2",
-  contextCompilerVersion: "candidate-qualification-context/v2.3",
+  contextCompilerVersion: "candidate-qualification-context/v2.4",
   modelRole: "candidate_relationship_reasoning",
   title: "Candidate relationship classification",
-  description: "Classify one evidence-bounded commercial relationship without deciding eligibility.",
+  description:
+    "Classify one evidence-bounded commercial relationship without deciding eligibility.",
   buildMessages: buildRelationshipClassificationMessages,
   outputSchema: relationshipOutputSchema,
   maxCompletionTokens: 2_000,
@@ -683,7 +711,8 @@ export const qualificationFactorTaskDefinition: PromptDefinition<
   contextCompilerVersion: "candidate-qualification-context/v2.3",
   modelRole: "candidate_factor_evaluation",
   title: "Candidate qualification-factor evaluation",
-  description: "Evaluate every frozen factor independently without calculating final decisions.",
+  description:
+    "Evaluate every frozen factor independently without calculating final decisions.",
   buildMessages: buildFactorEvaluationMessages,
   outputSchema: factorOutputSchema,
   maxCompletionTokens: 5_000,

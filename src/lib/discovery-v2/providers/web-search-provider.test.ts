@@ -3,7 +3,12 @@ import test from "node:test";
 import type { ProviderDiscoveryRequest } from "../contracts.ts";
 import { createConfiguredDiscoveryProviderRegistry } from "../configured-provider-registry.ts";
 import { createNativeCampaignStrategyFixture } from "../../intelligence/campaign-strategy-v2/test-fixture.ts";
-import { generateWebDiscoveryQueries, normalizeWebQuery } from "./web-query-generator.ts";
+import {
+  areNearDuplicateQueries,
+  expandContextualAcronyms,
+  generateWebDiscoveryQueries,
+  normalizeWebQuery,
+} from "./web-query-generator.ts";
 import { classifyWebResult } from "./web-normalization.ts";
 import { WebSearchProvider } from "./web-search-provider.ts";
 
@@ -64,6 +69,34 @@ test("relationship vocabulary changes materially by Campaign objective", () => {
   assert.notDeepEqual(
     buyerQueries.map((query) => query.normalizedQuery),
     distributorQueries.map((query) => query.normalizedQuery),
+  );
+});
+
+test("web planning expands contextual acronyms and allocates distinct query/source families", () => {
+  assert.equal(
+    expandContextualAcronyms("API manufacturer", ["active pharmaceutical ingredient"]),
+    '"active pharmaceutical ingredient" manufacturer',
+  );
+  assert.equal(
+    expandContextualAcronyms("API manufacturer", ["application programming interface"]),
+    '"application programming interface" manufacturer',
+  );
+  assert.equal(expandContextualAcronyms("API manufacturer", []), "API manufacturer");
+
+  const input = request();
+  input.budget.maxCalls = 10;
+  const queries = generateWebDiscoveryQueries(input);
+  assert.ok(new Set(queries.map(({ family }) => family)).size >= 4);
+  assert.ok(new Set(queries.map(({ sourceFamily }) => sourceFamily)).size >= 3);
+  assert.ok(
+    queries.every((query, index) =>
+      queries
+        .slice(index + 1)
+        .every(
+          (other) =>
+            !areNearDuplicateQueries(query.normalizedQuery, other.normalizedQuery),
+        ),
+    ),
   );
 });
 
@@ -154,7 +187,7 @@ test("multi-country discovery gives every Baltic market a localized query and fi
 
 test("WebSearchProvider is available only through the configured registry", () => {
   const registry = createConfiguredDiscoveryProviderRegistry();
-  assert.equal(registry.get("web_search").version, "2.4");
+  assert.equal(registry.get("web_search").version, "2.5");
   assert.deepEqual(
     registry.list().map(({ id }) => id),
     ["web_search"],
@@ -258,6 +291,22 @@ test("WebSearchProvider sends frozen excluded domains to Tavily", async () => {
   assert.deepEqual(calls[0]?.excludeDomains, ["acme.example", "previous.example"]);
 });
 
+test("source-family searches request extractable page content", async () => {
+  const calls: Array<{ includeRawContent?: boolean }> = [];
+  const provider = new WebSearchProvider(async (_query, _maxResults, options) => {
+    calls.push(options ?? {});
+    return [];
+  });
+  const input = request();
+  const queries = generateWebDiscoveryQueries(input);
+  const sourceQuery = queries.find(
+    ({ sourceFamily }) => sourceFamily !== "company_website",
+  );
+  assert.ok(sourceQuery);
+  await provider.search(input, { queries: [sourceQuery] });
+  assert.equal(calls[0]?.includeRawContent, true);
+});
+
 test("WebSearchProvider bounds calls and records while preserving raw provenance", async () => {
   const calls: string[] = [];
   const provider = new WebSearchProvider(
@@ -293,11 +342,11 @@ test("WebSearchProvider bounds calls and records while preserving raw provenance
   assert.ok(
     response.records.some(({ sourceType }) => sourceType === "industry_directory"),
   );
-  assert.equal(response.normalizedCandidates.length, 0);
+  assert.equal(response.normalizedCandidates.length, 2);
   assert.equal(response.classifications.length, response.records.length);
   assert.ok(
     response.classifications.every(({ disposition }) =>
-      ["reject", "source_only"].includes(disposition),
+      ["needs_review", "source_only"].includes(disposition),
     ),
   );
 });
@@ -321,6 +370,45 @@ test("directory pages are retained but not treated as company candidates", async
   assert.equal(response.records.length, 1);
   assert.equal(response.normalizedCandidates.length, 0);
   assert.equal(response.exhausted, true);
+});
+
+test("association sources produce organization references without becoming targets", async () => {
+  const provider = new WebSearchProvider(
+    async () => [
+      {
+        title: "Trade association members directory",
+        url: "https://association.example/members",
+        content: [
+          "[Acme Manufacturing](https://acme.example/)",
+          "[Beta Logistics](https://beta.example/)",
+          "- Gamma Services",
+        ].join("\n"),
+        score: 0.9,
+      },
+    ],
+    () => "2026-08-13T10:00:00.000Z",
+    () => "execution-source-expansion",
+  );
+  const input = request();
+  input.budget = { maxCalls: 1, maxResults: 5 };
+  const response = await provider.search(input);
+  assert.equal(response.records.length, 1);
+  assert.equal(response.classifications[0]?.disposition, "source_only");
+  assert.deepEqual(
+    response.normalizedCandidates.map(({ name }) => name),
+    ["Acme Manufacturing", "Beta Logistics", "Gamma Services"],
+  );
+  assert.ok(
+    response.normalizedCandidates.every(
+      ({ discoverySource }) =>
+        discoverySource?.sourceUrl === "https://association.example/members",
+    ),
+  );
+  assert.equal(
+    response.normalizedCandidates.find(({ name }) => name === "Gamma Services")
+      ?.canonicalDomainHint,
+    undefined,
+  );
 });
 
 test("editorial pages are evidence, not company candidates", async () => {
@@ -457,14 +545,19 @@ test("commercial pages are preclassified before becoming organization candidates
   input.budget = { maxCalls: 1, maxResults: 5 };
   const response = await provider.search(input);
 
-  assert.equal(response.normalizedCandidates.length, 1);
-  assert.equal(response.normalizedCandidates[0]?.name, "Consultancy");
+  assert.equal(response.normalizedCandidates.length, 2);
+  assert.equal(response.normalizedCandidates[0]?.name, "Acme Pharma");
   assert.equal(
     response.normalizedCandidates[0]?.websiteUrl,
-    "https://consultancy.example/",
+    "https://www.acme-pharma.example/",
   );
-  assert.equal(response.classifications[0]?.disposition, "reject");
+  assert.equal(response.classifications[0]?.disposition, "needs_review");
   assert.equal(response.classifications[0]?.objectiveCompatibility, "incompatible");
+  assert.ok(
+    response.classifications[0]?.reasonCodes.includes(
+      "commercial_role_requires_verification",
+    ),
+  );
   assert.equal(response.classifications[1]?.disposition, "needs_review");
   assert.equal(
     classifyWebResult({

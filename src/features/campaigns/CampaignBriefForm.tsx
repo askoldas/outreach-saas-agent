@@ -112,7 +112,6 @@ export function CampaignBriefForm({
   const [requiredCriteria, setRequiredCriteria] = useState("");
   const [exclusions, setExclusions] = useState("");
   const [roles, setRoles] = useState("");
-  const [desiredQualifiedCompanies, setDesiredQualifiedCompanies] = useState(25);
   const [proposalError, setProposalError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -211,7 +210,6 @@ export function CampaignBriefForm({
         ...segment,
         status: selectedTargetSegmentIds.includes(segment.id) ? "confirmed" : "rejected",
       })),
-      desiredQualifiedCompanies,
     };
   }, [
     proposal,
@@ -231,7 +229,6 @@ export function CampaignBriefForm({
     requiredCriteria,
     exclusions,
     roles,
-    desiredQualifiedCompanies,
   ]);
 
   function selectRegion(label: string, codes: readonly string[]) {
@@ -374,11 +371,6 @@ export function CampaignBriefForm({
             label="Recommended target client"
             value={targetSummary || "Generated after market selection"}
             state={targetSummary ? "selected" : "needs_review"}
-          />
-          <GuidedStatus
-            label="Qualified companies wanted"
-            value={String(desiredQualifiedCompanies)}
-            state="selected"
           />
         </>
       }
@@ -683,22 +675,6 @@ export function CampaignBriefForm({
               required
             />
           </label>
-          <label className={form.field}>
-            <span>Qualified companies wanted</span>
-            <input
-              className={form.input}
-              type="number"
-              min={1}
-              max={500}
-              value={desiredQualifiedCompanies}
-              onChange={(event) => {
-                const value = Number(event.target.value);
-                setDesiredQualifiedCompanies(
-                  Number.isFinite(value) ? Math.min(500, Math.max(1, value)) : 1,
-                );
-              }}
-            />
-          </label>
           <div className={styles.proposal}>
             <p>
               <span>Target market</span>
@@ -736,10 +712,6 @@ export function CampaignBriefForm({
               <span>Exclude</span>
               <strong>{split(exclusions).join(", ") || "None"}</strong>
             </p>
-            <p>
-              <span>Qualified companies wanted</span>
-              <strong>{desiredQualifiedCompanies}</strong>
-            </p>
           </div>
           {targetClientIssue ? <p className={styles.error}>{targetClientIssue}</p> : null}
           <form action={createCampaignAction}>
@@ -755,11 +727,6 @@ export function CampaignBriefForm({
               type="hidden"
               name="language"
               value={proposal.geography.primaryLanguage ?? "English"}
-            />
-            <input
-              type="hidden"
-              name="desiredLeadCount"
-              value={desiredQualifiedCompanies}
             />
             <input type="hidden" name="objective" value={targetSummary} />
             <input

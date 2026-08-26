@@ -59,7 +59,6 @@ export type ConfirmedCampaignBrief = {
   offering: CampaignOfferingProposal;
   targetClient: CampaignTargetClient;
   targetSegments: TargetSegment[];
-  desiredQualifiedCompanies: number;
 };
 
 export const campaignBriefPromptVersion = "campaign-brief-proposal-v4-objective-first";
@@ -142,21 +141,13 @@ export function parseConfirmedCampaignBrief(
     throw new Error("Confirm at least one organization target before discovery.");
   }
   if (objective) assertConfirmedSegmentsMatchObjective(objective, brief.targetSegments);
-  return {
-    ...brief,
-    desiredQualifiedCompanies: integer(
-      row.desiredQualifiedCompanies,
-      "desiredQualifiedCompanies",
-      1,
-      500,
-    ),
-  };
+  return brief;
 }
 
 function parseBrief(
   row: Record<string, unknown>,
   validOfferingIds: ReadonlySet<string>,
-): Omit<ConfirmedCampaignBrief, "desiredQualifiedCompanies"> {
+): ConfirmedCampaignBrief {
   const geographyRow = object(row.geography, "geography");
   const offeringRow = object(row.offering, "offering");
   const targetRow = object(row.targetClient, "targetClient");

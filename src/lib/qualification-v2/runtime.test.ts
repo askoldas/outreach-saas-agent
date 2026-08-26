@@ -312,6 +312,80 @@ test("a changed cited-claim snapshot invalidates the qualification input hash", 
   assert.notEqual(first[0]?.inputHash, changed[0]?.inputHash);
 });
 
+test("an exact Company Intelligence version invalidates qualification independently", () => {
+  const rubric = compileQualificationRubric(createNativeCampaignStrategyFixture());
+  const candidate = {
+    campaignCandidateId: "candidate-1",
+    organizationId: "organization-1",
+    candidateIntelligenceVersionId: "legacy-intelligence-1",
+    companyIntelligenceVersionId: "company-intelligence-1",
+    companyIntelligenceContentHash: "c".repeat(64),
+    intelligenceContentHash: "a".repeat(64),
+    state: "active",
+    identityConfidence: 0.9,
+    identityReviewState: "resolved",
+    operatingStatus: "active",
+    mergedIntoOrganizationId: null,
+    procurementAutonomy: "independent",
+    procurementConfidence: 0.8,
+  };
+  const first = prepareQualificationCandidates({
+    campaignRunId: "run-1",
+    rubric,
+    candidates: [candidate],
+  });
+  const changed = prepareQualificationCandidates({
+    campaignRunId: "run-1",
+    rubric,
+    candidates: [
+      {
+        ...candidate,
+        companyIntelligenceVersionId: "company-intelligence-2",
+        companyIntelligenceContentHash: "d".repeat(64),
+      },
+    ],
+  });
+
+  assert.equal(first[0]?.companyIntelligenceVersionId, "company-intelligence-1");
+  assert.notEqual(first[0]?.inputHash, changed[0]?.inputHash);
+});
+
+test("an exact Commercial Relationship assessment invalidates qualification independently", () => {
+  const rubric = compileQualificationRubric(createNativeCampaignStrategyFixture());
+  const candidate = {
+    campaignCandidateId: "candidate-1",
+    organizationId: "organization-1",
+    candidateIntelligenceVersionId: "legacy-intelligence-1",
+    commercialRelationshipAssessmentVersionId: "relationship-1",
+    commercialRelationshipAssessmentContentHash: "e".repeat(64),
+    intelligenceContentHash: "a".repeat(64),
+    state: "active",
+    identityConfidence: 0.9,
+    identityReviewState: "resolved",
+    operatingStatus: "active",
+    mergedIntoOrganizationId: null,
+    procurementAutonomy: "independent",
+    procurementConfidence: 0.8,
+  };
+  const first = prepareQualificationCandidates({
+    campaignRunId: "run-1",
+    rubric,
+    candidates: [candidate],
+  });
+  const changed = prepareQualificationCandidates({
+    campaignRunId: "run-1",
+    rubric,
+    candidates: [
+      {
+        ...candidate,
+        commercialRelationshipAssessmentVersionId: "relationship-2",
+      },
+    ],
+  });
+  assert.equal(first[0]?.commercialRelationshipAssessmentVersionId, "relationship-1");
+  assert.notEqual(first[0]?.inputHash, changed[0]?.inputHash);
+});
+
 test("hard exclusion requires an applicable verifiable positive claim", () => {
   const exclusionClaim: QualificationClaim = {
     ...claims[0]!,
@@ -369,10 +443,7 @@ test("relationship and factor evaluation are independent shared-runtime tasks", 
     qualificationRelationshipTaskDefinition.taskId,
     "candidate.relationship_classification",
   );
-  assert.equal(
-    qualificationFactorTaskDefinition.taskId,
-    "candidate.factor_evaluation",
-  );
+  assert.equal(qualificationFactorTaskDefinition.taskId, "candidate.factor_evaluation");
   assert.equal(qualificationRelationshipTaskDefinition.maxCompletionTokens, 2_000);
   assert.equal(qualificationFactorTaskDefinition.maxCompletionTokens, 5_000);
   assert.equal(qualificationRelationshipTaskDefinition.allowsRepair, true);

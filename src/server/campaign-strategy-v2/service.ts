@@ -26,6 +26,7 @@ import {
   recordCampaignStrategyModelCalls,
 } from "./repository";
 import { campaignV2TaskContracts } from "@/lib/intelligence/campaign-strategy-v2/task-contracts";
+import { LEGACY_CAMPAIGN_VOLUME_PROJECTION } from "@/lib/research-budget-v2/contracts";
 import { intelligenceResultCacheKey } from "@/lib/intelligence/runtime/cache-key";
 import {
   claimCampaignStrategyStage,
@@ -138,7 +139,7 @@ export async function createInitialCampaignStrategyV2(input: {
       targetClient: input.confirmedBrief.targetClient,
       targetSegments: input.confirmedBrief.targetSegments,
     },
-    requestedVolume: input.confirmedBrief.desiredQualifiedCompanies,
+    requestedVolume: LEGACY_CAMPAIGN_VOLUME_PROJECTION,
   };
   const persisted = await createCampaignStrategyV2Draft({
     workspaceId: input.workspaceId,
@@ -320,7 +321,6 @@ export async function prepareCampaignStrategyV2Compilation(input: {
       },
       targetClient: hypothesis.targetClient,
       targetSegments: hypothesis.targetSegments,
-      desiredQualifiedCompanies: recovery.requestedVolume,
     },
     new Set([offering.stableKey]),
   );
@@ -358,7 +358,7 @@ export async function prepareCampaignStrategyV2Compilation(input: {
     ],
     constraints: confirmedBrief.targetClient.requiredCriteria,
     initialHypothesis: hypothesis,
-    requestedVolume: recovery.requestedVolume,
+    requestedVolume: LEGACY_CAMPAIGN_VOLUME_PROJECTION,
   };
   return { recovery, storedContext, campaignInput, deterministicBase };
 }

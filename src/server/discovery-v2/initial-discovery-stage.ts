@@ -11,6 +11,7 @@ import {
   type DiscoveryPlanV2,
   type ProviderDiscoveryRequest,
 } from "@/lib/discovery-v2";
+import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
 import type { StageResult } from "@/lib/workflow-v2";
 import type { Json } from "@/types/database.types";
 import {
@@ -27,6 +28,8 @@ import {
 } from "./coverage-repository";
 import {
   compileAndPersistDiscoveryPlan,
+  compileAndPersistDiscoveryPlanFromMarketResearch,
+  loadMarketResearchPlanForDiscovery,
   parsePersistedFrozenDiscoveryPlan,
 } from "./plan-discovery";
 import { reconstructSettledProviderExecution } from "./provider-coverage";
@@ -38,7 +41,7 @@ import { loadEnabledDiscoveryProviderIds } from "./stage-context";
 const maximumInitialProviderCalls = 12;
 const maximumInitialSegments = 6;
 const maximumResultsPerSegment = 25;
-const normalizationVersion = "web-search-normalization-v3.0-preclassified";
+const normalizationVersion = "web-search-normalization-v3.1-source-expansion";
 const initialPassNumber = 1;
 
 export async function executeInitialDiscoveryStage(input: {
@@ -68,43 +71,65 @@ export async function executeInitialDiscoveryStage(input: {
     ).filter((providerId) => registeredProviderIds.has(providerId));
     if (!enabledProviderIds.length)
       throw new Error("No implemented V2 discovery provider is enabled.");
-    const initialRequests = buildRequests({
+    const marketResearchPlan = await loadMarketResearchPlanForDiscovery({
       workspaceId: input.workspaceId,
       campaignId: context.campaignInternalId,
-      discoveryPlanId: logicalPlanId,
-      segments: context.strategy.discoverySegments,
-      maximumCalls: maximumInitialProviderCalls,
-      deadlineAt: discoveryDeadline(context),
-    });
-    const routes = await routeSemanticSegments({
-      registry,
-      requests: initialRequests,
-      enabledProviderIds,
-    });
-    const providerCapabilities = await Promise.all(
-      enabledProviderIds.map(async (providerId) =>
-        discoveryProviderCapabilitiesSchema.parse(
-          await registry.get(providerId).getCapabilities(),
-        ),
-      ),
-    );
-    const maximumPlanProviderCalls =
-      maximumInitialProviderCalls *
-      context.strategy.stoppingPolicy.maximumDiscoveryPasses;
-    const compiled = await compileAndPersistDiscoveryPlan({
-      id: logicalPlanId,
-      workspaceId: input.workspaceId,
       campaignRunId: input.campaignRunId,
-      strategy: context.strategy,
-      routes,
-      providerCapabilities,
-      versionNumber: 1,
-      maximumProviderCalls: maximumPlanProviderCalls,
-      ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
-      compiledAt: context.campaignRunCreatedAt,
+      runCreatedAt: context.campaignRunCreatedAt,
     });
-    plan = compiled.plan;
-    planRecord = compiled.record;
+    const maximumPlanProviderCalls =
+      DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET.maxProviderCalls;
+    if (marketResearchPlan) {
+      const compiled = await compileAndPersistDiscoveryPlanFromMarketResearch({
+        id: logicalPlanId,
+        workspaceId: input.workspaceId,
+        campaignRunId: input.campaignRunId,
+        strategy: context.strategy,
+        researchPlan: marketResearchPlan,
+        enabledProviderIds,
+        versionNumber: 1,
+        maximumProviderCalls: maximumPlanProviderCalls,
+        ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
+        compiledAt: context.campaignRunCreatedAt,
+      });
+      plan = compiled.plan;
+      planRecord = compiled.record;
+    } else {
+      const initialRequests = buildRequests({
+        workspaceId: input.workspaceId,
+        campaignId: context.campaignInternalId,
+        discoveryPlanId: logicalPlanId,
+        segments: context.strategy.discoverySegments,
+        maximumCalls: maximumInitialProviderCalls,
+        deadlineAt: discoveryDeadline(context),
+      });
+      const routes = await routeSemanticSegments({
+        registry,
+        requests: initialRequests,
+        enabledProviderIds,
+      });
+      const providerCapabilities = await Promise.all(
+        enabledProviderIds.map(async (providerId) =>
+          discoveryProviderCapabilitiesSchema.parse(
+            await registry.get(providerId).getCapabilities(),
+          ),
+        ),
+      );
+      const compiled = await compileAndPersistDiscoveryPlan({
+        id: logicalPlanId,
+        workspaceId: input.workspaceId,
+        campaignRunId: input.campaignRunId,
+        strategy: context.strategy,
+        routes,
+        providerCapabilities,
+        versionNumber: 1,
+        maximumProviderCalls: maximumPlanProviderCalls,
+        ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
+        compiledAt: context.campaignRunCreatedAt,
+      });
+      plan = compiled.plan;
+      planRecord = compiled.record;
+    }
   }
   assertFrozenPlanContext({
     plan,
@@ -197,7 +222,7 @@ export async function executeInitialDiscoveryStage(input: {
   const registeredProviderById = new Map(
     registry.list().map((provider) => [provider.id, provider] as const),
   );
-  const outcomes = await mapWithConcurrency(executionRequests, 2, async (request) => {
+  const outcomes = await mapWithConcurrency(executionRequests, 1, async (request) => {
     const segmentRun = segmentRunByKey.get(request.segment.id);
     if (!segmentRun)
       throw new Error(
@@ -306,15 +331,6 @@ export async function executeInitialDiscoveryStage(input: {
       ({ coverageFacts }) => coverageFacts.plausibleCandidateIdentityHints,
     ),
   ).size;
-  const requestedCandidateCount =
-    context.strategy.coverageTarget.minimumUniqueCandidates ??
-    Math.max(
-      1,
-      plan.segments.reduce(
-        (total, segment) => total + (segment.targetCandidateCount ?? 0),
-        0,
-      ),
-    );
   const fatalProviderFailure =
     outcomes.length > 0 &&
     providerRecordCount === 0 &&
@@ -322,8 +338,6 @@ export async function executeInitialDiscoveryStage(input: {
   const decision = decideDiscoveryContinuation({
     cells: coverageCells,
     gaps: discoveryGaps,
-    requestedCandidateCount,
-    currentPlausibleCandidateCount: uniquePlausibleCandidateHintCount,
     remainingCalls: remainingCallBudget,
     deadlineReached: deadlineReached(
       plan.budgetPolicy.deadlineAt,
@@ -468,10 +482,7 @@ function buildRequests(input: {
     },
     budget: {
       maxCalls: callsPerSegment,
-      maxResults: Math.min(
-        maximumResultsPerSegment,
-        segment.targetCandidateCount ?? maximumResultsPerSegment,
-      ),
+      maxResults: maximumResultsPerSegment,
       ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
     },
   }));
@@ -551,9 +562,6 @@ export function buildCoverageMetrics(input: {
         .filter(({ family }) => family === "local_language")
         .map(({ language }) => language),
     ),
-    ...(input.segment.targetCandidateCount
-      ? { targetUniqueCandidates: input.segment.targetCandidateCount }
-      : {}),
     providerFailureCount: facts.providerFailureCount,
     providerExhausted: facts.providerExhausted,
     updatedAt: input.updatedAt,

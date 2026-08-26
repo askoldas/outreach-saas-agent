@@ -4,7 +4,10 @@ import {
   aggregateWorkflowProgress,
   decideWorkflowControl,
   remainingCampaignStages,
+  researchCycleStageCheckpointKey,
   stageCheckpointKey,
+  stagesForResearchContinuation,
+  stagesForResearchCycle,
 } from "./controller.ts";
 
 test("resume skips every completed durable checkpoint", () => {
@@ -15,6 +18,41 @@ test("resume skips every completed durable checkpoint", () => {
     "rank_candidates",
   ]);
   assert.equal(stageCheckpointKey("discover"), "campaign_v2:discover:complete");
+});
+
+test("continuation action controls whether discovery is repeated", () => {
+  assert.deepEqual(stagesForResearchContinuation("research_existing_pool"), [
+    "research_candidates",
+    "qualify_candidates",
+    "rank_candidates",
+  ]);
+  assert.deepEqual(stagesForResearchContinuation("discover_more"), [
+    "discover",
+    "resolve_entities",
+    "research_candidates",
+    "qualify_candidates",
+    "rank_candidates",
+  ]);
+  assert.deepEqual(
+    stagesForResearchContinuation("expand_source_pages"),
+    stagesForResearchContinuation("discover_more"),
+  );
+});
+
+test("continuation cycles rerun only repeatable evidence stages with distinct checkpoints", () => {
+  assert.deepEqual(stagesForResearchCycle(2), [
+    "research_candidates",
+    "qualify_candidates",
+    "rank_candidates",
+  ]);
+  assert.equal(
+    researchCycleStageCheckpointKey("research_candidates", 2),
+    "campaign_v2:cycle:2:research_candidates:complete",
+  );
+  assert.equal(
+    researchCycleStageCheckpointKey("discover", 1),
+    stageCheckpointKey("discover"),
+  );
 });
 
 test("cancel dominates pause and completed cancellation is terminal", () => {

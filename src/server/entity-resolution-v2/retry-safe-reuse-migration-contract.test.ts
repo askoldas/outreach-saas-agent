@@ -7,40 +7,23 @@ const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8")
 const migration = source(
   "supabase/migrations/20260730001100_retry_safe_entity_resolution_reuse.sql",
 );
-const preparation = source(
-  "src/server/entity-resolution-v2/candidate-preparation.ts",
-);
+const preparation = source("src/server/entity-resolution-v2/candidate-preparation.ts");
 const stage = source("src/server/entity-resolution-v2/stage-service.ts");
 
 test("entity resolution reuses only one exact compatible organization with lineage", () => {
-  assert.match(
-    migration,
-    /company\.normalized_name = candidate_normalized_name/,
-  );
+  assert.match(migration, /company\.normalized_name = candidate_normalized_name/);
   assert.match(
     migration,
     /upper\(coalesce\(company\.country, ''\)\) = candidate_country/,
   );
-  assert.match(
-    migration,
-    /company\.organization_type = candidate_type/,
-  );
-  assert.match(
-    migration,
-    /historical_link\.link_status = 'active'/,
-  );
-  assert.match(
-    migration,
-    /if cardinality\(compatible_match_ids\) <> 1 then\s+continue;/,
-  );
+  assert.match(migration, /company\.organization_type = candidate_type/);
+  assert.match(migration, /historical_link\.link_status = 'active'/);
+  assert.match(migration, /if cardinality\(compatible_match_ids\) <> 1 then\s+continue;/);
 });
 
 test("conflicting domains and active links remain reviewable instead of auto-linked", () => {
   assert.match(migration, /conflicting_active_link\.organization_id <> company\.id/);
-  assert.match(
-    migration,
-    /conflicting_domain\.normalized_domain <> candidate_domain/,
-  );
+  assert.match(migration, /conflicting_domain\.normalized_domain <> candidate_domain/);
   assert.match(
     migration,
     /conflicting_domain\.verification_status in \(\s*'source_confirmed',\s*'verified'\s*\)/,
@@ -63,8 +46,8 @@ test("retry reuse remains service-role only and delegates to the frozen resolver
   );
 });
 
-test("new rules do not replay stale V2.2 decisions and zero-result runs fail visibly", () => {
-  assert.match(preparation, /entity-resolution-v2\.4/);
+test("new rules do not replay stale decisions and zero-result runs fail visibly", () => {
+  assert.match(preparation, /entity-resolution-v2\.6/);
   assert.match(
     stage,
     /summary\.candidateCount > 0 && summary\.campaignCandidateCount === 0/,

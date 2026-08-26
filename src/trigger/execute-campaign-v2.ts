@@ -1,10 +1,10 @@
 import { task } from "@trigger.dev/sdk";
 import {
   aggregateWorkflowProgress,
-  campaignV2Stages,
-  remainingCampaignStages,
-  stageCheckpointKey,
   type CampaignV2Stage,
+  stagesForResearchCycle,
+  stagesForResearchContinuation,
+  researchCycleStageCheckpointKey,
 } from "@/lib/workflow-v2";
 import {
   ensureCampaignWorkflow,
@@ -12,13 +12,24 @@ import {
   loadCompletedCheckpointKeys,
   loadWorkflowCandidateProgress,
   updateCampaignWorkflow,
+  ensureCampaignResearchCycle,
+  finalizeCampaignResearchCycle,
+  loadAdaptiveResearchSnapshot,
 } from "@/server/workflow-v2/repository";
+import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
+import { decideAdaptiveResearchNextAction } from "@/lib/adaptive-research-v2/controller";
 import type { Json } from "@/types/database.types";
 import { runCampaignV2StageTask } from "./run-campaign-v2-stage";
 
 export type ExecuteCampaignV2Payload = {
   campaignRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
+  requestedAction?:
+    | "research_existing_pool"
+    | "discover_more"
+    | "expand_source_pages"
+    | "stop_budget";
 };
 
 export const executeCampaignV2Task = task({
@@ -50,6 +61,13 @@ export const executeCampaignV2Task = task({
       workspaceId: payload.workspaceId,
     });
     const workflowRunId = String(workflow.id);
+    const cycleNumber = payload.cycleNumber ?? 1;
+    const researchCycle = await ensureCampaignResearchCycle({
+      campaignRunId: payload.campaignRunId,
+      workspaceId: payload.workspaceId,
+      cycleNumber,
+      budget: DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+    });
     const initialControl = await consumeWorkflowControl({
       workflowRunId,
       workspaceId: payload.workspaceId,
@@ -68,10 +86,13 @@ export const executeCampaignV2Task = task({
       workflowRunId,
       workspaceId: payload.workspaceId,
     });
-    const completedStages = campaignV2Stages.filter((stage) =>
-      checkpointKeys.includes(stageCheckpointKey(stage)),
+    const cycleStages = payload.requestedAction
+      ? stagesForResearchContinuation(payload.requestedAction)
+      : stagesForResearchCycle(cycleNumber);
+    const completedStages = cycleStages.filter((stage) =>
+      checkpointKeys.includes(researchCycleStageCheckpointKey(stage, cycleNumber)),
     );
-    const stages = remainingCampaignStages(completedStages);
+    const stages = cycleStages.filter((stage) => !completedStages.includes(stage));
 
     for (const stage of stages) {
       const beforeStage = await consumeWorkflowControl({
@@ -88,9 +109,9 @@ export const executeCampaignV2Task = task({
         workspaceId: payload.workspaceId,
       });
       const child = await runCampaignV2StageTask.triggerAndWait(
-        { ...payload, stage, workflowRunId },
+        { ...payload, cycleNumber, stage, workflowRunId },
         {
-          idempotencyKey: `campaign-v2:${workflowRunId}:${stage}`,
+          idempotencyKey: `campaign-v2:${workflowRunId}:cycle-${cycleNumber}:${stage}`,
           tags: [
             `workspace:${payload.workspaceId}`,
             `campaign_run:${payload.campaignRunId}`,
@@ -130,14 +151,37 @@ export const executeCampaignV2Task = task({
       campaignRunId: payload.campaignRunId,
       completedStages,
     } satisfies Json;
+    const adaptiveSnapshot = await loadAdaptiveResearchSnapshot({
+      ...payload,
+      cycleId: String(researchCycle.id),
+      startedAt: String(researchCycle.startedAt),
+    });
+    const adaptiveDecision = decideAdaptiveResearchNextAction({
+      budget: DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+      ...adaptiveSnapshot,
+      discoverySaturated:
+        adaptiveSnapshot.remainingPlausibleCandidates === 0 &&
+        adaptiveSnapshot.unexpandedSourcePages === 0,
+    });
+    await finalizeCampaignResearchCycle({
+      cycleId: String(researchCycle.id),
+      workspaceId: payload.workspaceId,
+      usage: adaptiveSnapshot.usage,
+      decision: adaptiveDecision,
+    });
     await updateCampaignWorkflow({
-      outputReference,
+      outputReference: { ...outputReference, adaptiveDecision } as unknown as Json,
       progressSummary: await progress(payload, completedStages),
       status: "ready_for_review",
       workflowRunId,
       workspaceId: payload.workspaceId,
     });
-    return { ...outputReference, status: "ready_for_review", workflowRunId };
+    return {
+      ...outputReference,
+      adaptiveDecision,
+      status: "ready_for_review",
+      workflowRunId,
+    };
   },
 });
 

@@ -13,12 +13,10 @@ import styles from "@/features/shared/Feature.module.css";
 
 export function CampaignControls({
   campaignId,
-  desiredLeadCount,
   initialLeadCount,
   status,
 }: Readonly<{
   campaignId: string;
-  desiredLeadCount: number;
   initialLeadCount: number;
   status: CampaignStatus;
 }>) {
@@ -189,8 +187,8 @@ export function CampaignControls({
           onClick={discoverLeads}
         >
           {currentStatus === "planning"
-            ? "Start campaign and discover leads"
-            : "Discover more leads"}
+            ? "Start campaign research"
+            : "Start another research scan"}
         </Button>
         <Button
           disabled={isPending || currentStatus !== "running"}
@@ -246,19 +244,15 @@ export function CampaignControls({
           </span>
           {progress?.currentIteration ? (
             <span className={styles.secondaryText}>
-              Discovery iteration {progress.currentIteration} / 5
+              Discovery cycle {progress.currentIteration}
             </span>
           ) : null}
           <span className={styles.secondaryText}>
-            Qualified-company target: {progress?.companiesQualified ?? initialLeadCount} /{" "}
-            {desiredLeadCount}
-          </span>
-          <span className={styles.secondaryText}>
-            {progress?.candidatesDiscovered ?? 0} candidates discovered ·{" "}
-            {progress?.candidatesUnique ?? 0} unique ·{" "}
-            {progress?.candidatesClassified ?? 0} classified ·{" "}
-            {progress?.companiesEvaluated ?? 0} evaluated ·{" "}
-            {progress?.companiesQualified ?? 0} qualified
+            {progress?.candidatesDiscovered ?? 0} source records ·{" "}
+            {progress?.candidatesUnique ?? 0} unique organizations ·{" "}
+            {progress?.candidatesClassified ?? 0} plausible candidates ·{" "}
+            {progress?.companiesEvaluated ?? 0} deeply researched ·{" "}
+            {progress?.companiesQualified ?? initialLeadCount} review-ready
           </span>
         </div>
       ) : null}

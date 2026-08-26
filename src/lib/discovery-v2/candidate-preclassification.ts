@@ -6,7 +6,7 @@ import type {
 import type { WebResultPageType } from "./providers/web-normalization.ts";
 
 export const CANDIDATE_PRECLASSIFIER_VERSION =
-  "commercial-candidate-preclassification/v1.0";
+  "commercial-candidate-preclassification/v1.1";
 
 type Input = {
   pageType: WebResultPageType;
@@ -109,16 +109,6 @@ export function preclassifyWebResult(input: Input): CandidatePreclassification {
       confidence: 0.99,
     };
   }
-  if (geographyPlausible === false) {
-    return {
-      ...common,
-      disposition: "reject" as const,
-      probableOrganizationType: "operating_company" as const,
-      objectiveCompatibility: "unknown" as const,
-      reasonCodes: ["reliable_geography_mismatch"],
-      confidence: 0.92,
-    };
-  }
   const relationshipCompatible =
     probableRelationships.length === 0
       ? "unknown"
@@ -128,11 +118,11 @@ export function preclassifyWebResult(input: Input): CandidatePreclassification {
   if (relationshipCompatible === "incompatible") {
     return {
       ...common,
-      disposition: "reject" as const,
+      disposition: "needs_review" as const,
       probableOrganizationType: "operating_company" as const,
       objectiveCompatibility: relationshipCompatible,
-      reasonCodes: ["explicit_incompatible_commercial_role"],
-      confidence: 0.86,
+      reasonCodes: ["commercial_role_requires_verification"],
+      confidence: 0.62,
     };
   }
   return {
@@ -196,9 +186,13 @@ function reliableGeographyPlausibility(url: string, targetCountries: string[]) {
     const finalLabel = new URL(url).hostname.toLowerCase().split(".").at(-1);
     const observedCountry = finalLabel ? countryTlds[finalLabel] : undefined;
     if (!observedCountry) return null;
-    return targetCountries
+    const matchesTarget = targetCountries
       .map((country) => country.toUpperCase())
       .includes(observedCountry);
+    // A matching ccTLD is a useful positive hint. A mismatching ccTLD is not
+    // reliable negative evidence because organizations can operate and procure
+    // across borders or use a domain registered in another country.
+    return matchesTarget ? true : null;
   } catch {
     return null;
   }

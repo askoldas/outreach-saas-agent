@@ -11,6 +11,17 @@ import { resolveCandidateDisplayIdentity } from "./display-identity";
 
 type RecordValue = Record<string, unknown>;
 
+type UntypedQuery = {
+  eq(column: string, value: string | boolean): UntypedQuery;
+  in(
+    column: string,
+    values: string[],
+  ): Promise<{
+    data: RecordValue[] | null;
+    error: { message: string } | null;
+  }>;
+};
+
 export async function getCampaignV2Results(
   workspaceId: string,
   campaignExternalId: string,
@@ -50,12 +61,20 @@ export async function getCampaignV2Results(
   if (strategyError)
     throw new Error(`Could not load V2 Campaign Strategy: ${strategyError.message}`);
   const labels = resultLabels(strategyVersion?.strategy);
+  const { funnel, researchCycleId, researchOutcome } = await loadResearchFunnel({
+    campaignId: campaign.id,
+    campaignRunId: run.id,
+    strategyVersionId: run.strategy_version_id,
+    supabase,
+    workspaceId,
+  });
 
   const { data: snapshot, error: snapshotError } = await supabase
     .from("candidate_rank_snapshots")
     .select("id,comparative_batch_ids_json")
     .eq("workspace_id", workspaceId)
     .eq("campaign_run_id", run.id)
+    .eq("research_cycle_id", researchCycleId ?? "00000000-0000-0000-0000-000000000000")
     .maybeSingle();
   if (snapshotError)
     throw new Error(`Could not load V2 ranking: ${snapshotError.message}`);
@@ -131,6 +150,8 @@ export async function getCampaignV2Results(
   const evaluationIds = entries.map((entry) => entry.candidate_evaluation_version_id);
   if (!candidateIds.length) {
     return {
+      funnel,
+      researchOutcome,
       appliedMemorySnapshotId: discoveryPlan?.memory_snapshot_id ?? null,
       anomalies: [],
       candidates: [],
@@ -214,6 +235,20 @@ export async function getCampaignV2Results(
   }
 
   const candidateRows = candidatesResult.data ?? [];
+  const artifactClient = supabase as unknown as {
+    from(table: string): {
+      select(columns: string): UntypedQuery;
+    };
+  };
+  const relationshipAssessmentIds = (evaluationsResult.data ?? []).flatMap(
+    (evaluation) => {
+      const id = objectString(
+        evaluation,
+        "commercial_relationship_assessment_version_id",
+      );
+      return id ? [id] : [];
+    },
+  );
   const organizationIds = [
     ...new Set(
       candidateRows.flatMap((item) => [
@@ -226,35 +261,50 @@ export async function getCampaignV2Results(
     (item) => item.candidate_intelligence_version_id,
   );
   const batchIds = stringArray(snapshot?.comparative_batch_ids_json ?? []);
-  const [organizationsResult, domainsResult, intelligenceResult, anomalyResult] =
-    await Promise.all([
-      supabase
-        .from("companies")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .in("id", organizationIds),
-      supabase
-        .from("company_domains")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .in("company_id", organizationIds),
-      supabase
-        .from("candidate_intelligence_versions")
-        .select("*")
-        .eq("workspace_id", workspaceId)
-        .in("id", intelligenceIds),
-      batchIds.length
-        ? supabase
-            .from("comparative_anomalies")
-            .select("*")
-            .eq("workspace_id", workspaceId)
-            .in("comparative_batch_id", batchIds)
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+  const [
+    organizationsResult,
+    domainsResult,
+    intelligenceResult,
+    relationshipArtifactsResult,
+    anomalyResult,
+  ] = await Promise.all([
+    supabase
+      .from("companies")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .in("id", organizationIds),
+    supabase
+      .from("company_domains")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .in("company_id", organizationIds),
+    supabase
+      .from("candidate_intelligence_versions")
+      .select("*")
+      .eq("workspace_id", workspaceId)
+      .in("id", intelligenceIds),
+    relationshipAssessmentIds.length
+      ? artifactClient
+          .from("commercial_relationship_assessment_versions_v2")
+          .select(
+            "id,company_intelligence_version_id,campaign_target_model_version_id,assessment_json",
+          )
+          .eq("workspace_id", workspaceId)
+          .in("id", relationshipAssessmentIds)
+      : Promise.resolve({ data: [], error: null }),
+    batchIds.length
+      ? supabase
+          .from("comparative_anomalies")
+          .select("*")
+          .eq("workspace_id", workspaceId)
+          .in("comparative_batch_id", batchIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
   for (const result of [
     organizationsResult,
     domainsResult,
     intelligenceResult,
+    relationshipArtifactsResult,
     anomalyResult,
   ]) {
     if (result.error)
@@ -311,37 +361,22 @@ export async function getCampaignV2Results(
 
   // These WP-19 tables exist after migration 29. Keeping this read optional makes
   // an in-flight deployment display results while the migration is being applied.
-  type ReviewQuery = {
-    eq(column: string, value: string | boolean): ReviewQuery;
-    in(
-      column: string,
-      values: string[],
-    ): Promise<{
-      data: RecordValue[] | null;
-      error: { message: string } | null;
-    }>;
-  };
-  const reviewClient = supabase as unknown as {
-    from(table: string): {
-      select(columns: string): ReviewQuery;
-    };
-  };
   const [reviewResult, correctionsResult] = await Promise.all([
-    reviewClient
+    artifactClient
       .from("candidate_review_decisions_v2")
       .select("*")
       .eq("workspace_id", workspaceId)
       .eq("campaign_run_id", run.id)
       .eq("is_current", true)
       .in("campaign_candidate_id", candidateIds),
-    reviewClient
+    artifactClient
       .from("candidate_corrections_v2")
       .select("*")
       .eq("workspace_id", workspaceId)
       .eq("campaign_run_id", run.id)
       .in("campaign_candidate_id", candidateIds),
   ]);
-  const preclassificationResult = await reviewClient
+  const preclassificationResult = await artifactClient
     .from("provider_candidate_preclassifications_v2")
     .select("*")
     .eq("workspace_id", workspaceId)
@@ -357,6 +392,12 @@ export async function getCampaignV2Results(
   const evaluationById = byId(evaluationsResult.data);
   const organizationById = byId(organizationsResult.data);
   const intelligenceById = byId(intelligenceResult.data);
+  const relationshipArtifactById = new Map(
+    (relationshipArtifactsResult.data ?? []).flatMap((item) => {
+      const id = objectString(item, "id");
+      return id ? [[id, item] as const] : [];
+    }),
+  );
   const normalizedCandidateById = byId(normalizedCandidatesResult.data);
   const sourceRecordById = byId(sourceRecordsResult.data);
   const queryByFingerprint = new Map(
@@ -427,6 +468,13 @@ export async function getCampaignV2Results(
     const intelligence = intelligenceById.get(
       evaluation.candidate_intelligence_version_id,
     );
+    const relationshipAssessmentVersionId = objectString(
+      evaluation,
+      "commercial_relationship_assessment_version_id",
+    );
+    const relationshipArtifact = relationshipAssessmentVersionId
+      ? relationshipArtifactById.get(relationshipAssessmentVersionId)
+      : undefined;
     const scores = scoresByEvaluation.get(evaluation.id) ?? [];
     const factorRows = factorsByEvaluation.get(evaluation.id) ?? [];
     const primaryDomain =
@@ -460,6 +508,37 @@ export async function getCampaignV2Results(
       ? preclassificationBySource.get(sourceRecord.id)
       : undefined;
     const review = reviewByCandidate.get(candidate.id);
+    const relationshipCorrectionProposals = (
+      correctionsByCandidate.get(candidate.id) ?? []
+    )
+      .flatMap((correction) => {
+        if (correction.correction_type !== "relationship") return [];
+        const dimension = objectString(correction, "relationship_dimension");
+        const sourceRelationshipAssessmentVersionId = objectString(
+          correction,
+          "source_relationship_assessment_version_id",
+        );
+        const proposedValue = objectString(correction.proposed_value_json, "value");
+        if (!dimension || !sourceRelationshipAssessmentVersionId || !proposedValue) {
+          return [];
+        }
+        return [
+          {
+            createdAt: String(correction.created_at),
+            dimension,
+            id: String(correction.id),
+            proposedValue,
+            reason: String(correction.reason),
+            sourceRelationshipAssessmentVersionId,
+            status: String(correction.status),
+          },
+        ];
+      })
+      .sort(
+        (left, right) =>
+          left.createdAt.localeCompare(right.createdAt) ||
+          left.id.localeCompare(right.id),
+      );
     const lane = normalizeLane(entry.lane);
     return [
       {
@@ -470,6 +549,18 @@ export async function getCampaignV2Results(
             ),
           ),
         ],
+        artifactVersions: {
+          campaignTargetModelVersionId: objectString(
+            relationshipArtifact,
+            "campaign_target_model_version_id",
+          ),
+          candidateIntelligenceVersionId: evaluation.candidate_intelligence_version_id,
+          commercialRelationshipAssessmentVersionId: relationshipAssessmentVersionId,
+          companyIntelligenceVersionId:
+            objectString(evaluation, "company_intelligence_version_id") ??
+            objectString(relationshipArtifact, "company_intelligence_version_id"),
+          qualificationEvaluationVersionId: evaluation.id,
+        },
         candidateId: candidate.id,
         confidence: confidence?.overall_confidence ?? null,
         correctionCount: (correctionsByCandidate.get(candidate.id) ?? []).length,
@@ -520,6 +611,10 @@ export async function getCampaignV2Results(
         rank: entry.rank_overall,
         relationship: displayEnum(relationship?.primary_relationship ?? "unknown"),
         relationshipConfidence: relationship?.confidence ?? null,
+        relationshipCorrectionProposals,
+        relationshipDimensions: relationshipDimensions(
+          relationshipArtifact?.assessment_json,
+        ),
         reviewDecision: review ? String(review.decision) : null,
         reviewReason: review ? String(review.reason ?? "") : null,
         sourceUrl: displayIdentity.sourceUrl,
@@ -535,6 +630,8 @@ export async function getCampaignV2Results(
   for (const candidate of candidates) laneCounts[candidate.lane] += 1;
 
   return {
+    funnel,
+    researchOutcome,
     appliedMemorySnapshotId: discoveryPlan?.memory_snapshot_id ?? null,
     anomalies: (anomalyResult.data ?? []).map((item) => ({
       blocking: item.blocks_finalization,
@@ -555,6 +652,120 @@ export async function getCampaignV2Results(
     laneCounts,
     runId: run.id,
     runStatus: run.status,
+  };
+}
+
+async function loadResearchFunnel(input: {
+  campaignId: string;
+  campaignRunId: string;
+  strategyVersionId: string;
+  supabase: Awaited<ReturnType<typeof createAuthenticatedDatabaseClient>>["supabase"];
+  workspaceId: string;
+}) {
+  const { supabase } = input;
+  const cycle = await supabase
+    .from("campaign_research_cycles_v2")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .order("cycle_number", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (cycle.error)
+    throw new Error(`Could not load research cycle: ${cycle.error.message}`);
+  const discoveryRun = await supabase
+    .from("discovery_runs_v2")
+    .select("id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (discoveryRun.error)
+    throw new Error(`Could not load funnel Discovery run: ${discoveryRun.error.message}`);
+  const segmentRuns = discoveryRun.data
+    ? await supabase
+        .from("discovery_segment_runs_v2")
+        .select("id")
+        .eq("workspace_id", input.workspaceId)
+        .eq("discovery_run_id", discoveryRun.data.id)
+    : { data: [], error: null };
+  if (segmentRuns.error)
+    throw new Error(`Could not load funnel segment runs: ${segmentRuns.error.message}`);
+  const segmentRunIds = (segmentRuns.data ?? []).map(({ id }) => id);
+  const [executions, references, candidates, research] = await Promise.all([
+    supabase
+      .from("discovery_provider_executions")
+      .select("id")
+      .eq("workspace_id", input.workspaceId)
+      .in(
+        "discovery_segment_run_id",
+        segmentRunIds.length ? segmentRunIds : ["00000000-0000-0000-0000-000000000000"],
+      ),
+    supabase
+      .from("discovery_source_organization_references_v2")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", input.workspaceId)
+      .eq("campaign_id", input.campaignId),
+    supabase
+      .from("campaign_candidates")
+      .select("id", { count: "exact", head: true })
+      .eq("workspace_id", input.workspaceId)
+      .eq("campaign_id", input.campaignId)
+      .eq("campaign_strategy_version_id", input.strategyVersionId),
+    supabase
+      .from("candidate_research_batches_v2")
+      .select("completed_count")
+      .eq("workspace_id", input.workspaceId)
+      .eq("campaign_run_id", input.campaignRunId)
+      .eq("research_cycle_id", cycle.data?.id ?? "00000000-0000-0000-0000-000000000000")
+      .maybeSingle(),
+  ]);
+  for (const result of [executions, references, candidates, research]) {
+    if (result.error)
+      throw new Error(`Could not load research funnel: ${result.error.message}`);
+  }
+  const executionIds = (executions.data ?? []).map(({ id }) => id);
+  const records = executionIds.length
+    ? await supabase
+        .from("provider_source_records")
+        .select("id", { count: "exact", head: true })
+        .eq("workspace_id", input.workspaceId)
+        .in("provider_execution_id", executionIds)
+    : { count: 0, error: null };
+  if (records.error)
+    throw new Error(`Could not count source records: ${records.error.message}`);
+  const decision = cycle.data
+    ? await supabase
+        .from("campaign_research_cycle_decisions_v2")
+        .select("action,rationale,decision_json")
+        .eq("workspace_id", input.workspaceId)
+        .eq("research_cycle_id", cycle.data.id)
+        .order("decision_number", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+    : { data: null, error: null };
+  if (decision.error)
+    throw new Error(`Could not load research outcome: ${decision.error.message}`);
+  const decisionJson = (decision.data?.decision_json ?? {}) as Record<string, Json>;
+  const uniqueOrganizations = candidates.count ?? 0;
+  return {
+    funnel: {
+      sourceRecords: records.count ?? 0,
+      organizationReferences: references.count ?? 0,
+      uniqueOrganizations,
+      plausibleCandidates: uniqueOrganizations,
+      deeplyResearched: research.data?.completed_count ?? 0,
+    },
+    researchCycleId: cycle.data?.id ?? null,
+    researchOutcome: decision.data
+      ? {
+          action: decision.data.action,
+          rationale: decision.data.rationale,
+          additionalOpportunityRemains:
+            decisionJson.additionalOpportunityRemains === true,
+        }
+      : null,
   };
 }
 
@@ -711,4 +922,45 @@ function objectString(value: Json | unknown, key: string) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const candidate = (value as Record<string, unknown>)[key];
   return typeof candidate === "string" && candidate.trim() ? candidate.trim() : null;
+}
+
+function relationshipDimensions(value: unknown) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return [];
+  const relationships = (value as RecordValue).relationships;
+  if (
+    !relationships ||
+    typeof relationships !== "object" ||
+    Array.isArray(relationships)
+  ) {
+    return [];
+  }
+  return Object.entries(relationships as RecordValue)
+    .flatMap(([type, dimension]) => {
+      if (!dimension || typeof dimension !== "object" || Array.isArray(dimension)) {
+        return [];
+      }
+      const record = dimension as RecordValue;
+      const confidence = record.confidence;
+      const rationale = record.rationale;
+      const state = record.state;
+      if (
+        typeof confidence !== "number" ||
+        typeof rationale !== "string" ||
+        typeof state !== "string"
+      ) {
+        return [];
+      }
+      return [
+        {
+          confidence,
+          counterEvidenceIds: stringArray(record.counterEvidenceIds),
+          evidenceIds: stringArray(record.evidenceIds),
+          rationale,
+          state,
+          type,
+          unresolvedQuestions: stringArray(record.unresolvedQuestions),
+        },
+      ];
+    })
+    .sort((left, right) => left.type.localeCompare(right.type));
 }

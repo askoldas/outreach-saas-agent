@@ -100,6 +100,7 @@ const inputSnapshotSchema = z.object({
 export async function executeRankingStage(input: {
   campaignRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 }): Promise<StageResult> {
   const context = await loadRankingContext(input);
   const candidates = context.candidates.map((candidate) =>

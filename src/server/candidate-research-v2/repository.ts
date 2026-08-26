@@ -127,6 +127,7 @@ const researchPlanSchema = z
     campaignCandidateId: z.string().min(1).optional(),
     strategyVersionId: z.string().min(1).optional(),
     researchType: z.enum(["reusable", "campaign_specific"]),
+    researchBlueprintVersionIds: z.array(z.string().min(1)).optional(),
     questions: z.array(researchQuestionSchema).max(12),
     preferredPages: z.array(websitePageKindSchema),
     pageBudget: z.number().int().positive(),
@@ -151,6 +152,22 @@ const sourcePlanSchema = z
     maximumFirstPartyFetches: z.number().int().nonnegative(),
     deferredQuestionKeys: z.array(z.string().min(1)),
     deferredReusableQuestionKeys: z.array(z.string().min(1)),
+    prioritization: z
+      .object({
+        version: z.literal("candidate-priority-v1"),
+        score: z.number().min(0).max(100),
+        signals: z.array(
+          z
+            .object({
+              key: z.string().min(1),
+              contribution: z.number(),
+              explanation: z.string().min(1),
+            })
+            .strict(),
+        ),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -272,15 +289,25 @@ export async function loadCampaignResearchContext(input: {
 export async function findCandidateResearchBatch(input: {
   campaignRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 }) {
   const supabase = createServiceRoleClient();
-  const { data: batch, error: batchError } = await supabase
-    .from("candidate_research_batches_v2")
-    .select(
-      "id,campaign_run_id,contract_version,input_hash,status,candidate_count",
-    )
+  const { data: cycle, error: cycleError } = await supabase
+    .from("campaign_research_cycles_v2")
+    .select("id")
     .eq("workspace_id", input.workspaceId)
     .eq("campaign_run_id", input.campaignRunId)
+    .eq("cycle_number", input.cycleNumber ?? 1)
+    .maybeSingle();
+  if (cycleError)
+    throw new Error(`Could not inspect the research cycle: ${cycleError.message}`);
+  if (!cycle) return null;
+  const { data: batch, error: batchError } = await supabase
+    .from("candidate_research_batches_v2")
+    .select("id,campaign_run_id,contract_version,input_hash,status,candidate_count")
+    .eq("workspace_id", input.workspaceId)
+    .eq("campaign_run_id", input.campaignRunId)
+    .eq("research_cycle_id", cycle.id)
     .maybeSingle();
   if (batchError) {
     throw new Error(
@@ -291,7 +318,7 @@ export async function findCandidateResearchBatch(input: {
 
   const { data: members, error: memberError } = await supabase
     .from("candidate_research_batch_members_v2")
-    .select("id,status,attempt_count")
+    .select("id,status,attempt_count,research_plan_id")
     .eq("workspace_id", input.workspaceId)
     .eq("candidate_research_batch_id", batch.id)
     .order("id");
@@ -300,6 +327,26 @@ export async function findCandidateResearchBatch(input: {
       `Could not inspect frozen Candidate research members: ${memberError.message}`,
     );
   }
+  const planIds = members.map(({ research_plan_id: planId }) => planId);
+  const { data: plans, error: planError } = planIds.length
+    ? await supabase
+        .from("candidate_research_plans")
+        .select("id,priority")
+        .eq("workspace_id", input.workspaceId)
+        .in("id", planIds)
+    : { data: [], error: null };
+  if (planError) {
+    throw new Error(
+      `Could not inspect Candidate research priorities: ${planError.message}`,
+    );
+  }
+  const priorityByPlanId = new Map(plans.map(({ id, priority }) => [id, priority]));
+  const orderedMembers = [...members].sort(
+    (left, right) =>
+      (priorityByPlanId.get(right.research_plan_id) ?? 0) -
+        (priorityByPlanId.get(left.research_plan_id) ?? 0) ||
+      left.id.localeCompare(right.id),
+  );
 
   return researchBatchSchema.parse({
     schemaVersion: 2,
@@ -309,13 +356,12 @@ export async function findCandidateResearchBatch(input: {
     inputHash: batch.input_hash,
     status: batch.status,
     candidateCount: batch.candidate_count,
-    memberIds: members.map(({ id }) => id),
-    pendingMemberIds: members
+    memberIds: orderedMembers.map(({ id }) => id),
+    pendingMemberIds: orderedMembers
       .filter(({ status }) => ["queued", "running"].includes(status))
       .map(({ id }) => id),
-    reusedMemberCount: members.filter(
-      ({ status, attempt_count: attempts }) =>
-        status === "completed" && attempts === 0,
+    reusedMemberCount: orderedMembers.filter(
+      ({ status, attempt_count: attempts }) => status === "completed" && attempts === 0,
     ).length,
   });
 }

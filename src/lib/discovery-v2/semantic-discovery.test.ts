@@ -113,7 +113,7 @@ test("gap analysis chooses concrete bounded actions instead of generic iteration
   );
 });
 
-test("continuation stops on product goals and otherwise requires an actionable gap", () => {
+test("continuation stops on bounded research conditions and requires an actionable gap", () => {
   const raw = metrics({
     providerCalls: 2,
     rawRecords: 4,
@@ -134,8 +134,6 @@ test("continuation stops on product goals and otherwise requires an actionable g
   const base = {
     cells: [cell],
     gaps,
-    requestedCandidateCount: 25,
-    currentPlausibleCandidateCount: 2,
     remainingCalls: 5,
     deadlineReached: false,
     userState: "running" as const,
@@ -166,13 +164,6 @@ test("continuation stops on product goals and otherwise requires an actionable g
         maxCalls: 2,
       },
     ],
-  );
-  assert.equal(
-    decideDiscoveryContinuation({
-      ...base,
-      currentPlausibleCandidateCount: 25,
-    }).reasonCode,
-    "target_reached",
   );
   assert.equal(
     decideDiscoveryContinuation({

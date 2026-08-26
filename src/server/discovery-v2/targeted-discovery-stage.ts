@@ -43,7 +43,7 @@ import { executeAndPersistDiscoveryProvider } from "./provider-service";
 import { prepareSemanticDiscoveryContext } from "./semantic-context";
 
 const maximumResultsPerTargetedSegment = 25;
-const normalizationVersion = "web-search-normalization-v3.0-preclassified";
+const normalizationVersion = "web-search-normalization-v3.1-source-expansion";
 
 export async function executeSemanticDiscoveryStage(input: {
   campaignRunId: string;
@@ -224,7 +224,7 @@ async function executeTargetedPass(input: {
     ),
   );
 
-  const outcomes = await mapWithConcurrency(batches, 2, async (batch) => {
+  const outcomes = await mapWithConcurrency(batches, 1, async (batch) => {
     const durablePass = segmentRunById.get(batch.persistedSegment.id);
     if (!durablePass) {
       throw new Error(
@@ -399,15 +399,6 @@ async function executeTargetedPass(input: {
     passProviderCalls === 0 || marginalUniqueYieldPerCall < 0.5
       ? priorLowYieldPasses + 1
       : 0;
-  const requestedCandidateCount =
-    input.context.strategy.coverageTarget.minimumUniqueCandidates ??
-    Math.max(
-      1,
-      input.plan.segments.reduce(
-        (total, segment) => total + (segment.targetCandidateCount ?? 0),
-        0,
-      ),
-    );
   const fatalProviderFailure =
     outcomes.length > 0 &&
     outcomes.every(
@@ -418,8 +409,6 @@ async function executeTargetedPass(input: {
   const decision = decideDiscoveryContinuation({
     cells: coverageResults.map(({ coverage }) => coverage),
     gaps,
-    requestedCandidateCount,
-    currentPlausibleCandidateCount: plausibleCandidateHints.size,
     remainingCalls,
     deadlineReached: deadlineReached(
       input.plan.budgetPolicy.deadlineAt,
@@ -491,10 +480,7 @@ function targetedRequest(input: {
     },
     budget: {
       maxCalls,
-      maxResults: Math.min(
-        maximumResultsPerTargetedSegment,
-        input.segment.targetCandidateCount ?? maximumResultsPerTargetedSegment,
-      ),
+      maxResults: maximumResultsPerTargetedSegment,
       ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
     },
   });

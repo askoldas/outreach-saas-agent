@@ -28,6 +28,18 @@ the V2 strategy and provider-neutral discovery plan.
 Discovery stores raw provider provenance and normalized candidate hints without
 assigning final fit. Entity resolution creates stable organization identities.
 Candidate research collects question-driven evidence and explicit unknowns.
+Before Candidate Research, a deterministic, versioned viability score orders the resolved
+pool using cheap identity, source-diversity, archetype-fit, reusable-intelligence, and
+conflict signals. The score and its contributions are frozen in the research source plan;
+it prioritizes expensive work but never acts as final qualification. Research executes in
+bounded waves of 12 against one unchanged Candidate Research quality contract. Wave size
+is an internal concurrency control, not a user-visible target or quality tier.
+Useful association, exhibitor, registry-style, and industry-directory pages remain
+discovery sources rather than target companies. Their referenced organizations are
+expanded in bounded, resumable chunks and enter the same normalized-candidate and Entity
+Resolution path with immutable source/query/extraction provenance. Explicit company links
+may provide domain hints; name-only references remain unresolved rather than borrowing the
+directory domain.
 For multi-country markets, discovery runs country-specific and local-language queries.
 Provider country targeting improves retrieval but is never accepted as geographic
 evidence. Research resolves a frozen target-geography question from first-party,

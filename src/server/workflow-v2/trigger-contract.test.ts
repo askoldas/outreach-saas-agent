@@ -14,9 +14,9 @@ const dispatch = source("src/server/trigger/dispatch.ts");
 test("V2 parent resumes from checkpoints and waits for durable child stages", () => {
   assert.match(parent, /id: "execute-campaign-v2"/);
   assert.match(parent, /loadCompletedCheckpointKeys/);
-  assert.match(parent, /remainingCampaignStages/);
+  assert.match(parent, /stagesForResearchCycle/);
   assert.match(parent, /runCampaignV2StageTask\.triggerAndWait/);
-  assert.match(parent, /campaign-v2:\$\{workflowRunId\}:\$\{stage\}/);
+  assert.match(parent, /campaign-v2:\$\{workflowRunId\}:cycle-\$\{cycleNumber\}:\$\{stage\}/);
   assert.match(parent, /consumeWorkflowControl/);
   assert.match(parent, /beforeStage/);
   assert.match(parent, /afterStage/);

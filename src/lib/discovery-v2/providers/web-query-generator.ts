@@ -22,6 +22,10 @@ export const webDiscoveryQuerySchema = z
     normalizedQuery: z.string().min(1),
     fingerprint: z.string().length(64),
     family: z.enum([
+      "direct_commercial",
+      "relationship",
+      "product_category",
+      "capability",
       "archetype",
       "business_model",
       "positive_signal",
@@ -30,6 +34,18 @@ export const webDiscoveryQuerySchema = z
       "local_language",
       "known_entity_expansion",
       "gap_targeted",
+    ]),
+    sourceFamily: z.enum([
+      "company_website",
+      "industry_association",
+      "trade_association",
+      "member_directory",
+      "event_exhibitor_list",
+      "supplier_directory",
+      "partner_directory",
+      "public_business_directory",
+      "regulatory_certification_list",
+      "national_industry_list",
     ]),
     language: z.string().min(1),
     country: z.string().length(2).optional(),
@@ -75,7 +91,10 @@ export function generateWebDiscoveryQueries(
     .map((term) => term.trim())
     .filter(Boolean);
   const candidates: Array<
-    Pick<WebDiscoveryQuery, "query" | "family" | "language" | "purpose"> & {
+    Pick<
+      WebDiscoveryQuery,
+      "query" | "family" | "sourceFamily" | "language" | "purpose"
+    > & {
       expectedGapId?: string;
       country?: string;
     }
@@ -92,18 +111,126 @@ export function generateWebDiscoveryQueries(
       );
     }
   } else {
+    const contextualLabel = expandContextualAcronyms(segment.label, [
+      ...segment.businessCharacteristics.industries,
+      ...segment.businessCharacteristics.keywords,
+      ...segment.businessCharacteristics.businessModels,
+      ...segment.positiveSignals.map(({ label }) => label),
+    ]);
     const geographyContexts = countryContexts.length
       ? countryContexts
       : [{ countryCode: undefined, displayName: geography, localLanguage: undefined }];
+    const primaryIndustry = segment.businessCharacteristics.industries[0];
+    const primaryModel = segment.businessCharacteristics.businessModels[0];
+    const primarySignal = segment.positiveSignals[0]?.label;
+    if (countryContexts.length > 1) {
+      for (const context of countryContexts) {
+        candidates.push({
+          query: join([
+            contextualLabel,
+            context.displayName,
+            roleTerms[0],
+            "official website",
+          ]),
+          family: "archetype",
+          sourceFamily: "company_website",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          country: context.countryCode,
+          purpose: `Find operating organizations in ${context.displayName}.`,
+        });
+        if (context.localLanguage) {
+          const terms = relationshipVocabulary(
+            segment.relationshipType,
+            context.localLanguage,
+          );
+          candidates.push({
+            query: join([contextualLabel, context.displayName, terms[0], terms[1]]),
+            family: "local_language",
+            sourceFamily: "national_industry_list",
+            language: context.localLanguage,
+            country: context.countryCode,
+            purpose: `Find local organizations using ${context.localLanguage} terminology.`,
+          });
+        }
+      }
+    } else {
+      candidates.push({
+        query: join([contextualLabel, geography, roleTerms[0], "official website"]),
+        family: "archetype",
+        sourceFamily: "company_website",
+        language: segment.geography.workingLanguages[0] ?? "English",
+        purpose: `Find operating organizations matching ${segment.label}.`,
+      });
+      candidates.push(
+        {
+          query: join([contextualLabel, roleTerms[0], geography, "company"]),
+          family: "direct_commercial",
+          sourceFamily: "company_website",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          purpose: "Find companies through the explicit commercial category and role.",
+        },
+        {
+          query: join([primaryIndustry, ...roleTerms.slice(0, 2), geography]),
+          family: "relationship",
+          sourceFamily: "company_website",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          purpose: `Find organizations through the intended ${segment.relationshipType} relationship.`,
+        },
+        {
+          query: join([contextualLabel, primaryIndustry, geography]),
+          family: "product_category",
+          sourceFamily: "supplier_directory",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          purpose: "Find organizations through offering-specific category terminology.",
+        },
+        {
+          query: join([
+            quoted(primarySignal ?? primaryModel ?? contextualLabel),
+            geography,
+            roleTerms[0],
+          ]),
+          family: "capability",
+          sourceFamily: "regulatory_certification_list",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          purpose:
+            "Find organizations through a Campaign-supplied capability or certification signal.",
+        },
+        {
+          query: join([contextualLabel, geography, "trade association members"]),
+          family: "directory",
+          sourceFamily: "trade_association",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          purpose: "Find trade-association member sources for this segment.",
+        },
+        {
+          query: join([contextualLabel, geography, "exhibitor list"]),
+          family: "directory",
+          sourceFamily: "event_exhibitor_list",
+          language: segment.geography.workingLanguages[0] ?? "English",
+          purpose: "Find event exhibitor sources for this segment.",
+        },
+      );
+    }
+    for (const localLanguage of segment.geography.localLanguages) {
+      const terms = relationshipVocabulary(segment.relationshipType, localLanguage);
+      candidates.push({
+        query: join([contextualLabel, geography, terms[0], terms[1]]),
+        family: "local_language",
+        sourceFamily: "national_industry_list",
+        language: localLanguage,
+        purpose: `Improve coverage using established ${localLanguage} business terminology.`,
+      });
+    }
     for (const context of geographyContexts) {
       candidates.push({
         query: join([
-          segment.label,
+          contextualLabel,
           context.displayName,
           roleTerms[0],
           "official website",
         ]),
         family: "archetype",
+        sourceFamily: "company_website",
         language: segment.geography.workingLanguages[0] ?? "English",
         country: context.countryCode,
         purpose: `Find operating organizations matching ${segment.label} in ${context.displayName}.`,
@@ -116,8 +243,9 @@ export function generateWebDiscoveryQueries(
         context.localLanguage,
       );
       candidates.push({
-        query: join([segment.label, context.displayName, terms[0], "official website"]),
+        query: join([contextualLabel, context.displayName, terms[0], "official website"]),
         family: "local_language",
+        sourceFamily: "company_website",
         language: context.localLanguage,
         country: context.countryCode,
         purpose: `Find operating organizations in ${context.displayName} using established ${context.localLanguage} business terminology.`,
@@ -127,6 +255,7 @@ export function generateWebDiscoveryQueries(
       candidates.push({
         query: join([model, segment.label, geography, roleTerms[0]]),
         family: "business_model",
+        sourceFamily: "company_website",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find organizations operating as ${model}.`,
       });
@@ -138,6 +267,7 @@ export function generateWebDiscoveryQueries(
       candidates.push({
         query: join([keyword, segment.label, geography, roleTerms[0]]),
         family: "use_context",
+        sourceFamily: "company_website",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find organizations in the ${keyword} commercial context.`,
       });
@@ -146,6 +276,7 @@ export function generateWebDiscoveryQueries(
       candidates.push({
         query: join([quoted(signal.label), segment.label, geography, roleTerms[0]]),
         family: "positive_signal",
+        sourceFamily: "company_website",
         language: segment.geography.workingLanguages[0] ?? "English",
         purpose: `Find explicit evidence of ${signal.label}.`,
       });
@@ -153,6 +284,7 @@ export function generateWebDiscoveryQueries(
     candidates.push({
       query: join([segment.label, geography, directoryTerms[0]]),
       family: "directory",
+      sourceFamily: "member_directory",
       language: segment.geography.workingLanguages[0] ?? "English",
       purpose: `Find directories or member lists covering ${segment.label}.`,
     });
@@ -161,6 +293,7 @@ export function generateWebDiscoveryQueries(
       candidates.push({
         query: join([segment.label, geography, terms[0], terms[1]]),
         family: "local_language",
+        sourceFamily: "national_industry_list",
         language,
         purpose: `Improve coverage using established ${language} business terminology.`,
       });
@@ -183,7 +316,14 @@ export function generateWebDiscoveryQueries(
       country,
       language: candidate.language,
     });
-    if (previous.has(fingerprint) || seen.has(fingerprint)) continue;
+    if (
+      previous.has(fingerprint) ||
+      seen.has(fingerprint) ||
+      queries.some((existing) =>
+        areNearDuplicateQueries(existing.normalizedQuery, normalizedQuery),
+      )
+    )
+      continue;
     seen.add(fingerprint);
     queries.push(
       webDiscoveryQuerySchema.parse({
@@ -194,6 +334,7 @@ export function generateWebDiscoveryQueries(
         normalizedQuery,
         fingerprint,
         family: candidate.family,
+        sourceFamily: candidate.sourceFamily,
         language: candidate.language,
         ...(country ? { country } : {}),
         ...(excludedDomains.length ? { excludedDomains } : {}),
@@ -242,11 +383,13 @@ function targetedCandidates(input: {
     family: WebDiscoveryQuery["family"],
     purpose: string,
     queryLanguage = language,
+    sourceFamily: WebDiscoveryQuery["sourceFamily"] = "company_website",
   ) => ({
     query,
     family,
     language: queryLanguage,
     purpose,
+    sourceFamily,
     expectedGapId: action.gapId,
   });
   if (action.type === "translate_queries") {
@@ -258,12 +401,14 @@ function targetedCandidates(input: {
           "local_language",
           `Address ${action.gapId} with ${localLanguage} market terminology.`,
           localLanguage,
+          "national_industry_list",
         ),
         make(
           join([industry, geography, ...terms.slice(0, 2), "directory"]),
           "local_language",
           `Search a second ${localLanguage} formulation for ${action.gapId}.`,
           localLanguage,
+          "member_directory",
         ),
       ];
     });
@@ -274,21 +419,29 @@ function targetedCandidates(input: {
         join([segment.label, geography, "trade association member directory"]),
         "directory",
         `Expand association coverage for ${action.gapId}.`,
+        language,
+        "industry_association",
       ),
       make(
         join([industry, geography, directoryTerms[1]]),
         "directory",
         `Expand relationship-specific directory coverage for ${action.gapId}.`,
+        language,
+        "member_directory",
       ),
       make(
         join([segment.label, geography, "trade fair exhibitors"]),
         "gap_targeted",
         `Inspect exhibitor lists for ${action.gapId}.`,
+        language,
+        "event_exhibitor_list",
       ),
       make(
         join([model, geography, "business registry companies"]),
         "gap_targeted",
         `Inspect registry-style sources for ${action.gapId}.`,
+        language,
+        "public_business_directory",
       ),
     ];
   }
@@ -350,8 +503,48 @@ function targetedCandidates(input: {
   ];
 }
 
+/** Expands an acronym only when Campaign Strategy supplies an unambiguous expansion. */
+export function expandContextualAcronyms(label: string, contextTerms: string[]) {
+  const expansions = contextTerms
+    .map((term) => term.trim())
+    .filter((term) => term.split(/\s+/).length > 1);
+  return label.replace(/\b[A-Z][A-Z0-9]{1,5}\b/g, (acronym) => {
+    const matches = expansions.filter(
+      (term) =>
+        term
+          .split(/[^\p{L}\p{N}]+/u)
+          .filter(Boolean)
+          .map((word) => word[0])
+          .join("")
+          .toUpperCase() === acronym,
+    );
+    return matches.length === 1 ? quoted(matches[0]!) : acronym;
+  });
+}
+
 export function normalizeWebQuery(query: string) {
   return query.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+export function areNearDuplicateQueries(left: string, right: string) {
+  const leftTokens = significantTokens(left);
+  const rightTokens = significantTokens(right);
+  if (!leftTokens.size || !rightTokens.size) return false;
+  const intersection = [...leftTokens].filter((token) => rightTokens.has(token)).length;
+  const union = new Set([...leftTokens, ...rightTokens]).size;
+  return intersection / union >= 0.82;
+}
+
+function significantTokens(value: string) {
+  return new Set(
+    normalizeWebQuery(value)
+      .replace(/[^\p{L}\p{N}\s]/gu, " ")
+      .split(/\s+/)
+      .filter(
+        (token) =>
+          token.length > 2 && !["and", "company", "official", "website"].includes(token),
+      ),
+  );
 }
 
 export function fingerprintWebQuery(

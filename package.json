@@ -45,6 +45,7 @@
     "eslint": "^9.39.1",
     "eslint-config-next": "16.2.9",
     "prettier": "^3.6.2",
+    "supabase": "^2.115.0",
     "trigger.dev": "4.5.7",
     "typescript": "^5.9.3"
   }

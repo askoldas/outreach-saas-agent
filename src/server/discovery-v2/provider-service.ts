@@ -12,6 +12,7 @@ import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/exter
 import {
   findPersistedProviderExecution,
   persistProviderResponse,
+  persistDiscoverySourceExpansions,
   recordCandidatePreclassificationModelCall,
 } from "./provider-repository";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
@@ -132,6 +133,12 @@ export async function executeAndPersistDiscoveryProvider(input: {
       { code: "provider_unavailable", retryable: true },
     );
   }
+  const directResponse = {
+    ...response,
+    normalizedCandidates: response.normalizedCandidates.filter(
+      ({ discoverySource }) => !discoverySource,
+    ),
+  };
   const execution = await persistProviderResponse({
     workspaceId: request.workspaceId,
     campaignId: request.campaignId,
@@ -144,8 +151,17 @@ export async function executeAndPersistDiscoveryProvider(input: {
     executionKey: response.executionId,
     requestHash,
     request,
-    response,
+    response: directResponse,
     normalizationVersion: input.normalizationVersion,
+  });
+  await persistDiscoverySourceExpansions({
+    workspaceId: request.workspaceId,
+    campaignId: request.campaignId,
+    executionId: String((execution as { id: unknown }).id),
+    segmentKey: request.segment.id,
+    archetypeKey: request.segment.archetypeId,
+    normalizationVersion: input.normalizationVersion,
+    records: response.records,
   });
   const persisted = await findPersistedProviderExecution({
     workspaceId: request.workspaceId,

@@ -6,7 +6,7 @@ import {
   type ExternalOrganizationType,
 } from "../../lib/entity-resolution-v2/index.ts";
 
-export const ENTITY_RESOLUTION_RUNTIME_RULES_VERSION = "entity-resolution-v2.4";
+export const ENTITY_RESOLUTION_RUNTIME_RULES_VERSION = "entity-resolution-v2.6";
 
 const organizationWebsitePageTypes = new Set(["company_homepage", "company_subpage"]);
 const nonOrganizationPageTypes = new Set([
@@ -27,6 +27,7 @@ export type CampaignResolutionInput = {
   matchedSegmentKey: string;
   name: string;
   normalizedCandidateId: string;
+  organizationReferenceId?: string | null;
   normalizedName: string | null;
   organizationTypeHint: string | null;
   preliminaryQuality: unknown;
@@ -34,6 +35,11 @@ export type CampaignResolutionInput = {
   sourcePageType: string | null;
   sourceUrl: string | null;
   websiteUrl: string | null;
+  discoverySource?: {
+    extractionMethod: string;
+    sourceUrl: string;
+  } | null;
+  sourceRoles?: string[];
 };
 
 export type PreparedResolutionCandidate = {
@@ -48,6 +54,7 @@ export type PreparedResolutionCandidate = {
   matchedSegmentKey: string;
   name: string;
   normalizedCandidateId: string;
+  organizationReferenceId?: string;
   normalizedName: string;
   organizationType: ExternalOrganizationType;
   providerSourceRecordId: string;
@@ -64,11 +71,16 @@ export function prepareResolutionCandidate(
   const domain = normalizeDomain(input.canonicalDomainHint ?? undefined) ?? null;
   const sourceDomain = normalizeDomain(input.sourceUrl ?? undefined);
   const websiteDomain = normalizeDomain(input.websiteUrl ?? undefined);
-  const attributableWebsiteDomain =
-    domain !== null &&
-    organizationWebsitePageTypes.has(input.sourcePageType ?? "") &&
-    sourceDomain === domain &&
-    websiteDomain === domain;
+  const attributableWebsiteDomain = input.organizationReferenceId
+    ? domain !== null &&
+      websiteDomain === domain &&
+      (input.sourceRoles ?? []).includes("first_party") &&
+      sourceDomain === domain
+    : domain !== null &&
+      websiteDomain === domain &&
+      ((organizationWebsitePageTypes.has(input.sourcePageType ?? "") &&
+        sourceDomain === domain) ||
+        input.discoverySource?.extractionMethod === "public_link");
   const safeOfficialDomain = attributableWebsiteDomain;
   const canonicalDomain = safeOfficialDomain ? domain : null;
   const normalizedName =
@@ -94,12 +106,16 @@ export function prepareResolutionCandidate(
     ...grouping,
     invalidIdentity:
       input.organizationTypeHint === "directory_listing" ||
-      nonOrganizationPageTypes.has(input.sourcePageType ?? "") ||
+      (nonOrganizationPageTypes.has(input.sourcePageType ?? "") &&
+        !input.discoverySource) ||
       (!normalizedName && !canonicalDomain),
     matchedArchetypeKey: input.matchedArchetypeKey,
     matchedSegmentKey: input.matchedSegmentKey,
     name: input.name.trim(),
     normalizedCandidateId: input.normalizedCandidateId,
+    ...(input.organizationReferenceId
+      ? { organizationReferenceId: input.organizationReferenceId }
+      : {}),
     normalizedName,
     organizationType,
     providerSourceRecordId: input.providerSourceRecordId,

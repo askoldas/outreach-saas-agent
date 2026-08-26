@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { organizationReferenceSchema } from "@/lib/intelligence/core";
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
@@ -23,6 +24,7 @@ const resolutionInputSchema = z
     matchedSegmentKey: z.string().min(1),
     name: z.string().min(1),
     normalizedCandidateId: z.string().min(1),
+    organizationReferenceId: z.string().min(1).nullable().optional(),
     normalizedName: z.string().nullable(),
     organizationTypeHint: z.string().nullable(),
     preliminaryQuality: z.unknown(),
@@ -30,6 +32,13 @@ const resolutionInputSchema = z
     sourcePageType: z.string().nullable(),
     sourceUrl: z.string().nullable(),
     websiteUrl: z.string().nullable(),
+    discoverySource: z
+      .object({
+        extractionMethod: z.string(),
+        sourceUrl: z.string(),
+      })
+      .nullable(),
+    sourceRoles: z.array(z.string()).optional(),
   })
   .strict();
 
@@ -62,16 +71,46 @@ export async function resolveCampaignEntities(input: {
   campaignRunId: string;
   workspaceId: string;
 }): Promise<CampaignEntityResolutionSummary> {
-  const [loadedCandidates, semanticContext] = await Promise.all([
-    rpc("load_campaign_entity_resolution_inputs_v2", {
+  const [loadedReferences, semanticContext] = await Promise.all([
+    rpc("materialize_campaign_organization_references_v2", {
       target_workspace_id: input.workspaceId,
       target_campaign_run_id: input.campaignRunId,
     }),
     prepareSemanticDiscoveryContext(input),
   ]);
-  const rawCandidates = z
-    .array(resolutionInputSchema)
-    .parse(loadedCandidates) as CampaignResolutionInput[];
+  const references = organizationReferenceSchema.array().parse(loadedReferences);
+  const frozenCandidateIdByReferenceId = await loadCandidateIdentities({
+    referenceIds: references.map((reference) => reference.id),
+    workspaceId: input.workspaceId,
+  });
+  const rawCandidates = references
+    .filter((reference) => frozenCandidateIdByReferenceId.has(reference.id))
+    .map(
+      (reference): CampaignResolutionInput =>
+        resolutionInputSchema.parse({
+          canonicalDomainHint: reference.domainHint ?? null,
+          country: reference.geographyHints[0] ?? null,
+          matchedArchetypeKey: reference.matchedArchetypeIds[0] ?? "unknown",
+          matchedSegmentKey: reference.matchedSegmentIds[0] ?? "unknown",
+          name: reference.organizationName,
+          normalizedCandidateId: frozenCandidateIdByReferenceId.get(reference.id),
+          organizationReferenceId: reference.id,
+          normalizedName: reference.normalizedName ?? null,
+          organizationTypeHint: reference.organizationTypeHints[0] ?? null,
+          preliminaryQuality: { confidence: reference.confidence },
+          providerSourceRecordId: reference.sourceRecordId,
+          sourcePageType: null,
+          sourceUrl: reference.sourceUrl ?? null,
+          websiteUrl: reference.websiteHint ?? null,
+          discoverySource: reference.sourceRoles.includes("discovery")
+            ? {
+                extractionMethod: reference.provenance.extractionMethod,
+                sourceUrl: reference.sourceUrl ?? "",
+              }
+            : null,
+          sourceRoles: reference.sourceRoles,
+        }),
+    );
   const memoryAdjustedCandidates = applyMemoryEntityResolutionEffects(
     rawCandidates,
     semanticContext.memoryEntityResolutionEffects,
@@ -85,15 +124,60 @@ export async function resolveCampaignEntities(input: {
     rulesVersion: ENTITY_RESOLUTION_RUNTIME_RULES_VERSION,
     workspaceId: input.workspaceId,
   });
-  return resolutionSummarySchema.parse(
-    await rpc("resolve_campaign_entities_v2", {
+  try {
+    return resolutionSummarySchema.parse(
+      await rpc("resolve_campaign_entities_v2", {
       target_workspace_id: input.workspaceId,
       target_campaign_run_id: input.campaignRunId,
       target_rules_version: ENTITY_RESOLUTION_RUNTIME_RULES_VERSION,
       target_input_hash: inputHash,
       target_candidates: candidates as unknown as Json,
-    }),
+      }),
+    );
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : "Entity Resolution failed."} ` +
+        `(prepared ${candidates.length} frozen candidates; lineage contract v2)`,
+      { cause: error },
+    );
+  }
+}
+
+async function loadCandidateIdentities(input: {
+  referenceIds: string[];
+  workspaceId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const references: Array<{
+    id: string;
+    normalized_candidate_id: string;
+    provider_source_record_id: string;
+  }> = [];
+  for (const ids of batches([...new Set(input.referenceIds)], 200)) {
+    if (!ids.length) continue;
+    const { data, error } = await supabase
+      .from("organization_references_v2")
+      .select("id,normalized_candidate_id,provider_source_record_id")
+      .eq("workspace_id", input.workspaceId)
+      .in("id", ids);
+    if (error) {
+      throw new Error(
+        `Could not freeze Entity Resolution candidate identities: ${error.message}`,
+      );
+    }
+    references.push(...(data ?? []));
+  }
+  return new Map(
+    references.map((reference) => [reference.id, reference.normalized_candidate_id]),
   );
+}
+
+function batches<T>(values: T[], size: number) {
+  const result: T[][] = [];
+  for (let index = 0; index < values.length; index += size) {
+    result.push(values.slice(index, index + size));
+  }
+  return result;
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {

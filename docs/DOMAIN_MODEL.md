@@ -26,9 +26,11 @@ contracts until Phase 2. The canonical clean database model is documented in
 - `ProfileFact` and `SourceReference`: atomic extracted evidence retained behind the visible profile for conflict, confidence, and claim review.
 - `ReviewQuestion`: one commercially meaningful decision required to make discovery, qualification, buyer selection, or messaging safe.
 - `CampaignProfileSnapshot`: immutable copy of the exact profile version selected when a campaign is created.
-- `Campaign`: natural-language objective, focus, geography, desired count, status, and strategy reference.
+- `Campaign`: natural-language objective, focus, geography, status, strategy reference,
+  and bounded research-cycle state. Historical desired-count fields are compatibility
+  projections and do not control native V2 execution.
 - `CampaignBrief`: confirmed geography, campaign-only Offering wording, structured
-  target client, and requested qualified-company quantity. The original validated AI
+  target client, qualification requirements, and exclusions. The original validated AI
   proposal remains separate from the user-confirmed brief. A saved Campaign Strategy
   revision synchronizes the confirmed market and target-client fields for future runs
   without changing the original proposal or Company Profile.
@@ -37,8 +39,19 @@ contracts until Phase 2. The canonical clean database model is documented in
 - `DiscoveryPlan`, `DiscoveryPath`, and `DiscoveryIteration`: bounded, auditable search
   intent, queries, provenance, counters, yield, and continuation decision.
 - `DiscoveryCandidate`: lightweight raw search candidate saved before qualification.
+- `DiscoverySourceExpansion`: retry-safe expansion state for a useful directory or list
+  source, including its extraction version and continuation offset.
+- `DiscoverySourceOrganizationReference`: an organization named by a discovery source,
+  retaining provider execution, source URL, query/source family, extraction method, and
+  stable reference identity before Entity Resolution.
 - `CandidateClassification`: cheap deterministic or economical-model decision gating
   whether a raw candidate may receive deep evidence-aware evaluation.
+- `CandidatePrioritization`: versioned, explainable cheap-stage signals used only to order
+  resolved organizations for Candidate Research. It is persisted with the frozen source
+  plan and is not a qualification result.
+- `CandidateResearchWave`: a bounded ordered slice of research members. Every member uses
+  the same Candidate Research contract; wave boundaries control concurrency and enable
+  later adaptive yield decisions without creating lower-quality research modes.
 - `CampaignAgentCheckpoint`: retry-safe workspace-scoped snapshot of one Campaign Agent
   loop state at a deterministic phase boundary; it is operational state, not model
   conversation memory.

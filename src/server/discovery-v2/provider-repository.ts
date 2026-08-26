@@ -7,6 +7,7 @@ import { CANDIDATE_PRECLASSIFICATION_PROMPT_VERSION } from "@/lib/discovery-v2/c
 import type { AiCallResult } from "@/lib/providers/openrouter";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
+import { discoverySourceExtractionPageSchema } from "@/lib/discovery-v2/providers/discovery-source-extraction";
 import {
   summarizePersistedProviderCoverage,
   type PersistedProviderCandidateFact,
@@ -15,7 +16,12 @@ import {
 
 type RpcResult = {
   data: unknown;
-  error: { message: string } | null;
+  error: {
+    code?: string;
+    details?: string;
+    hint?: string;
+    message: string;
+  } | null;
 };
 
 export type PersistedProviderExecutionSummary = {
@@ -168,7 +174,7 @@ export async function persistProviderResponse(input: {
   const database = supabase as unknown as {
     rpc(name: string, args: Record<string, unknown>): PromiseLike<RpcResult>;
   };
-  const { data, error } = await database.rpc("persist_discovery_provider_response", {
+  const rpcArguments = {
     target_workspace_id: input.workspaceId,
     target_campaign_id: input.campaignId,
     target_plan_key: input.planKey,
@@ -182,7 +188,14 @@ export async function persistProviderResponse(input: {
     target_request: input.request as unknown as Json,
     target_response: input.response as unknown as Json,
     target_normalization_version: input.normalizationVersion,
-  });
+  };
+  let result: RpcResult | undefined;
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    result = await database.rpc("persist_discovery_provider_response", rpcArguments);
+    if (!isStatementTimeout(result.error) || attempt === 3) break;
+    await delay(attempt * 750);
+  }
+  const { data, error } = result!;
   if (error)
     throw new Error(`Could not persist Discovery provider response: ${error.message}`);
   if (!data || typeof data !== "object" || Array.isArray(data)) {
@@ -207,6 +220,96 @@ export async function persistProviderResponse(input: {
     );
   }
   return execution;
+}
+
+function isStatementTimeout(error: RpcResult["error"]) {
+  return Boolean(
+    error &&
+      (error.code === "57014" || /statement timeout/i.test(error.message)),
+  );
+}
+
+function delay(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
+}
+
+export async function persistDiscoverySourceExpansions(input: {
+  workspaceId: string;
+  campaignId: string;
+  executionId: string;
+  segmentKey: string;
+  archetypeKey: string;
+  normalizationVersion: string;
+  records: ProviderDiscoveryResponse["records"];
+}) {
+  const expandable = input.records.filter((record) => {
+    const page = record.rawPayload.sourceExpansion;
+    return page && typeof page === "object" && !Array.isArray(page);
+  });
+  if (!expandable.length) return [];
+  const supabase = createServiceRoleClient();
+  const { data: sources, error } = await supabase
+    .from("provider_source_records")
+    .select("id,source_record_key")
+    .eq("workspace_id", input.workspaceId)
+    .eq("provider_execution_id", input.executionId)
+    .in(
+      "source_record_key",
+      expandable.map(({ sourceRecordKey }) => sourceRecordKey),
+    );
+  if (error)
+    throw new Error(`Could not load discovery sources to expand: ${error.message}`);
+  const sourceIdByKey = new Map(
+    (sources ?? []).map((row) => [row.source_record_key, row.id]),
+  );
+  const database = supabase as unknown as {
+    rpc(name: string, args: Record<string, unknown>): PromiseLike<RpcResult>;
+  };
+  const results = [];
+  for (const record of expandable) {
+    const sourceId = sourceIdByKey.get(record.sourceRecordKey);
+    const page = discoverySourceExtractionPageSchema.parse(
+      record.rawPayload.sourceExpansion,
+    );
+    const query = record.rawPayload.query as Record<string, unknown> | undefined;
+    if (!sourceId || !query)
+      throw new Error("Expandable source lost persisted provenance.");
+    const { data, error: expansionError } = await database.rpc(
+      "persist_discovery_source_expansion_v2",
+      {
+        target_workspace_id: input.workspaceId,
+        target_campaign_id: input.campaignId,
+        target_provider_execution_id: input.executionId,
+        target_provider_source_record_id: sourceId,
+        target_normalization_version: input.normalizationVersion,
+        target_segment_key: input.segmentKey,
+        target_archetype_key: input.archetypeKey,
+        target_page: page,
+        target_source_family: String(query.sourceFamily ?? "unknown"),
+        target_source_type: String(record.rawPayload.pageType ?? "unknown"),
+        target_query_fingerprint: record.queryOrFilterFingerprint,
+        target_created_at: record.retrievedAt,
+      },
+    );
+    if (expansionError) {
+      throw new Error(
+        `Could not persist discovery source expansion: ${formatDatabaseError(expansionError)}`,
+      );
+    }
+    results.push(data);
+  }
+  return results;
+}
+
+function formatDatabaseError(error: NonNullable<RpcResult["error"]>) {
+  return [
+    error.message,
+    error.code ? `code=${error.code}` : null,
+    error.details ? `details=${error.details}` : null,
+    error.hint ? `hint=${error.hint}` : null,
+  ]
+    .filter(Boolean)
+    .join("; ");
 }
 
 function batches<T>(values: T[], size: number) {

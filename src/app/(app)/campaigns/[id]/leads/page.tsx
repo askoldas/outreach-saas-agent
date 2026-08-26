@@ -33,7 +33,6 @@ export default async function LeadsPage({
     <CampaignShell campaign={campaign} active="companies">
       <CampaignControls
         campaignId={campaign.id}
-        desiredLeadCount={campaign.desiredLeadCount}
         initialLeadCount={leads.length}
         status={campaign.status}
       />

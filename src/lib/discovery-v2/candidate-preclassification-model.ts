@@ -6,7 +6,10 @@ import {
   type IntelligenceAttemptRecord,
 } from "../intelligence/runtime/execute-ai-task.ts";
 import { IntelligenceSchemaRegistry } from "../intelligence/runtime/schema-registry.ts";
-import { IntelligenceTaskRegistry, type PromptDefinition } from "../intelligence/runtime/task-registry.ts";
+import {
+  IntelligenceTaskRegistry,
+  type PromptDefinition,
+} from "../intelligence/runtime/task-registry.ts";
 import { hashCanonical } from "../intelligence/campaign-strategy-v2/context-compiler.ts";
 import {
   providerDiscoveryResponseSchema,
@@ -15,7 +18,7 @@ import {
 } from "./contracts.ts";
 
 export const CANDIDATE_PRECLASSIFICATION_PROMPT_VERSION =
-  "candidate-commercial-plausibility/v1.0";
+  "candidate-commercial-plausibility/v1.2";
 
 const itemSchema = z
   .object({
@@ -73,12 +76,13 @@ export async function refinePlausibleCandidateClassifications(input: {
     contextCompilerVersion: "candidate-preclassification-context/v1",
     modelRole: "candidate_classification",
     title: "Candidate commercial preclassification",
-    description: "Classify commercial relationship plausibility from frozen search evidence.",
+    description:
+      "Classify commercial relationship plausibility from frozen search evidence.",
     buildMessages: (value) => [
       {
         role: "system",
         content:
-          "Classify commercial relationship plausibility from only the supplied search evidence. Do not score fit, potential, eligibility, or rank. Unknown evidence must remain unknown. Return one item per sourceRecordKey.",
+          "Classify commercial relationship plausibility from only the supplied search evidence. Commercial roles are not mutually exclusive: a manufacturer, supplier, distributor, or reseller may also buy the Campaign offering. Do not treat a probable role as proof that another relationship is impossible. Do not score fit, potential, eligibility, or rank. Unknown evidence must remain unknown. Return one item per sourceRecordKey.",
       },
       {
         role: "user",
@@ -103,14 +107,19 @@ export async function refinePlausibleCandidateClassifications(input: {
     schema: outputSchema,
     semanticValidators: [],
   });
-  const result = await executeValidatedAiTask<typeof request, z.infer<typeof outputSchema>>({
+  const result = await executeValidatedAiTask<
+    typeof request,
+    z.infer<typeof outputSchema>
+  >({
     registry: tasks,
     schemas,
     taskId: definition.taskId,
     promptVersion: definition.promptVersion,
     modelRouteVersion: "candidate-preclassification-route/v1-shared-runtime",
     request,
-    ...(input.runtime?.recordAttempt ? { recordAttempt: input.runtime.recordAttempt } : {}),
+    ...(input.runtime?.recordAttempt
+      ? { recordAttempt: input.runtime.recordAttempt }
+      : {}),
     transport: async (transport) => {
       const call = await (input.generate ?? generateTextResult)(transport.messages, {
         role: "search_result_classification",
@@ -137,30 +146,35 @@ export async function refinePlausibleCandidateClassifications(input: {
     },
   });
   const parsed = result.data;
-  const byKey = new Map(
-    parsed.classifications.map((item) => [item.sourceRecordKey, item]),
-  );
-  if (
-    byKey.size !== records.length ||
-    records.some(({ sourceRecordKey }) => !byKey.has(sourceRecordKey)) ||
-    [...byKey].some(([key]) => !plausibleKeys.has(key))
-  ) {
-    throw new Error("Candidate classifier output does not match its frozen source set.");
+  const frozenKeys = new Set(records.map(({ sourceRecordKey }) => sourceRecordKey));
+  const byKey = new Map<string, (typeof parsed.classifications)[number]>();
+  for (const item of parsed.classifications) {
+    if (!frozenKeys.has(item.sourceRecordKey) || byKey.has(item.sourceRecordKey)) {
+      continue;
+    }
+    byKey.set(item.sourceRecordKey, item);
   }
   const classifications = input.response.classifications.map((classification) => {
     const refinement = byKey.get(classification.sourceRecordKey);
     if (!refinement) return classification;
-    const incompatible = refinement.objectiveCompatibility === "incompatible";
     return {
       ...classification,
-      disposition: incompatible
-        ? ("reject" as const)
-        : refinement.objectiveCompatibility === "unknown"
+      disposition:
+        refinement.objectiveCompatibility === "incompatible"
           ? ("needs_review" as const)
-          : classification.disposition,
+          : refinement.objectiveCompatibility === "unknown"
+            ? ("needs_review" as const)
+            : classification.disposition,
       probableRelationshipTypes: refinement.probableRelationshipTypes,
       objectiveCompatibility: refinement.objectiveCompatibility,
-      reasonCodes: [...new Set([...classification.reasonCodes, refinement.reasonCode])],
+      reasonCodes: [
+        ...new Set([
+          ...classification.reasonCodes,
+          refinement.objectiveCompatibility === "incompatible"
+            ? "commercial_role_requires_verification"
+            : refinement.reasonCode,
+        ]),
+      ],
       confidence: Math.min(classification.confidence, refinement.confidence),
       classifierVersion: `${classification.classifierVersion}+model:${CANDIDATE_PRECLASSIFICATION_PROMPT_VERSION}`,
     };
@@ -175,7 +189,8 @@ export async function refinePlausibleCandidateClassifications(input: {
       ...input.response,
       classifications,
       normalizedCandidates: input.response.normalizedCandidates.filter(
-        ({ sourceRecordKey }) => acceptedKeys.has(sourceRecordKey),
+        ({ sourceRecordKey, discoverySource }) =>
+          Boolean(discoverySource) || acceptedKeys.has(sourceRecordKey),
       ),
     }),
     call: {

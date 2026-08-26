@@ -6,7 +6,7 @@ import { WebSearchProvider } from "./providers/web-search-provider.ts";
 import { refinePlausibleCandidateClassifications } from "./candidate-preclassification-model.ts";
 import type { ProviderDiscoveryRequest } from "./contracts.ts";
 
-test("model refinement is evidence-bounded and can reject only plausible pages", async () => {
+test("model refinement keeps inferred incompatible roles for verification", async () => {
   const request = discoveryRequest();
   const provider = new WebSearchProvider(
     async () => [
@@ -51,19 +51,91 @@ test("model refinement is evidence-bounded and can reject only plausible pages",
         ],
       }),
   });
-  assert.equal(refined.response.normalizedCandidates.length, 0);
+  assert.equal(refined.response.normalizedCandidates.length, 1);
   assert.equal(
     refined.response.classifications.find(
       ({ sourceRecordKey }) => sourceRecordKey === plausibleKey,
     )?.disposition,
-    "reject",
+    "needs_review",
   );
   assert.equal(
     refined.response.classifications.find(
       ({ disposition }) => disposition === "source_only",
     )?.classifierVersion,
-    "commercial-candidate-preclassification/v1.0",
+    "commercial-candidate-preclassification/v1.1",
   );
+  assert.ok(
+    refined.response.classifications
+      .find(({ sourceRecordKey }) => sourceRecordKey === plausibleKey)
+      ?.reasonCodes.includes("commercial_role_requires_verification"),
+  );
+});
+
+test("model refinement preserves deterministic classifications when frozen records are omitted", async () => {
+  const request = discoveryRequest();
+  const provider = new WebSearchProvider(
+    async () => [
+      {
+        title: "Ambiguous Operations",
+        url: "https://ambiguous.example/about",
+        content: "We supply industrial components.",
+        score: 0.8,
+      },
+    ],
+    () => "2026-08-02T10:00:00.000Z",
+    () => "execution-1",
+  );
+  const response = await provider.search({
+    ...request,
+    segment: { ...request.segment, relationshipType: "supplier" },
+  });
+  const original = response.classifications[0]!;
+  const refined = await refinePlausibleCandidateClassifications({
+    request,
+    response,
+    generate: async () => fakeCall({ classifications: [] }),
+  });
+
+  assert.deepEqual(refined.response.classifications[0], original);
+});
+
+test("model refinement ignores classifications outside the frozen source set", async () => {
+  const request = discoveryRequest();
+  const provider = new WebSearchProvider(
+    async () => [
+      {
+        title: "Ambiguous Operations",
+        url: "https://ambiguous.example/about",
+        content: "We supply industrial components.",
+        score: 0.8,
+      },
+    ],
+    () => "2026-08-02T10:00:00.000Z",
+    () => "execution-1",
+  );
+  const response = await provider.search({
+    ...request,
+    segment: { ...request.segment, relationshipType: "supplier" },
+  });
+  const original = response.classifications[0]!;
+  const refined = await refinePlausibleCandidateClassifications({
+    request,
+    response,
+    generate: async () =>
+      fakeCall({
+        classifications: [
+          {
+            sourceRecordKey: "foreign-source-record",
+            probableRelationshipTypes: ["competitor"],
+            objectiveCompatibility: "incompatible",
+            reasonCode: "explicit_incompatible_commercial_role",
+            confidence: 1,
+          },
+        ],
+      }),
+  });
+
+  assert.deepEqual(refined.response.classifications[0], original);
 });
 
 function discoveryRequest(): ProviderDiscoveryRequest {

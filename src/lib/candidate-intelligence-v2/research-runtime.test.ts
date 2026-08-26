@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { createNativeCampaignStrategyFixture } from "../intelligence/campaign-strategy-v2/test-fixture.ts";
+import { researchBlueprintSchema } from "../intelligence/core/research-blueprint.ts";
 import {
   buildCandidateEvidenceExtractionMessages,
   candidateEvidenceExtractionTaskDefinition,
@@ -66,6 +67,9 @@ test("Campaign research plans freeze required policy questions and reusable stat
   assert.equal(prepared.inputHash.length, 64);
   assert.equal(prepared.contentHash.length, 64);
   assert.equal(prepared.reusableIntelligenceVersionId, null);
+  assert.equal(prepared.priority, prepared.sourcePlan.prioritization.score);
+  assert.equal(prepared.sourcePlan.prioritization.version, "candidate-priority-v1");
+  assert.ok(prepared.sourcePlan.prioritization.signals.length >= 6);
 });
 
 test("Candidate research plans cap the frozen question set at twelve", () => {
@@ -119,6 +123,74 @@ test("Deferred reusable gaps retain organization scope", () => {
       .filter(({ key }) => unresolvedQuestionKeys.includes(key))
       .every(({ reusableScope }) => reusableScope === "organization"),
   );
+});
+
+test("Research Blueprints add reusable questions while Strategy policy remains campaign-only", () => {
+  const strategy = confirmedStrategy();
+  const archetypeId = strategy.archetypes[0]!.id;
+  const blueprint = researchBlueprintSchema.parse({
+    id: "blueprint-1",
+    workspaceId: "workspace-1",
+    campaignId: strategy.campaignId,
+    targetArchetypeId: archetypeId,
+    campaignTargetModelVersionId: "target-1",
+    marketAnalysisVersionId: "analysis-1",
+    researchQuestions: [
+      {
+        key: "facilities",
+        question: "Which facilities does the organization operate?",
+        required: true,
+        priority: 99,
+        evidenceRoles: ["first_party"],
+      },
+      {
+        key: "relationship-compatibility",
+        question: "This reusable wording must not replace Strategy policy.",
+        required: true,
+        priority: 100,
+        evidenceRoles: ["supporting"],
+      },
+    ],
+    preferredSourceTypes: ["official_website"],
+    requiredEvidenceDimensions: ["facilities"],
+    optionalEvidenceDimensions: [],
+    operationalSignals: [],
+    exclusionChecks: [],
+    stoppingCriteria: {
+      minimumRequiredCoverage: 0.75,
+      maximumFirstPartyPages: 8,
+      maximumSupportingSources: 4,
+      stopWhenCriticalUnknownsResolved: true,
+    },
+    version: {
+      schemaVersion: "research-blueprint/v1",
+      compilerVersion: "research-blueprint-compiler/v1",
+      inputHash: "a".repeat(64),
+      contentHash: "b".repeat(64),
+      createdAt: "2026-08-24T00:00:00.000Z",
+    },
+  });
+  const [prepared] = prepareCampaignResearchPlans({
+    campaignRunId: "run-1",
+    strategyVersionId: strategy.id,
+    strategy,
+    researchBlueprints: [
+      blueprint,
+      { ...blueprint, id: "blueprint-unmatched", targetArchetypeId: "unmatched" },
+    ],
+    candidates: [candidate(archetypeId)],
+  });
+
+  assert.deepEqual(prepared?.plan.researchBlueprintVersionIds, ["blueprint-1"]);
+  assert.equal(
+    prepared?.plan.questions.find(({ key }) => key === "facilities")?.reusableScope,
+    "organization",
+  );
+  const policyQuestion = prepared?.plan.questions.find(
+    ({ key }) => key === "relationship-compatibility",
+  );
+  assert.equal(policyQuestion?.reusableScope, "campaign_only");
+  assert.notEqual(policyQuestion?.question, blueprint.researchQuestions[1]?.question);
 });
 
 test("Evidence extraction fills omitted findings with explicit unknowns", () => {
@@ -451,7 +523,10 @@ test("Candidate evidence prompts keep scoring and eligibility outside research",
 });
 
 test("Candidate evidence extraction is a bounded shared-runtime task", () => {
-  assert.equal(candidateEvidenceExtractionTaskDefinition.taskId, "candidate.evidence_extraction");
+  assert.equal(
+    candidateEvidenceExtractionTaskDefinition.taskId,
+    "candidate.evidence_extraction",
+  );
   assert.equal(candidateEvidenceExtractionTaskDefinition.maxCompletionTokens, 5_000);
   assert.equal(candidateEvidenceExtractionTaskDefinition.allowsRepair, true);
   assert.equal(candidateEvidenceExtractionTaskDefinition.allowsFallback, true);
@@ -469,4 +544,22 @@ function confirmedStrategy() {
     confirmedAt: "2026-07-28T09:00:00.000Z",
   };
   return strategy;
+}
+
+function candidate(archetypeId: string) {
+  return {
+    campaignCandidateId: "candidate-1",
+    organizationId: "organization-1",
+    organizationName: "Example",
+    organizationType: "operating_company",
+    canonicalDomain: "example.com",
+    canonicalUrl: "https://example.com/",
+    procurementAutonomy: "local" as const,
+    matchedArchetypeIds: [archetypeId],
+    discoverySourceIds: [],
+    currentIntelligenceVersionId: "intelligence-1",
+    unresolvedQuestionKeys: [],
+    conflictKeys: [],
+    claimStates: [],
+  };
 }

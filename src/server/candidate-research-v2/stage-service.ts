@@ -15,10 +15,14 @@ import {
   loadCampaignResearchContext,
 } from "./repository";
 import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
+import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
+import { loadLatestResearchBlueprints } from "@/server/core-intelligence-v2/repository";
+import { loadMarketResearchPlanForDiscovery } from "@/server/discovery-v2/plan-discovery";
 
 export async function prepareCandidateResearchStage(input: {
   campaignRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 }) {
   const frozenBatch = await findCandidateResearchBatch(input);
   if (frozenBatch) return frozenBatch;
@@ -31,12 +35,31 @@ export async function prepareCandidateResearchStage(input: {
   if (strategy.id !== context.strategyVersionId || strategy.status !== "confirmed") {
     throw new Error("Candidate research requires the run's frozen confirmed Strategy.");
   }
-  const plans = prepareCampaignResearchPlans({
+  const marketResearchPlan = await loadMarketResearchPlanForDiscovery({
+    workspaceId: input.workspaceId,
+    campaignId: context.campaignId,
+    campaignRunId: context.campaignRunId,
+    runCreatedAt: semanticContext.campaignRunCreatedAt,
+  });
+  const researchBlueprints = marketResearchPlan
+    ? await loadLatestResearchBlueprints({
+        workspaceId: input.workspaceId,
+        campaignId: context.campaignId,
+        campaignTargetModelVersionId: marketResearchPlan.campaignTargetModelVersionId,
+        marketAnalysisVersionId: marketResearchPlan.marketAnalysisVersionId,
+      })
+    : [];
+  const prioritizedPlans = prepareCampaignResearchPlans({
     campaignRunId: context.campaignRunId,
     strategyVersionId: context.strategyVersionId,
     strategy,
+    researchBlueprints,
     candidates: context.candidates,
   });
+  const plans = prioritizedPlans.slice(
+    0,
+    DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET.maxDeepResearchCandidates,
+  );
   const inputHash = hashCanonical({
     campaignRunId: context.campaignRunId,
     strategyVersionId: context.strategyVersionId,

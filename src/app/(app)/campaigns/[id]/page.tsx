@@ -40,7 +40,6 @@ export default async function CampaignPage({
     <CampaignShell campaign={campaign} active="overview">
       <CampaignControls
         campaignId={campaign.id}
-        desiredLeadCount={campaign.desiredLeadCount}
         initialLeadCount={leads.length}
         status={campaign.status}
       />
@@ -52,13 +51,14 @@ export default async function CampaignPage({
         <h3>Current stage</h3>
         <p>{progress?.currentStep ?? "Campaign brief ready"}</p>
         <p>
-          {progress?.candidatesDiscovered ?? 0} candidates discovered ·{" "}
-          {progress?.candidatesUnique ?? 0} unique · {progress?.candidatesClassified ?? 0}{" "}
-          classified · {progress?.companiesEvaluated ?? 0} evaluated ·{" "}
-          {progress?.companiesQualified ?? 0} qualified
+          {progress?.candidatesDiscovered ?? 0} source records ·{" "}
+          {progress?.candidatesUnique ?? 0} unique organizations ·{" "}
+          {progress?.candidatesClassified ?? 0} plausible candidates ·{" "}
+          {progress?.companiesEvaluated ?? 0} deeply researched ·{" "}
+          {progress?.companiesQualified ?? 0} review-ready
         </p>
         {progress?.currentIteration ? (
-          <p>Discovery iteration {progress.currentIteration} / 5</p>
+          <p>Discovery cycle {progress.currentIteration}</p>
         ) : null}
       </section>
       <CampaignWorkflowSummary summary={workflow} view="overview" />

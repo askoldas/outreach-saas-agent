@@ -158,10 +158,6 @@ export function buildNativeCampaignStrategyV2(input: {
       positiveSignals: archetype.positiveSignals,
       negativeSignals: archetype.negativeSignals,
       exclusionRules: campaignRules,
-      targetCandidateCount: Math.max(
-        input.confirmedBrief.desiredQualifiedCompanies,
-        Math.ceil(input.confirmedBrief.desiredQualifiedCompanies * 2),
-      ),
       priority: Math.max(1, 100 - index * 10),
       explorationBudgetClass: index === 0 ? ("high" as const) : ("medium" as const),
     };
@@ -303,12 +299,6 @@ export function buildNativeCampaignStrategyV2(input: {
     },
     discoverySegments,
     coverageTarget: {
-      minimumUniqueCandidates: Math.max(
-        input.confirmedBrief.desiredQualifiedCompanies * 2,
-        input.confirmedBrief.desiredQualifiedCompanies + 10,
-      ),
-      minimumPlausibleCandidates: input.confirmedBrief.desiredQualifiedCompanies,
-      minimumQualifiedCandidates: input.confirmedBrief.desiredQualifiedCompanies,
       targetArchetypeCoverage: archetypeIds.length > 1 ? 0.75 : 1,
       maximumDuplicateRate: 0.25,
     },
@@ -318,7 +308,7 @@ export function buildNativeCampaignStrategyV2(input: {
         "market_exhaustion_detected",
         "marginal_yield_below_threshold",
       ],
-      maximumDiscoveryPasses: 3,
+      maximumDiscoveryPasses: 10,
       maximumRunMinutes: 45,
       minimumMarginalQualifiedYield: 0.05,
     },

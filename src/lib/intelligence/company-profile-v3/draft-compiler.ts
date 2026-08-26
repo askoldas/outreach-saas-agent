@@ -55,14 +55,22 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
         `Buyer archetype ${archetype.archetypeKey} references unknown offering ${archetype.offeringKey}.`,
       );
     }
-    if (archetypeKeys.has(archetype.archetypeKey)) {
-      throw new Error(`Duplicate buyer archetype key ${archetype.archetypeKey}.`);
-    }
-    archetypeKeys.add(archetype.archetypeKey);
+    const archetypeKey = uniqueScopedKey(
+      archetype.archetypeKey,
+      archetype.offeringKey,
+      archetypeKeys,
+    );
+    const normalizedArchetype = { ...archetype, archetypeKey };
+    archetypeKeys.add(archetypeKey);
     const entries = archetypesByOffering.get(archetype.offeringKey) ?? [];
-    entries.push(archetype);
+    entries.push(normalizedArchetype);
     archetypesByOffering.set(archetype.offeringKey, entries);
   }
+
+  const normalizedBuyerLogic = {
+    ...input.buyerLogic,
+    archetypes: [...archetypesByOffering.values()].flat(),
+  };
 
   const offerings = input.offerings.offerings.map((offering) => ({
     stableKey: offering.offeringKey,
@@ -152,7 +160,7 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     ...objectValue(input.baseSnapshot),
     commercialSynthesis: input.commercial,
     offerings: input.offerings,
-    buyerLogic: input.buyerLogic,
+    buyerLogic: normalizedBuyerLogic,
     clarification: input.clarification,
     consistency: input.consistency,
   };
@@ -182,6 +190,17 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     compiledSnapshot,
     compiledSnapshotHash: hash(compiledSnapshot),
   };
+}
+
+function uniqueScopedKey(baseKey: string, offeringKey: string, used: Set<string>) {
+  if (!used.has(baseKey)) return baseKey;
+  let sequence = 1;
+  while (true) {
+    const suffix = `--${offeringKey}${sequence === 1 ? "" : `-${sequence}`}`;
+    const candidate = `${baseKey.slice(0, 160 - suffix.length)}${suffix}`;
+    if (!used.has(candidate)) return candidate;
+    sequence += 1;
+  }
 }
 
 function validUuids(values: string[]) {

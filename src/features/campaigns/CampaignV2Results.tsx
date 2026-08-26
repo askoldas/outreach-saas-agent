@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
+  continueV2CampaignResearchAction,
   proposeV2CandidateCorrectionAction,
   reviewV2CandidateAction,
 } from "@/server/campaign-results-v2/actions";
@@ -78,19 +79,42 @@ export function CampaignV2Results({
   function correct(candidate: Results["candidates"][number], formData: FormData) {
     startTransition(async () => {
       try {
+        const correctionType = String(formData.get("correctionType"));
         const result = await proposeV2CandidateCorrectionAction({
           campaignCandidateId: candidate.candidateId,
           campaignExternalId: campaignId,
           campaignRunId: results.runId,
-          correctionType: String(formData.get("correctionType")),
+          correctionType,
           evaluationVersionId: candidate.evaluationId,
           proposedValue: String(formData.get("proposedValue")),
+          relationshipDimension:
+            String(formData.get("relationshipDimension") ?? "") || undefined,
           reason: String(formData.get("correctionReason")),
           scope: String(formData.get("scope")),
+          sourceRelationshipAssessmentVersionId:
+            correctionType === "relationship"
+              ? candidate.artifactVersions.commercialRelationshipAssessmentVersionId
+              : null,
         });
         setMessage(result.message);
       } catch (error) {
         setMessage(error instanceof Error ? error.message : "Could not save correction.");
+      }
+    });
+  }
+
+  function continueResearch() {
+    startTransition(async () => {
+      try {
+        const result = await continueV2CampaignResearchAction({
+          campaignExternalId: campaignId,
+          campaignRunId: results.runId,
+        });
+        setMessage(result.message);
+      } catch (error) {
+        setMessage(
+          error instanceof Error ? error.message : "Could not continue research.",
+        );
       }
     });
   }
@@ -107,6 +131,39 @@ export function CampaignV2Results({
           {results.appliedMemorySnapshotId?.slice(0, 8) ?? "none"}
         </p>
       </div>
+
+      <section className={styles.panel} aria-label="Market research funnel">
+        <h3>Market research funnel</h3>
+        <p>
+          {results.funnel.sourceRecords} source records scanned ·{" "}
+          {results.funnel.organizationReferences} organization references identified ·{" "}
+          {results.funnel.uniqueOrganizations} unique organizations resolved ·{" "}
+          {results.funnel.plausibleCandidates} plausible candidates ·{" "}
+          {results.funnel.deeplyResearched} deeply researched
+        </p>
+        <p>
+          {results.laneCounts.recommended} Recommended · {results.laneCounts.conditional}{" "}
+          Conditional · {results.laneCounts.needs_research} Needs research ·{" "}
+          {results.laneCounts.rejected + results.laneCounts.excluded} Rejected / Excluded
+        </p>
+        {results.researchOutcome ? (
+          <p className={styles.muted}>
+            <strong>Current scan outcome:</strong>{" "}
+            {results.researchOutcome.action.replaceAll("_", " ")} —{" "}
+            {results.researchOutcome.rationale}
+            {results.researchOutcome.additionalOpportunityRemains
+              ? " Additional market opportunity remains for a future research cycle."
+              : ""}
+            {results.researchOutcome.additionalOpportunityRemains ? (
+              <span className={styles.actions}>
+                <Button disabled={pending} onClick={continueResearch}>
+                  {pending ? "Queuing research…" : "Continue research"}
+                </Button>
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+      </section>
 
       <div className={styles.summary}>
         <section className={styles.panel}>
@@ -344,6 +401,140 @@ export function CampaignV2Results({
                         ) : null}
                       </section>
                       <section>
+                        <h3>Commercial relationships</h3>
+                        {candidate.relationshipDimensions.length ? (
+                          <ul className={styles.factorList}>
+                            {candidate.relationshipDimensions.map((dimension) => (
+                              <li key={dimension.type}>
+                                <strong>
+                                  {displayKey(dimension.type)}:{" "}
+                                  {displayKey(dimension.state)}
+                                  {" · "}
+                                  {formatScore(dimension.confidence)} confidence
+                                </strong>
+                                <div>{dimension.rationale}</div>
+                                <div className={styles.muted}>
+                                  Evidence references: {dimension.evidenceIds.length} ·
+                                  Counter-evidence references:{" "}
+                                  {dimension.counterEvidenceIds.length}
+                                </div>
+                                {dimension.unresolvedQuestions.length ? (
+                                  <div className={styles.muted}>
+                                    Unresolved: {dimension.unresolvedQuestions.join(", ")}
+                                  </div>
+                                ) : null}
+                                {candidate.relationshipCorrectionProposals
+                                  .filter(
+                                    (proposal) => proposal.dimension === dimension.type,
+                                  )
+                                  .map((proposal) => (
+                                    <aside
+                                      className={styles.correctionProposal}
+                                      key={proposal.id}
+                                    >
+                                      <strong>
+                                        {displayKey(proposal.status)} correction proposal
+                                      </strong>
+                                      <div>Proposed value: {proposal.proposedValue}</div>
+                                      <div>Reason: {proposal.reason}</div>
+                                      <div className={styles.muted}>
+                                        Source assessment:{" "}
+                                        <code
+                                          title={
+                                            proposal.sourceRelationshipAssessmentVersionId
+                                          }
+                                        >
+                                          {proposal.sourceRelationshipAssessmentVersionId}
+                                        </code>
+                                      </div>
+                                      <div className={styles.muted}>
+                                        This proposal does not change the frozen
+                                        assessment.
+                                      </div>
+                                    </aside>
+                                  ))}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p className={styles.muted}>
+                            Multi-dimensional relationship assessment is not available for
+                            this historical evaluation.
+                          </p>
+                        )}
+                        {candidate.relationshipDimensions.length ? (
+                          <form
+                            className={styles.reviewForm}
+                            action={(formData) => correct(candidate, formData)}
+                          >
+                            <input
+                              name="correctionType"
+                              type="hidden"
+                              value="relationship"
+                            />
+                            <label>
+                              Relationship dimension
+                              <select name="relationshipDimension" required>
+                                {candidate.relationshipDimensions.map((dimension) => (
+                                  <option key={dimension.type} value={dimension.type}>
+                                    {displayKey(dimension.type)}
+                                  </option>
+                                ))}
+                              </select>
+                            </label>
+                            <label>
+                              Correct value
+                              <input name="proposedValue" required />
+                            </label>
+                            <label>
+                              Reason
+                              <textarea name="correctionReason" required />
+                            </label>
+                            <input name="scope" type="hidden" value="campaign" />
+                            <Button disabled={pending} type="submit">
+                              Propose relationship correction
+                            </Button>
+                          </form>
+                        ) : null}
+                        <details className={styles.lineage}>
+                          <summary>Artifact lineage</summary>
+                          <dl className={styles.lineageList}>
+                            <ArtifactVersion
+                              label="Qualification evaluation"
+                              value={
+                                candidate.artifactVersions
+                                  .qualificationEvaluationVersionId
+                              }
+                            />
+                            <ArtifactVersion
+                              label="Candidate intelligence (legacy)"
+                              value={
+                                candidate.artifactVersions.candidateIntelligenceVersionId
+                              }
+                            />
+                            <ArtifactVersion
+                              label="Company Intelligence"
+                              value={
+                                candidate.artifactVersions.companyIntelligenceVersionId
+                              }
+                            />
+                            <ArtifactVersion
+                              label="Commercial Relationship assessment"
+                              value={
+                                candidate.artifactVersions
+                                  .commercialRelationshipAssessmentVersionId
+                              }
+                            />
+                            <ArtifactVersion
+                              label="Campaign Target Model"
+                              value={
+                                candidate.artifactVersions.campaignTargetModelVersionId
+                              }
+                            />
+                          </dl>
+                        </details>
+                      </section>
+                      <section>
                         <h3>Campaign review</h3>
                         <div className={styles.actions}>
                           <Button
@@ -396,8 +587,7 @@ export function CampaignV2Results({
                         >
                           <label>
                             Classification
-                            <select name="correctionType" defaultValue="relationship">
-                              <option value="relationship">Relationship</option>
+                            <select name="correctionType" defaultValue="archetype">
                               <option value="archetype">Archetype</option>
                               <option value="entity">Entity or duplicate</option>
                               <option value="evidence">Evidence</option>
@@ -457,4 +647,24 @@ function laneTone(lane: ResultLane) {
 function formatScore(value: number | null) {
   if (value === null) return "Not enough data";
   return Number.isInteger(value) ? String(value) : value.toFixed(1);
+}
+
+function displayKey(value: string) {
+  const words = value.replaceAll("_", " ");
+  return `${words.charAt(0).toUpperCase()}${words.slice(1)}`;
+}
+
+function ArtifactVersion({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>
+        {value ? (
+          <code title={value}>{value}</code>
+        ) : (
+          <span className={styles.muted}>Not available for historical evaluation</span>
+        )}
+      </dd>
+    </div>
+  );
 }

@@ -30,7 +30,7 @@ type WebSearchTransport = (
 
 export class WebSearchProvider implements CompanyDiscoveryProvider {
   readonly id = "web_search";
-  readonly version = "2.4";
+  readonly version = "2.5";
   readonly #transport: WebSearchTransport;
   readonly #now: () => string;
   readonly #executionId: () => string;
@@ -109,6 +109,9 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
             ...(query.excludedDomains?.length
               ? { excludeDomains: query.excludedDomains }
               : {}),
+            ...(query.sourceFamily !== "company_website"
+              ? { includeRawContent: true }
+              : {}),
           }),
         };
       } catch (error) {
@@ -140,7 +143,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
         });
         records.push(normalized.record);
         classifications.push(normalized.classification);
-        if (normalized.candidate) normalizedCandidates.push(normalized.candidate);
+        normalizedCandidates.push(...normalized.candidates);
       }
     }
     const errors = outcomes.flatMap((outcome) => (outcome.error ? [outcome.error] : []));
@@ -166,7 +169,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
 
 export const webSearchProviderCapabilities: DiscoveryProviderCapabilities = {
   providerId: "web_search",
-  providerVersion: "2.4",
+  providerVersion: "2.5",
   sourceTypes: ["web_search", "industry_directory"],
   supports: {
     countryFilter: true,

@@ -9,6 +9,7 @@ export type ResearchPlanInput = {
   organizationId: string;
   campaignCandidateId?: string;
   strategyVersionId?: string;
+  researchBlueprintVersionIds?: string[];
   requiredQuestionKeys: string[];
   optionalQuestionKeys?: string[];
   resolvedQuestionKeys?: string[];
@@ -106,8 +107,8 @@ function buildQuestion(
     required,
     priority,
     reusableScope:
-      reusableScopeOverride ??
       override?.reusableScope ??
+      reusableScopeOverride ??
       catalog?.reusableScope ??
       "campaign_only",
     expectedEvidenceTypes: override?.expectedEvidenceTypes ??
@@ -205,6 +206,13 @@ export function compileCandidateResearchPlan(
     campaignCandidateId: input.campaignCandidateId,
     strategyVersionId: input.strategyVersionId,
     researchType: input.campaignCandidateId ? "campaign_specific" : "reusable",
+    ...(input.researchBlueprintVersionIds?.length
+      ? {
+          researchBlueprintVersionIds: [
+            ...new Set(input.researchBlueprintVersionIds),
+          ].sort(),
+        }
+      : {}),
     questions: ordered,
     preferredPages: preferredPages.slice(0, pageBudget),
     pageBudget,

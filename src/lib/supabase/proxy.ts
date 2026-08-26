@@ -35,14 +35,37 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   const { pathname, search } = request.nextUrl;
   const isAuthRoute = authRoutes.has(pathname);
   const isProtectedRoute = protectedPrefixes.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
   );
+
+  const {
+    data: { user },
+    error: authError,
+  } = await supabase.auth.getUser();
+
+  if (authError) {
+    const redirectUrl = request.nextUrl.clone();
+    redirectUrl.pathname = "/login";
+    redirectUrl.search = "";
+
+    if (isProtectedRoute) {
+      redirectUrl.searchParams.set("next", `${pathname}${search}`);
+    }
+
+    const recoveryResponse = isAuthRoute
+      ? NextResponse.next({ request })
+      : NextResponse.redirect(redirectUrl);
+
+    request.cookies
+      .getAll()
+      .filter(({ name }) => name.startsWith("sb-") && name.includes("auth-token"))
+      .forEach(({ name }) => recoveryResponse.cookies.set(name, "", { maxAge: 0, path: "/" }));
+
+    return recoveryResponse;
+  }
 
   if (!user && isProtectedRoute) {
     const redirectUrl = request.nextUrl.clone();

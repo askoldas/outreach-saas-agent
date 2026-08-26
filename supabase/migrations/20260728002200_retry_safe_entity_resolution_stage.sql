@@ -456,8 +456,7 @@ begin
     on segment_run.id = provider_execution.discovery_segment_run_id
   where segment_run.discovery_run_id = discovery_run.id
     and candidate.workspace_id = target_workspace_id
-    and candidate.campaign_id = campaign_run.campaign_id
-    and provider_source.ingestion_status = 'normalized';
+    and candidate.campaign_id = campaign_run.campaign_id;
 
   supplied_candidate_count := jsonb_array_length(target_candidates);
   if database_candidate_count <> supplied_candidate_count
@@ -483,7 +482,6 @@ begin
           and candidate.workspace_id = target_workspace_id
           and candidate.campaign_id = campaign_run.campaign_id
           and segment_run.discovery_run_id = discovery_run.id
-          and provider_source.ingestion_status = 'normalized'
       )
     )
   then

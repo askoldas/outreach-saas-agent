@@ -18,9 +18,9 @@ export function CampaignRunOverview({
           <span>{run.progress}% complete</span>
         </Card>
         <Card className={shared.metric}>
-          <p>Iteration</p>
+          <p>Discovery cycle</p>
           <h2>{run.iteration || "—"}</h2>
-          <span>Maximum 5 discovery iterations</span>
+          <span>Continues while productive work and research budget remain</span>
         </Card>
         <Card className={shared.metric}>
           <p>Run cost</p>

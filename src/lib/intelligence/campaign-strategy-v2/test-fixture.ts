@@ -131,6 +131,5 @@ function brief(): ConfirmedCampaignBrief {
         status: "confirmed",
       },
     ],
-    desiredQualifiedCompanies: 25,
   };
 }

@@ -85,7 +85,7 @@
 | 5 — commercial candidate preclassification                    | complete | Every source receives a frozen disposition before Entity Resolution. Deterministic checks run first; only plausible organization pages reach a small evidence-bounded model task. Strategy/archetype provenance, reason codes, signals, geography/objective state, confidence and classifier versions persist immutably.                                                                                                                                                                                                                                           |
 | 6 — multi-page first-party research                           | complete | Research now discovers same-domain pages, ranks them by frozen question purpose, executes the page budget, persists each bounded first-party artifact with existing URL/kind/reliability/directness/freshness/hash provenance, rejects off-domain redirects, and stops on question-specific strong coverage or budget exhaustion. Snippet length cannot suppress first-party fetching.                                                                                                                                                                             |
 | 7 — executable frozen Memory effects                          | complete | Validated typed effects now compile into Strategy, discovery/query exclusions, research, Entity Resolution and qualification. Snapshot schema v3 freezes full applied/overridden records, evidence, origin/version fields, compiler version and per-memory layer trace. Deterministic precedence and applicability prevent cross-offering/campaign leakage; replay uses only frozen values.                                                                                                                                                                        |
-| 8 — useful-candidate coverage and continuation                | complete | Coverage now carries separate raw-source, valid-organization, source-only, plausible, unique-plausible, geography-supported and relationship-compatible counters from persisted preclassification. Sufficiency, exhaustion, marginal yield and target-volume stopping use plausible organizations. Omitted segments remain not-started, while geography/archetype/relationship/source/language gaps retain bounded actions.                                                                                                                                        |
+| 8 — useful-candidate coverage and continuation                | complete | Coverage carries separate raw-source, valid-organization, source-only, plausible, unique-plausible, geography-supported and relationship-compatible counters. Native V2 no longer stops at a requested company count; continuation is governed by bounded budget, coverage, saturation, marginal yield and actionable gaps. Omitted segments remain not-started.                                                                                                                                        |
 | 9 — evidence-bound qualification and interpretation           | complete | Qualification claims receive deterministic organization/Campaign/offering/archetype/question/factor/exclusion applicability. Relationships, factors and hard exclusions require applicable verifiable claims with linked current evidence. Unknown/conflict gates remain unresolved, confidence caps critical conflicts, insufficient evidence suppresses fit, potential stays separate, and claim-content changes invalidate evaluation inputs.                                                                                                                   |
 | 10                                                            | complete | Company Profile retains per-offering mechanics, evidence, confidence, unresolved questions and meaningful correction controls. Strategy exposes objective, geography, selected offering, relationships, archetype conditions, exclusions, terminology, source plan, assumptions, unresolved questions and Memory reference. Results expose discovery/query/source provenance, preclassification, resolved identity, first-party source status, eligibility, factors, independent scores, confidence, unresolved questions, and audited review/correction controls. |
 
@@ -151,10 +151,17 @@
 - Strategy-proposal prompt/schema: `campaign-strategy-compiler/v3.0`.
 - Campaign context compiler: `campaign-context/v2.2-market-specific`.
 - Web query policy: `web-query/v3-objective-aware`.
-- Web search provider: `2.4`.
-- Web normalization: `web-search-normalization-v3.0-preclassified`.
-- Deterministic candidate classifier: `commercial-candidate-preclassification/v1.0`.
-- Model candidate classifier prompt: `candidate-commercial-plausibility/v1.0`.
+- Web search provider: `2.5`.
+- Web normalization: `web-search-normalization-v3.1-source-expansion`.
+- Web discovery sources now expand into durable organization references with stable
+  reference keys, source/query/extraction provenance, resumable offsets, and cautious
+  name-only identity handling before the existing Entity Resolution stage.
+- Deterministic candidate classifier: `commercial-candidate-preclassification/v1.1`.
+- Model candidate classifier prompt: `candidate-commercial-plausibility/v1.1`.
+- Commercial-role hints are non-exclusive: an inferred manufacturer, supplier,
+  distributor, or reseller role routes uncertain objective compatibility to review rather
+  than rejecting a plausible organization. A ccTLD is a positive geography hint when it
+  matches, but a mismatching ccTLD is not sufficient negative evidence for rejection.
 - Candidate classifier schema: `candidate-preclassification-schema/v1.0`.
 - Candidate Research runtime: `candidate-research-v2.3-multipage`.
 - Candidate evidence extraction prompt: `candidate-evidence-extraction-v2.3-multipage`.

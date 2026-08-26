@@ -4,6 +4,10 @@ import {
   finalizeCandidateResearchStage,
   prepareCandidateResearchStage,
 } from "@/server/candidate-research-v2/stage-service";
+import {
+  DEFAULT_CANDIDATE_RESEARCH_WAVE_SIZE,
+  partitionResearchWaves,
+} from "@/lib/candidate-intelligence-v2/research-waves";
 
 export type ResearchCampaignCandidateV2Payload = {
   campaignRunId: string;
@@ -34,23 +38,29 @@ export const researchCampaignCandidateV2Task = task({
 export async function executeCandidateResearchFanOut(input: {
   campaignRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 }) {
   const batch = await prepareCandidateResearchStage(input);
-  if (batch.pendingMemberIds.length) {
+  const waves = partitionResearchWaves(
+    batch.pendingMemberIds,
+    DEFAULT_CANDIDATE_RESEARCH_WAVE_SIZE,
+  );
+  for (const [waveIndex, memberIds] of waves.entries()) {
     const results = await researchCampaignCandidateV2Task.batchTriggerAndWait(
-      batch.pendingMemberIds.map((memberId) => ({
+      memberIds.map((memberId) => ({
         payload: {
           campaignRunId: input.campaignRunId,
           memberId,
           workspaceId: input.workspaceId,
         },
         options: {
-          idempotencyKey: `candidate-research:${batch.batchId}:${memberId}`,
+          idempotencyKey: `candidate-research:${batch.batchId}:wave-${waveIndex + 1}:${memberId}`,
           tags: [
             `workspace:${input.workspaceId}`,
             `campaign_run:${input.campaignRunId}`,
             `candidate_research_batch:${batch.batchId}`,
             `candidate_research_member:${memberId}`,
+            `candidate_research_wave:${waveIndex + 1}`,
           ],
         },
       })),

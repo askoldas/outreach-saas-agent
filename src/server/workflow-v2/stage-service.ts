@@ -1,5 +1,5 @@
 import type { CampaignV2Stage, StageResult } from "@/lib/workflow-v2/contracts";
-import { stageCheckpointKey } from "@/lib/workflow-v2/controller";
+import { researchCycleStageCheckpointKey } from "@/lib/workflow-v2/controller";
 import { classifyWorkflowError, errorForTrigger } from "@/server/execution/errors";
 import { executeSemanticDiscoveryStage } from "@/server/discovery-v2/targeted-discovery-stage";
 import { executeEntityResolutionStage } from "@/server/entity-resolution-v2/stage-service";
@@ -19,6 +19,7 @@ export type ExecuteCampaignV2StageInput = {
   triggerRunId: string;
   workflowRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 };
 
 export type CampaignV2StageAdapters = {
@@ -36,7 +37,7 @@ export async function executeCampaignV2Stage(
     workflowRunId: input.workflowRunId,
   } satisfies Json;
   const taskRun = await claimWorkflowTask({
-    idempotencyKey: `campaign-v2:${input.workflowRunId}:${input.stage}`,
+    idempotencyKey: `campaign-v2:${input.workflowRunId}:cycle-${input.cycleNumber ?? 1}:${input.stage}`,
     inputReference,
     taskType: input.stage,
     triggerRunId: input.triggerRunId,
@@ -85,7 +86,7 @@ async function checkpointStage(
   result: StageResult,
 ) {
   await saveWorkflowCheckpoint({
-    checkpointKey: stageCheckpointKey(input.stage),
+    checkpointKey: researchCycleStageCheckpointKey(input.stage, input.cycleNumber ?? 1),
     payload: {
       outputReferences: result.outputReferences,
       progressDelta: result.progressDelta,

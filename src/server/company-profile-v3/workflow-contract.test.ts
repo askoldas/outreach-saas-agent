@@ -23,6 +23,7 @@ test("V3 profile orchestration uses one retryable Trigger run with durable seque
   assert.match(parent, /minTimeoutInMs: 5_000/);
   assert.match(parent, /onFailure/);
   assert.match(parent, /failProfileV3Draft/);
+  assert.match(parent, /linkProfileV3TriggerRun/);
 });
 
 test("stage execution freezes versions, reuses completed outputs, and audits AI", () => {
@@ -57,20 +58,20 @@ test("every profile stage enforces its complete ordered dependency chain", () =>
     "profile.clarification",
   ]);
   assert.throws(
-    () => assertProfileStageDependencies("profile.buyer_logic", [
-      { taskId: "profile.fact_extraction" },
-      { taskId: "profile.commercial_synthesis" },
-    ]),
+    () =>
+      assertProfileStageDependencies("profile.buyer_logic", [
+        { taskId: "profile.fact_extraction" },
+        { taskId: "profile.commercial_synthesis" },
+      ]),
     /profile\.offering_decomposition/,
   );
-  assert.doesNotThrow(() => assertProfileStageDependencies(
-    "profile.buyer_logic",
-    [
+  assert.doesNotThrow(() =>
+    assertProfileStageDependencies("profile.buyer_logic", [
       { taskId: "profile.fact_extraction" },
       { taskId: "profile.commercial_synthesis" },
       { taskId: "profile.offering_decomposition" },
-    ],
-  ));
+    ]),
+  );
 });
 
 test("V3 dispatch starts from the workspace website without a V1 profile adapter", () => {
@@ -82,6 +83,10 @@ test("V3 dispatch starts from the workspace website without a V1 profile adapter
   assert.doesNotMatch(repository, /adaptV2ProfileToV3Draft/);
   assert.doesNotMatch(repository, /from "@\/server\/company-profile\/repository"/);
   assert.match(repository, /create-company-intelligence-v3/);
+  assert.match(repository, /isIndeterminateTriggerDispatchError/);
+  assert.match(repository, /dispatchPending: true/);
+  assert.match(repository, /name === "aborterror"/);
+  assert.match(service, /\.is\("created_by_run_id", null\)/);
   assert.match(service, /resolveWorkspaceIntelligenceSettings/);
 });
 

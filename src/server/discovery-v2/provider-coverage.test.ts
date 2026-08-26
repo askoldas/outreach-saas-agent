@@ -229,6 +229,7 @@ function query(
     normalizedQuery: `${seed} query`,
     fingerprint,
     family,
+    sourceFamily: "company_website",
     language,
     country: "LT",
     purpose: `Exercise ${family}.`,

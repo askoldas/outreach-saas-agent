@@ -3,6 +3,7 @@ import {
   executeProfileV3Stage,
   failProfileV3Draft,
   finalizeProfileV3Draft,
+  linkProfileV3TriggerRun,
   profileV3StageIds,
 } from "@/server/company-profile-v3/stage-service";
 import { runProfileV3Workflow } from "@/lib/intelligence/company-profile-v3/workflow";
@@ -38,13 +39,15 @@ export const createCompanyIntelligenceV3Task = task<
       error,
     }),
   run: async (payload: CreateCompanyIntelligenceV3Payload, { ctx }) => {
+    await linkProfileV3TriggerRun({ ...payload, triggerRunId: ctx.run.id });
     const workflow = await runProfileV3Workflow({
       stageIds: profileV3StageIds,
-      runStage: (taskId) => executeProfileV3Stage({
-        ...payload,
-        taskId,
-        triggerRunId: ctx.run.id,
-      }),
+      runStage: (taskId) =>
+        executeProfileV3Stage({
+          ...payload,
+          taskId,
+          triggerRunId: ctx.run.id,
+        }),
       finalize: () => finalizeProfileV3Draft(payload),
     });
     return { ...payload, ...workflow };

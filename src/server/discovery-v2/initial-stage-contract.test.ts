@@ -61,9 +61,9 @@ test("initial breadth durably attaches semantic audit and remains partial", () =
   assert.match(stage, /cachedExecutionCount/);
 });
 
-test("coverage keeps omitted segments visible and stops only on plausible volume", () => {
+test("coverage keeps omitted segments visible without a requested-volume stop", () => {
   assert.match(stage, /const coverageResults = plan\.segments\.map/);
-  assert.match(stage, /currentPlausibleCandidateCount/);
+  assert.doesNotMatch(stage, /currentPlausibleCandidateCount/);
   assert.match(stage, /plausibleCandidateIdentityHints/);
   assert.match(stage, /omittedInitialBreadthSegmentCount/);
   assert.match(targetedStage, /globalPlausibleCandidateHints/);

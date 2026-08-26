@@ -41,6 +41,7 @@ export type CandidateResearchPlan = {
   campaignCandidateId?: string;
   strategyVersionId?: string;
   researchType: "reusable" | "campaign_specific";
+  researchBlueprintVersionIds?: string[];
   questions: CandidateResearchQuestion[];
   preferredPages: WebsitePageKind[];
   pageBudget: number;

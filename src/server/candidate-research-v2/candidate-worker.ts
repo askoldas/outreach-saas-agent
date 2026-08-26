@@ -26,6 +26,10 @@ import {
   type CandidateResearchMemberContext,
 } from "./repository";
 import { collectCandidateResearchSources } from "./source-service";
+import {
+  compileAndPersistCompanyIntelligence,
+  ensureCompanyIntelligenceForCandidateSource,
+} from "@/server/core-intelligence-v2/company-intelligence-service";
 
 const promptVersion = candidateEvidenceExtractionPromptVersion;
 const schemaVersion = candidateEvidenceExtractionSchemaVersion;
@@ -37,7 +41,12 @@ export async function executeCandidateResearchMember(input: {
 }) {
   const member = await claimCandidateResearchMember(input);
   if (member.status === "completed" || member.status === "blocked") {
-    return parseCandidateResearchMemberResult(member.outputReference);
+    const completed = parseCandidateResearchMemberResult(member.outputReference);
+    await ensureCompanyIntelligenceForCandidateSource({
+      workspaceId: input.workspaceId,
+      sourceCandidateIntelligenceVersionId: completed.intelligenceVersionId,
+    });
+    return completed;
   }
 
   const { sources, warnings } = await collectCandidateResearchSources(member);
@@ -186,7 +195,7 @@ export async function executeCandidateResearchMember(input: {
   }
 
   const persisted = preparePersistedResearch(member, extraction);
-  return completeCandidateResearchMember({
+  const completed = await completeCandidateResearchMember({
     memberId: member.memberId,
     workspaceId: input.workspaceId,
     extractionRequestHash,
@@ -197,6 +206,11 @@ export async function executeCandidateResearchMember(input: {
     aiRequestIds: aiRequestIds as Json,
     accessBlocked: sources.length === 0,
   });
+  await compileAndPersistCompanyIntelligence({
+    workspaceId: input.workspaceId,
+    sourceCandidateIntelligenceVersionId: completed.intelligenceVersionId,
+  });
+  return completed;
 }
 
 function preparePersistedResearch(

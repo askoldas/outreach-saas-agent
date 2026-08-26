@@ -48,24 +48,55 @@ export function mergeBuyerLogicShardOutputs(
     ) {
       throw new Error(`Buyer-logic shard returned data outside offering ${offeringKey}.`);
     }
-    return parsed;
+    return { offeringKey, parsed };
   });
-  const rules = new Map<string, (typeof outputs)[number]["proposedOfferingRules"][number]>();
-  for (const rule of outputs.flatMap((output) => output.proposedOfferingRules)) {
-    const existing = rules.get(rule.ruleKey);
-    if (existing && JSON.stringify(existing) !== JSON.stringify(rule)) {
-      throw new Error(`Buyer-logic shards returned conflicting rule ${rule.ruleKey}.`);
-    }
-    rules.set(rule.ruleKey, rule);
-  }
+  const rules = mergeShardRules(
+    outputs.flatMap(({ offeringKey, parsed }) =>
+      parsed.proposedOfferingRules.map((rule) => ({ offeringKey, rule })),
+    ),
+  );
   return profileBuyerLogicOutputSchema.parse({
-    offeringBuyerLogic: outputs.flatMap((item) => item.offeringBuyerLogic),
-    archetypes: outputs.flatMap((item) => item.archetypes),
-    proposedOfferingRules: [...rules.values()],
+    offeringBuyerLogic: outputs.flatMap((item) => item.parsed.offeringBuyerLogic),
+    archetypes: outputs.flatMap((item) => item.parsed.archetypes),
+    proposedOfferingRules: rules,
     unresolvedQuestions: [
-      ...new Set(outputs.flatMap((item) => item.unresolvedQuestions)),
+      ...new Set(outputs.flatMap((item) => item.parsed.unresolvedQuestions)),
     ].slice(0, maxMergedUnresolvedQuestions),
   });
+}
+
+function mergeShardRules(
+  entries: Array<{
+    offeringKey: string;
+    rule: ReturnType<
+      typeof profileBuyerLogicShardOutputSchema.parse
+    >["proposedOfferingRules"][number];
+  }>,
+) {
+  const byKey = new Map<string, typeof entries>();
+  for (const entry of entries) {
+    const group = byKey.get(entry.rule.ruleKey) ?? [];
+    group.push(entry);
+    byKey.set(entry.rule.ruleKey, group);
+  }
+  return [...byKey.values()].flatMap((group) => {
+    const distinct = new Set(group.map(({ rule }) => JSON.stringify(rule)));
+    if (distinct.size === 1) return [group[0]!.rule];
+    return group.map(({ offeringKey, rule }) => ({
+      ...rule,
+      ruleKey: scopedRuleKey(rule.ruleKey, offeringKey),
+      scope: "offering" as const,
+      applicability: {
+        ...rule.applicability,
+        offeringIds: [offeringKey],
+      },
+    }));
+  });
+}
+
+function scopedRuleKey(ruleKey: string, offeringKey: string) {
+  const suffix = `--${offeringKey}`;
+  return `${ruleKey.slice(0, 160 - suffix.length)}${suffix}`;
 }
 
 function objectValue(value: unknown): Record<string, unknown> {

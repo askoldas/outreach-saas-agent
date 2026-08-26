@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.5"
+    PostgrestVersion: "14.17"
   }
   public: {
     Tables: {
@@ -1686,6 +1686,131 @@ export type Database = {
           },
         ]
       }
+      campaign_research_cycle_decisions_v2: {
+        Row: {
+          action: string
+          created_at: string
+          decision_json: Json
+          decision_number: number
+          id: string
+          rationale: string
+          reason_code: string
+          research_cycle_id: string
+          workspace_id: string
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          decision_json: Json
+          decision_number: number
+          id?: string
+          rationale: string
+          reason_code: string
+          research_cycle_id: string
+          workspace_id: string
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          decision_json?: Json
+          decision_number?: number
+          id?: string
+          rationale?: string
+          reason_code?: string
+          research_cycle_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_research_cycle_decisions_v2_research_cycle_id_fkey"
+            columns: ["research_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_research_cycles_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_research_cycle_decisions_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_research_cycles_v2: {
+        Row: {
+          budget_json: Json
+          campaign_id: string
+          campaign_run_id: string
+          completed_at: string | null
+          continuation_of_cycle_id: string | null
+          created_at: string
+          cycle_number: number
+          id: string
+          started_at: string
+          status: string
+          usage_json: Json
+          workspace_id: string
+        }
+        Insert: {
+          budget_json: Json
+          campaign_id: string
+          campaign_run_id: string
+          completed_at?: string | null
+          continuation_of_cycle_id?: string | null
+          created_at?: string
+          cycle_number: number
+          id?: string
+          started_at?: string
+          status: string
+          usage_json?: Json
+          workspace_id: string
+        }
+        Update: {
+          budget_json?: Json
+          campaign_id?: string
+          campaign_run_id?: string
+          completed_at?: string | null
+          continuation_of_cycle_id?: string | null
+          created_at?: string
+          cycle_number?: number
+          id?: string
+          started_at?: string
+          status?: string
+          usage_json?: Json
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_research_cycles_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_research_cycles_v2_campaign_run_id_fkey"
+            columns: ["campaign_run_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_research_cycles_v2_continuation_of_cycle_id_fkey"
+            columns: ["continuation_of_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_research_cycles_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_research_cycles_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_rules_v2: {
         Row: {
           campaign_strategy_draft_id: string | null
@@ -2231,6 +2356,90 @@ export type Database = {
           },
         ]
       }
+      campaign_strategy_stage_runs_v2: {
+        Row: {
+          attempt_count: number
+          cache_key: string
+          campaign_strategy_draft_id: string
+          completed_at: string | null
+          context_compiler_version: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          input_hash: string
+          model_route_version: string
+          output_json: Json | null
+          prompt_version: string
+          schema_version: string
+          stage_id: string
+          started_at: string | null
+          status: string
+          trigger_run_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          attempt_count?: number
+          cache_key: string
+          campaign_strategy_draft_id: string
+          completed_at?: string | null
+          context_compiler_version: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          input_hash: string
+          model_route_version: string
+          output_json?: Json | null
+          prompt_version: string
+          schema_version: string
+          stage_id: string
+          started_at?: string | null
+          status?: string
+          trigger_run_id?: string | null
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          attempt_count?: number
+          cache_key?: string
+          campaign_strategy_draft_id?: string
+          completed_at?: string | null
+          context_compiler_version?: string
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          input_hash?: string
+          model_route_version?: string
+          output_json?: Json | null
+          prompt_version?: string
+          schema_version?: string
+          stage_id?: string
+          started_at?: string | null
+          status?: string
+          trigger_run_id?: string | null
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_strategy_stage_runs_v2_campaign_strategy_draft_id_fkey"
+            columns: ["campaign_strategy_draft_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_strategy_drafts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_strategy_stage_runs_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       campaign_strategy_versions: {
         Row: {
           campaign_id: string
@@ -2323,6 +2532,86 @@ export type Database = {
           },
           {
             foreignKeyName: "campaign_strategy_versions_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaign_target_model_versions_v2: {
+        Row: {
+          campaign_id: string
+          commercial_intelligence_version_id: string
+          compiler_version: string
+          confidence: number
+          content_hash: string
+          created_at: string
+          evidence_ids: string[]
+          id: string
+          input_hash: string
+          profile_snapshot_id: string
+          schema_version: string
+          target_model_json: Json
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          commercial_intelligence_version_id: string
+          compiler_version: string
+          confidence: number
+          content_hash: string
+          created_at?: string
+          evidence_ids?: string[]
+          id?: string
+          input_hash: string
+          profile_snapshot_id: string
+          schema_version: string
+          target_model_json: Json
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          commercial_intelligence_version_id?: string
+          compiler_version?: string
+          confidence?: number
+          content_hash?: string
+          created_at?: string
+          evidence_ids?: string[]
+          id?: string
+          input_hash?: string
+          profile_snapshot_id?: string
+          schema_version?: string
+          target_model_json?: Json
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_target_model_version_commercial_intelligence_vers_fkey"
+            columns: ["commercial_intelligence_version_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_intelligence_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_target_model_versions_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_target_model_versions_v2_profile_snapshot_id_fkey"
+            columns: ["profile_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_profile_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_target_model_versions_v2_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -2642,9 +2931,11 @@ export type Database = {
           id: string
           proposed_value_json: Json
           reason: string
+          relationship_dimension: string | null
           reverted_at: string | null
           reverted_by: string | null
           scope: string
+          source_relationship_assessment_version_id: string | null
           status: string
           workspace_id: string
         }
@@ -2658,9 +2949,11 @@ export type Database = {
           id?: string
           proposed_value_json: Json
           reason: string
+          relationship_dimension?: string | null
           reverted_at?: string | null
           reverted_by?: string | null
           scope?: string
+          source_relationship_assessment_version_id?: string | null
           status?: string
           workspace_id: string
         }
@@ -2674,9 +2967,11 @@ export type Database = {
           id?: string
           proposed_value_json?: Json
           reason?: string
+          relationship_dimension?: string | null
           reverted_at?: string | null
           reverted_by?: string | null
           scope?: string
+          source_relationship_assessment_version_id?: string | null
           status?: string
           workspace_id?: string
         }
@@ -2700,6 +2995,13 @@ export type Database = {
             columns: ["candidate_evaluation_version_id"]
             isOneToOne: false
             referencedRelation: "candidate_evaluation_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_corrections_v2_source_relationship_assessment_ve_fkey"
+            columns: ["source_relationship_assessment_version_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_relationship_assessment_versions_v2"
             referencedColumns: ["id"]
           },
           {
@@ -2806,6 +3108,8 @@ export type Database = {
           campaign_candidate_id: string
           campaign_strategy_version_id: string
           candidate_intelligence_version_id: string
+          commercial_relationship_assessment_version_id: string | null
+          company_intelligence_version_id: string | null
           compiled_snapshot_json: Json
           content_hash: string
           created_at: string
@@ -2820,6 +3124,8 @@ export type Database = {
           campaign_candidate_id: string
           campaign_strategy_version_id: string
           candidate_intelligence_version_id: string
+          commercial_relationship_assessment_version_id?: string | null
+          company_intelligence_version_id?: string | null
           compiled_snapshot_json: Json
           content_hash: string
           created_at?: string
@@ -2834,6 +3140,8 @@ export type Database = {
           campaign_candidate_id?: string
           campaign_strategy_version_id?: string
           candidate_intelligence_version_id?: string
+          commercial_relationship_assessment_version_id?: string | null
+          company_intelligence_version_id?: string | null
           compiled_snapshot_json?: Json
           content_hash?: string
           created_at?: string
@@ -2864,6 +3172,20 @@ export type Database = {
             columns: ["candidate_intelligence_version_id"]
             isOneToOne: false
             referencedRelation: "candidate_intelligence_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_evaluation_versions_commercial_relationship_asse_fkey"
+            columns: ["commercial_relationship_assessment_version_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_relationship_assessment_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_evaluation_versions_company_intelligence_version_fkey"
+            columns: ["company_intelligence_version_id"]
+            isOneToOne: false
+            referencedRelation: "company_intelligence_versions_v2"
             referencedColumns: ["id"]
           },
           {
@@ -3244,6 +3566,8 @@ export type Database = {
           candidate_evaluation_version_id: string
           candidate_intelligence_version_id: string
           candidate_qualification_batch_id: string
+          commercial_relationship_assessment_version_id: string | null
+          company_intelligence_version_id: string | null
           completed_at: string | null
           created_at: string
           error_code: string | null
@@ -3263,6 +3587,8 @@ export type Database = {
           candidate_evaluation_version_id: string
           candidate_intelligence_version_id: string
           candidate_qualification_batch_id: string
+          commercial_relationship_assessment_version_id?: string | null
+          company_intelligence_version_id?: string | null
           completed_at?: string | null
           created_at?: string
           error_code?: string | null
@@ -3282,6 +3608,8 @@ export type Database = {
           candidate_evaluation_version_id?: string
           candidate_intelligence_version_id?: string
           candidate_qualification_batch_id?: string
+          commercial_relationship_assessment_version_id?: string | null
+          company_intelligence_version_id?: string | null
           completed_at?: string | null
           created_at?: string
           error_code?: string | null
@@ -3318,6 +3646,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "candidate_qualification_batch_commercial_relationship_asse_fkey"
+            columns: ["commercial_relationship_assessment_version_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_relationship_assessment_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_qualification_batch_company_intelligence_version_fkey"
+            columns: ["company_intelligence_version_id"]
+            isOneToOne: false
+            referencedRelation: "company_intelligence_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "candidate_qualification_batch_member_campaign_candidate_id_fkey"
             columns: ["campaign_candidate_id"]
             isOneToOne: false
@@ -3349,6 +3691,7 @@ export type Database = {
           input_hash: string
           output_reference_json: Json | null
           qualification_rubric_id: string
+          research_cycle_id: string
           rubric_json: Json
           status: string
           workspace_id: string
@@ -3368,6 +3711,7 @@ export type Database = {
           input_hash: string
           output_reference_json?: Json | null
           qualification_rubric_id: string
+          research_cycle_id: string
           rubric_json: Json
           status?: string
           workspace_id: string
@@ -3387,6 +3731,7 @@ export type Database = {
           input_hash?: string
           output_reference_json?: Json | null
           qualification_rubric_id?: string
+          research_cycle_id?: string
           rubric_json?: Json
           status?: string
           workspace_id?: string
@@ -3416,7 +3761,7 @@ export type Database = {
           {
             foreignKeyName: "candidate_qualification_batches_v2_campaign_run_id_fkey"
             columns: ["campaign_run_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "campaign_runs"
             referencedColumns: ["id"]
           },
@@ -3425,6 +3770,13 @@ export type Database = {
             columns: ["qualification_rubric_id"]
             isOneToOne: false
             referencedRelation: "qualification_rubrics"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_qualification_batches_v2_research_cycle_id_fkey"
+            columns: ["research_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_research_cycles_v2"
             referencedColumns: ["id"]
           },
           {
@@ -3520,6 +3872,7 @@ export type Database = {
           id: string
           included_evaluation_ids_json: Json
           ordering_policy_version: string
+          research_cycle_id: string | null
           status: string
           version_number: number
           workspace_id: string
@@ -3539,6 +3892,7 @@ export type Database = {
           id?: string
           included_evaluation_ids_json: Json
           ordering_policy_version: string
+          research_cycle_id?: string | null
           status?: string
           version_number: number
           workspace_id: string
@@ -3558,6 +3912,7 @@ export type Database = {
           id?: string
           included_evaluation_ids_json?: Json
           ordering_policy_version?: string
+          research_cycle_id?: string | null
           status?: string
           version_number?: number
           workspace_id?: string
@@ -3589,6 +3944,13 @@ export type Database = {
             columns: ["candidate_qualification_batch_id"]
             isOneToOne: false
             referencedRelation: "candidate_qualification_batches_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_rank_snapshots_research_cycle_id_fkey"
+            columns: ["research_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_research_cycles_v2"
             referencedColumns: ["id"]
           },
           {
@@ -3782,6 +4144,7 @@ export type Database = {
           entity_resolution_batch_id: string
           id: string
           input_hash: string
+          research_cycle_id: string
           started_at: string
           status: string
           summary_json: Json | null
@@ -3799,6 +4162,7 @@ export type Database = {
           entity_resolution_batch_id: string
           id?: string
           input_hash: string
+          research_cycle_id: string
           started_at?: string
           status?: string
           summary_json?: Json | null
@@ -3816,6 +4180,7 @@ export type Database = {
           entity_resolution_batch_id?: string
           id?: string
           input_hash?: string
+          research_cycle_id?: string
           started_at?: string
           status?: string
           summary_json?: Json | null
@@ -3832,7 +4197,7 @@ export type Database = {
           {
             foreignKeyName: "candidate_research_batches_v2_campaign_run_id_fkey"
             columns: ["campaign_run_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "campaign_runs"
             referencedColumns: ["id"]
           },
@@ -3848,6 +4213,13 @@ export type Database = {
             columns: ["entity_resolution_batch_id"]
             isOneToOne: false
             referencedRelation: "entity_resolution_batches_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_research_batches_v2_research_cycle_id_fkey"
+            columns: ["research_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_research_cycles_v2"
             referencedColumns: ["id"]
           },
           {
@@ -4451,6 +4823,165 @@ export type Database = {
           },
         ]
       }
+      commercial_intelligence_versions_v2: {
+        Row: {
+          company_profile_version_id: string
+          compiler_version: string
+          confidence: number
+          content_hash: string
+          created_at: string
+          evidence_ids: string[]
+          id: string
+          input_hash: string
+          intelligence_json: Json
+          model: string | null
+          model_role: string | null
+          prompt_version: string | null
+          provider: string | null
+          schema_version: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          company_profile_version_id: string
+          compiler_version: string
+          confidence: number
+          content_hash: string
+          created_at?: string
+          evidence_ids?: string[]
+          id?: string
+          input_hash: string
+          intelligence_json: Json
+          model?: string | null
+          model_role?: string | null
+          prompt_version?: string | null
+          provider?: string | null
+          schema_version: string
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          company_profile_version_id?: string
+          compiler_version?: string
+          confidence?: number
+          content_hash?: string
+          created_at?: string
+          evidence_ids?: string[]
+          id?: string
+          input_hash?: string
+          intelligence_json?: Json
+          model?: string | null
+          model_role?: string | null
+          prompt_version?: string | null
+          provider?: string | null
+          schema_version?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_intelligence_version_company_profile_version_id_fkey"
+            columns: ["company_profile_version_id"]
+            isOneToOne: false
+            referencedRelation: "company_profile_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_intelligence_versions_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      commercial_relationship_assessment_versions_v2: {
+        Row: {
+          assessment_json: Json
+          campaign_id: string
+          campaign_target_model_version_id: string
+          company_intelligence_version_id: string
+          compiler_version: string
+          content_hash: string
+          created_at: string
+          id: string
+          input_hash: string
+          matched_archetype_ids: Json
+          organization_id: string
+          schema_version: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          assessment_json: Json
+          campaign_id: string
+          campaign_target_model_version_id: string
+          company_intelligence_version_id: string
+          compiler_version: string
+          content_hash: string
+          created_at?: string
+          id?: string
+          input_hash: string
+          matched_archetype_ids?: Json
+          organization_id: string
+          schema_version: string
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          assessment_json?: Json
+          campaign_id?: string
+          campaign_target_model_version_id?: string
+          company_intelligence_version_id?: string
+          compiler_version?: string
+          content_hash?: string
+          created_at?: string
+          id?: string
+          input_hash?: string
+          matched_archetype_ids?: Json
+          organization_id?: string
+          schema_version?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "commercial_relationship_asses_campaign_target_model_versio_fkey"
+            columns: ["campaign_target_model_version_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_target_model_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_relationship_asses_company_intelligence_version_fkey"
+            columns: ["company_intelligence_version_id"]
+            isOneToOne: false
+            referencedRelation: "company_intelligence_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_relationship_assessment_version_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_relationship_assessment_versions_v_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "commercial_relationship_assessment_versions_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       commercial_rules: {
         Row: {
           applicability_json: Json
@@ -4802,6 +5333,79 @@ export type Database = {
           },
           {
             foreignKeyName: "company_domains_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      company_intelligence_versions_v2: {
+        Row: {
+          compiler_version: string
+          confidence: number
+          content_hash: string
+          created_at: string
+          evidence_ids: Json
+          id: string
+          input_hash: string
+          intelligence_json: Json
+          organization_id: string
+          research_blueprint_version_ids: Json
+          schema_version: string
+          source_candidate_intelligence_version_id: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          compiler_version: string
+          confidence: number
+          content_hash: string
+          created_at?: string
+          evidence_ids?: Json
+          id?: string
+          input_hash: string
+          intelligence_json: Json
+          organization_id: string
+          research_blueprint_version_ids?: Json
+          schema_version: string
+          source_candidate_intelligence_version_id: string
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          compiler_version?: string
+          confidence?: number
+          content_hash?: string
+          created_at?: string
+          evidence_ids?: Json
+          id?: string
+          input_hash?: string
+          intelligence_json?: Json
+          organization_id?: string
+          research_blueprint_version_ids?: Json
+          schema_version?: string
+          source_candidate_intelligence_version_id?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "company_intelligence_versions_source_candidate_intelligenc_fkey"
+            columns: ["source_candidate_intelligence_version_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_intelligence_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_intelligence_versions_v2_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "company_intelligence_versions_v2_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -5386,6 +5990,7 @@ export type Database = {
           lane: string
           model_call_id: string | null
           output_reference_json: Json | null
+          research_cycle_id: string | null
           rules_version: string
           status: string
           workspace_id: string
@@ -5405,6 +6010,7 @@ export type Database = {
           lane: string
           model_call_id?: string | null
           output_reference_json?: Json | null
+          research_cycle_id?: string | null
           rules_version: string
           status?: string
           workspace_id: string
@@ -5424,6 +6030,7 @@ export type Database = {
           lane?: string
           model_call_id?: string | null
           output_reference_json?: Json | null
+          research_cycle_id?: string | null
           rules_version?: string
           status?: string
           workspace_id?: string
@@ -5455,6 +6062,13 @@ export type Database = {
             columns: ["candidate_qualification_batch_id"]
             isOneToOne: false
             referencedRelation: "candidate_qualification_batches_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comparative_batches_research_cycle_id_fkey"
+            columns: ["research_cycle_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_research_cycles_v2"
             referencedColumns: ["id"]
           },
           {
@@ -7199,6 +7813,200 @@ export type Database = {
           },
         ]
       }
+      discovery_source_expansions_v2: {
+        Row: {
+          campaign_id: string
+          completed_at: string | null
+          created_at: string
+          expanded_organizations: number
+          extraction_method: string
+          extraction_version: string
+          id: string
+          matched_archetype_key: string
+          matched_segment_key: string
+          next_offset: number | null
+          provider_execution_id: string
+          provider_source_record_id: string
+          query_fingerprint: string
+          source_family: string
+          source_type: string
+          started_at: string
+          status: string
+          total_organizations: number
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          completed_at?: string | null
+          created_at?: string
+          expanded_organizations: number
+          extraction_method: string
+          extraction_version: string
+          id?: string
+          matched_archetype_key: string
+          matched_segment_key: string
+          next_offset?: number | null
+          provider_execution_id: string
+          provider_source_record_id: string
+          query_fingerprint: string
+          source_family: string
+          source_type: string
+          started_at?: string
+          status: string
+          total_organizations: number
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          completed_at?: string | null
+          created_at?: string
+          expanded_organizations?: number
+          extraction_method?: string
+          extraction_version?: string
+          id?: string
+          matched_archetype_key?: string
+          matched_segment_key?: string
+          next_offset?: number | null
+          provider_execution_id?: string
+          provider_source_record_id?: string
+          query_fingerprint?: string
+          source_family?: string
+          source_type?: string
+          started_at?: string
+          status?: string
+          total_organizations?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_source_expansions_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_expansions_v2_provider_execution_id_fkey"
+            columns: ["provider_execution_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_provider_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_expansions_v2_provider_source_record_id_fkey"
+            columns: ["provider_source_record_id"]
+            isOneToOne: false
+            referencedRelation: "provider_source_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_expansions_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      discovery_source_organization_references_v2: {
+        Row: {
+          campaign_id: string
+          canonical_domain_hint: string | null
+          created_at: string
+          extraction_method: string
+          extraction_version: string
+          id: string
+          organization_name: string
+          provider_execution_id: string
+          provider_source_record_id: string
+          query_fingerprint: string
+          reference_key: string
+          source_expansion_id: string
+          source_family: string
+          source_ordinal: number
+          source_type: string
+          source_url: string
+          website_url: string | null
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          canonical_domain_hint?: string | null
+          created_at?: string
+          extraction_method: string
+          extraction_version: string
+          id?: string
+          organization_name: string
+          provider_execution_id: string
+          provider_source_record_id: string
+          query_fingerprint: string
+          reference_key: string
+          source_expansion_id: string
+          source_family: string
+          source_ordinal: number
+          source_type: string
+          source_url: string
+          website_url?: string | null
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          canonical_domain_hint?: string | null
+          created_at?: string
+          extraction_method?: string
+          extraction_version?: string
+          id?: string
+          organization_name?: string
+          provider_execution_id?: string
+          provider_source_record_id?: string
+          query_fingerprint?: string
+          reference_key?: string
+          source_expansion_id?: string
+          source_family?: string
+          source_ordinal?: number
+          source_type?: string
+          source_url?: string
+          website_url?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "discovery_source_organization_re_provider_source_record_id_fkey"
+            columns: ["provider_source_record_id"]
+            isOneToOne: false
+            referencedRelation: "provider_source_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_organization_refere_provider_execution_id_fkey"
+            columns: ["provider_execution_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_provider_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_organization_referenc_source_expansion_id_fkey"
+            columns: ["source_expansion_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_source_expansions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_organization_references_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "discovery_source_organization_references_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       discovery_source_plans_v2: {
         Row: {
           activation_condition_json: Json
@@ -8004,6 +8812,113 @@ export type Database = {
           },
         ]
       }
+      intelligence_ai_attempts: {
+        Row: {
+          actual_cost: number | null
+          actual_model: string | null
+          attempt: number
+          attempt_kind: string
+          cache_key: string | null
+          completed_at: string
+          context_compiler_version: string
+          created_at: string
+          currency: string | null
+          error_code: string | null
+          error_message: string | null
+          fallback_used: boolean
+          frozen_input_hash: string | null
+          id: string
+          input_units: number | null
+          latency_ms: number | null
+          metadata: Json
+          model_route_version: string
+          output_mode: string
+          output_units: number | null
+          prompt_version: string
+          request_hash: string | null
+          requested_model: string | null
+          response_hash: string | null
+          schema_version: string
+          started_at: string
+          status: string
+          task_id: string
+          validation_issue: string | null
+          workspace_id: string
+        }
+        Insert: {
+          actual_cost?: number | null
+          actual_model?: string | null
+          attempt: number
+          attempt_kind: string
+          cache_key?: string | null
+          completed_at: string
+          context_compiler_version: string
+          created_at?: string
+          currency?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          fallback_used?: boolean
+          frozen_input_hash?: string | null
+          id?: string
+          input_units?: number | null
+          latency_ms?: number | null
+          metadata?: Json
+          model_route_version: string
+          output_mode: string
+          output_units?: number | null
+          prompt_version: string
+          request_hash?: string | null
+          requested_model?: string | null
+          response_hash?: string | null
+          schema_version: string
+          started_at: string
+          status: string
+          task_id: string
+          validation_issue?: string | null
+          workspace_id: string
+        }
+        Update: {
+          actual_cost?: number | null
+          actual_model?: string | null
+          attempt?: number
+          attempt_kind?: string
+          cache_key?: string | null
+          completed_at?: string
+          context_compiler_version?: string
+          created_at?: string
+          currency?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          fallback_used?: boolean
+          frozen_input_hash?: string | null
+          id?: string
+          input_units?: number | null
+          latency_ms?: number | null
+          metadata?: Json
+          model_route_version?: string
+          output_mode?: string
+          output_units?: number | null
+          prompt_version?: string
+          request_hash?: string | null
+          requested_model?: string | null
+          response_hash?: string | null
+          schema_version?: string
+          started_at?: string
+          status?: string
+          task_id?: string
+          validation_issue?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_ai_attempts_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intelligence_claims: {
         Row: {
           claim_key: string
@@ -8344,6 +9259,44 @@ export type Database = {
           },
         ]
       }
+      intelligence_runtime_events: {
+        Row: {
+          cache_key: string
+          created_at: string
+          event_type: string
+          id: string
+          metadata: Json
+          task_id: string
+          workspace_id: string
+        }
+        Insert: {
+          cache_key: string
+          created_at?: string
+          event_type: string
+          id?: string
+          metadata?: Json
+          task_id: string
+          workspace_id: string
+        }
+        Update: {
+          cache_key?: string
+          created_at?: string
+          event_type?: string
+          id?: string
+          metadata?: Json
+          task_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intelligence_runtime_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       intelligence_task_attempts: {
         Row: {
           attempt_number: number
@@ -8647,12 +9600,24 @@ export type Database = {
           analysis: Json
           campaign_id: string
           campaign_run_id: string
+          campaign_strategy_version_id: string | null
+          campaign_target_model_version_id: string | null
+          commercial_intelligence_version_id: string | null
+          compiler_version: string | null
           confidence: number
+          content_hash: string | null
           created_at: string
+          evidence_ids: string[]
           fallback_used: boolean
           id: string
+          input_hash: string | null
+          model_role: string | null
+          profile_snapshot_id: string | null
           prompt_version: string
           requested_model: string
+          requires_user_confirmation: boolean
+          schema_version: string | null
+          supersedes_market_analysis_id: string | null
           version: number
           workspace_id: string
         }
@@ -8661,12 +9626,24 @@ export type Database = {
           analysis: Json
           campaign_id: string
           campaign_run_id: string
+          campaign_strategy_version_id?: string | null
+          campaign_target_model_version_id?: string | null
+          commercial_intelligence_version_id?: string | null
+          compiler_version?: string | null
           confidence: number
+          content_hash?: string | null
           created_at?: string
+          evidence_ids?: string[]
           fallback_used?: boolean
           id?: string
+          input_hash?: string | null
+          model_role?: string | null
+          profile_snapshot_id?: string | null
           prompt_version: string
           requested_model: string
+          requires_user_confirmation?: boolean
+          schema_version?: string | null
+          supersedes_market_analysis_id?: string | null
           version: number
           workspace_id: string
         }
@@ -8675,12 +9652,24 @@ export type Database = {
           analysis?: Json
           campaign_id?: string
           campaign_run_id?: string
+          campaign_strategy_version_id?: string | null
+          campaign_target_model_version_id?: string | null
+          commercial_intelligence_version_id?: string | null
+          compiler_version?: string | null
           confidence?: number
+          content_hash?: string | null
           created_at?: string
+          evidence_ids?: string[]
           fallback_used?: boolean
           id?: string
+          input_hash?: string | null
+          model_role?: string | null
+          profile_snapshot_id?: string | null
           prompt_version?: string
           requested_model?: string
+          requires_user_confirmation?: boolean
+          schema_version?: string | null
+          supersedes_market_analysis_id?: string | null
           version?: number
           workspace_id?: string
         }
@@ -8700,7 +9689,178 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "market_analyses_campaign_strategy_version_id_fkey"
+            columns: ["campaign_strategy_version_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_strategy_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_analyses_campaign_target_model_version_id_fkey"
+            columns: ["campaign_target_model_version_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_target_model_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_analyses_commercial_intelligence_version_id_fkey"
+            columns: ["commercial_intelligence_version_id"]
+            isOneToOne: false
+            referencedRelation: "commercial_intelligence_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_analyses_profile_snapshot_id_fkey"
+            columns: ["profile_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_profile_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_analyses_supersedes_market_analysis_id_fkey"
+            columns: ["supersedes_market_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "market_analyses"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "market_analyses_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      market_analysis_confirmations_v2: {
+        Row: {
+          campaign_id: string
+          confirmed_at: string
+          confirmed_by: string
+          id: string
+          market_analysis_id: string
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          confirmed_at?: string
+          confirmed_by: string
+          id?: string
+          market_analysis_id: string
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          confirmed_at?: string
+          confirmed_by?: string
+          id?: string
+          market_analysis_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_analysis_confirmations_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_analysis_confirmations_v2_market_analysis_id_fkey"
+            columns: ["market_analysis_id"]
+            isOneToOne: true
+            referencedRelation: "market_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_analysis_confirmations_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      market_research_plan_versions_v2: {
+        Row: {
+          campaign_id: string
+          campaign_run_id: string | null
+          campaign_target_model_version_id: string
+          compiler_version: string
+          content_hash: string
+          created_at: string
+          id: string
+          input_hash: string
+          market_analysis_id: string
+          plan_json: Json
+          provider_capability_snapshot_ids: string[]
+          schema_version: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          campaign_run_id?: string | null
+          campaign_target_model_version_id: string
+          compiler_version: string
+          content_hash: string
+          created_at?: string
+          id?: string
+          input_hash: string
+          market_analysis_id: string
+          plan_json: Json
+          provider_capability_snapshot_ids?: string[]
+          schema_version: string
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          campaign_run_id?: string | null
+          campaign_target_model_version_id?: string
+          compiler_version?: string
+          content_hash?: string
+          created_at?: string
+          id?: string
+          input_hash?: string
+          market_analysis_id?: string
+          plan_json?: Json
+          provider_capability_snapshot_ids?: string[]
+          schema_version?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_research_plan_versions_campaign_target_model_versio_fkey"
+            columns: ["campaign_target_model_version_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_target_model_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_research_plan_versions_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_research_plan_versions_v2_campaign_run_id_fkey"
+            columns: ["campaign_run_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_research_plan_versions_v2_market_analysis_id_fkey"
+            columns: ["market_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "market_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_research_plan_versions_v2_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -8919,10 +10079,12 @@ export type Database = {
       normalized_provider_candidates: {
         Row: {
           campaign_id: string
+          candidate_reference_key: string | null
           canonical_domain_hint: string | null
           country: string | null
           created_at: string
           description: string | null
+          discovery_source_reference_id: string | null
           employee_count: number | null
           id: string
           industries_json: Json
@@ -8945,10 +10107,12 @@ export type Database = {
         }
         Insert: {
           campaign_id: string
+          candidate_reference_key?: string | null
           canonical_domain_hint?: string | null
           country?: string | null
           created_at: string
           description?: string | null
+          discovery_source_reference_id?: string | null
           employee_count?: number | null
           id?: string
           industries_json?: Json
@@ -8971,10 +10135,12 @@ export type Database = {
         }
         Update: {
           campaign_id?: string
+          candidate_reference_key?: string | null
           canonical_domain_hint?: string | null
           country?: string | null
           created_at?: string
           description?: string | null
+          discovery_source_reference_id?: string | null
           employee_count?: number | null
           id?: string
           industries_json?: Json
@@ -8996,6 +10162,13 @@ export type Database = {
           workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "normalized_provider_candidate_discovery_source_reference_i_fkey"
+            columns: ["discovery_source_reference_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_source_organization_references_v2"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "normalized_provider_candidates_campaign_id_fkey"
             columns: ["campaign_id"]
@@ -9407,6 +10580,85 @@ export type Database = {
           },
           {
             foreignKeyName: "organization_merge_events_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organization_references_v2: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          id: string
+          normalized_candidate_id: string
+          provider_execution_id: string
+          provider_source_record_id: string
+          reference_json: Json
+          source_expansion_reference_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          id?: string
+          normalized_candidate_id: string
+          provider_execution_id: string
+          provider_source_record_id: string
+          reference_json: Json
+          source_expansion_reference_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          id?: string
+          normalized_candidate_id?: string
+          provider_execution_id?: string
+          provider_source_record_id?: string
+          reference_json?: Json
+          source_expansion_reference_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_references_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_references_v2_normalized_candidate_id_fkey"
+            columns: ["normalized_candidate_id"]
+            isOneToOne: true
+            referencedRelation: "normalized_provider_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_references_v2_provider_execution_id_fkey"
+            columns: ["provider_execution_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_provider_executions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_references_v2_provider_source_record_id_fkey"
+            columns: ["provider_source_record_id"]
+            isOneToOne: false
+            referencedRelation: "provider_source_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_references_v2_source_expansion_reference_id_fkey"
+            columns: ["source_expansion_reference_id"]
+            isOneToOne: false
+            referencedRelation: "discovery_source_organization_references_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "organization_references_v2_workspace_id_fkey"
             columns: ["workspace_id"]
             isOneToOne: false
             referencedRelation: "workspaces"
@@ -10673,6 +11925,83 @@ export type Database = {
           },
         ]
       }
+      research_blueprint_versions_v2: {
+        Row: {
+          blueprint_json: Json
+          campaign_id: string
+          campaign_target_model_version_id: string
+          compiler_version: string
+          content_hash: string
+          created_at: string
+          id: string
+          input_hash: string
+          market_analysis_id: string
+          schema_version: string
+          target_archetype_id: string
+          version: number
+          workspace_id: string
+        }
+        Insert: {
+          blueprint_json: Json
+          campaign_id: string
+          campaign_target_model_version_id: string
+          compiler_version: string
+          content_hash: string
+          created_at?: string
+          id?: string
+          input_hash: string
+          market_analysis_id: string
+          schema_version: string
+          target_archetype_id: string
+          version: number
+          workspace_id: string
+        }
+        Update: {
+          blueprint_json?: Json
+          campaign_id?: string
+          campaign_target_model_version_id?: string
+          compiler_version?: string
+          content_hash?: string
+          created_at?: string
+          id?: string
+          input_hash?: string
+          market_analysis_id?: string
+          schema_version?: string
+          target_archetype_id?: string
+          version?: number
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "research_blueprint_versions_v_campaign_target_model_versio_fkey"
+            columns: ["campaign_target_model_version_id"]
+            isOneToOne: false
+            referencedRelation: "campaign_target_model_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_blueprint_versions_v2_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_blueprint_versions_v2_market_analysis_id_fkey"
+            columns: ["market_analysis_id"]
+            isOneToOne: false
+            referencedRelation: "market_analyses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "research_blueprint_versions_v2_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scoring_versions: {
         Row: {
           confidence_policy_json: Json
@@ -11291,6 +12620,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bind_qualification_relationship_assessments_v2: {
+        Args: {
+          target_batch_id: string
+          target_bindings: Json
+          target_workspace_id: string
+        }
+        Returns: undefined
+      }
       block_candidate_qualification_member_v2: {
         Args: {
           target_error_code: string
@@ -11299,6 +12636,48 @@ export type Database = {
           target_workspace_id: string
         }
         Returns: Json
+      }
+      claim_campaign_strategy_stage_v2: {
+        Args: {
+          target_cache_key: string
+          target_context_compiler_version: string
+          target_input_hash: string
+          target_model_route_version: string
+          target_prompt_version: string
+          target_schema_version: string
+          target_stage_id: string
+          target_strategy_draft_id: string
+          target_trigger_run_id: string
+          target_workspace_id: string
+        }
+        Returns: {
+          attempt_count: number
+          cache_key: string
+          campaign_strategy_draft_id: string
+          completed_at: string | null
+          context_compiler_version: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          input_hash: string
+          model_route_version: string
+          output_json: Json | null
+          prompt_version: string
+          schema_version: string
+          stage_id: string
+          started_at: string | null
+          status: string
+          trigger_run_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "campaign_strategy_stage_runs_v2"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       claim_candidate_qualification_member_v2: {
         Args: {
@@ -11358,6 +12737,10 @@ export type Database = {
         Returns: undefined
       }
       clear_workspace_data_before_candidate_research_v2: {
+        Args: { target_workspace_id: string }
+        Returns: undefined
+      }
+      clear_workspace_data_before_core_intelligence_v2: {
         Args: { target_workspace_id: string }
         Returns: undefined
       }
@@ -11421,6 +12804,41 @@ export type Database = {
           target_workspace_id: string
         }
         Returns: undefined
+      }
+      complete_campaign_strategy_stage_v2: {
+        Args: {
+          target_output: Json
+          target_stage_run_id: string
+          target_workspace_id: string
+        }
+        Returns: {
+          attempt_count: number
+          cache_key: string
+          campaign_strategy_draft_id: string
+          completed_at: string | null
+          context_compiler_version: string
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          input_hash: string
+          model_route_version: string
+          output_json: Json | null
+          prompt_version: string
+          schema_version: string
+          stage_id: string
+          started_at: string | null
+          status: string
+          trigger_run_id: string | null
+          updated_at: string
+          workspace_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "campaign_strategy_stage_runs_v2"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       complete_candidate_qualification_member_v2: {
         Args: {
@@ -11851,6 +13269,16 @@ export type Database = {
         Returns: string
       }
       empty_discovery_progress_counters_v2: { Args: never; Returns: Json }
+      ensure_campaign_research_cycle_v2: {
+        Args: {
+          target_budget: Json
+          target_campaign_run_id: string
+          target_continuation_of_cycle_id?: string
+          target_cycle_number: number
+          target_workspace_id: string
+        }
+        Returns: Json
+      }
       ensure_campaign_workflow_v2: {
         Args: {
           target_campaign_run_id: string
@@ -11885,6 +13313,15 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      fail_campaign_strategy_stage_v2: {
+        Args: {
+          target_error_code: string
+          target_error_message: string
+          target_stage_run_id: string
+          target_workspace_id: string
+        }
+        Returns: undefined
+      }
       fail_intelligence_task_attempt_v2: {
         Args: {
           target_error_code: string
@@ -11918,6 +13355,15 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      finalize_campaign_research_cycle_v2: {
+        Args: {
+          target_cycle_id: string
+          target_decision: Json
+          target_usage: Json
+          target_workspace_id: string
+        }
+        Returns: Json
       }
       finalize_candidate_qualification_batch_v2: {
         Args: { target_batch_id: string; target_workspace_id: string }
@@ -12048,6 +13494,51 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      get_campaign_strategy_enrichment_v2: {
+        Args: { target_strategy_draft_id: string; target_workspace_id: string }
+        Returns: Json
+      }
+      get_intelligence_feedback_metrics: {
+        Args: { target_since?: string; target_workspace_id: string }
+        Returns: {
+          cache_hits: number
+          cache_misses: number
+          cache_reuse_rate: number
+          metric_scope: string
+          reviewed_outputs: number
+          task_id: string
+          user_edit_rate: number
+          user_edits: number
+          user_rejection_rate: number
+          user_rejections: number
+        }[]
+      }
+      get_intelligence_runtime_metrics: {
+        Args: { target_since?: string; target_workspace_id: string }
+        Returns: {
+          actual_model: string
+          completed_outputs: number
+          currency: string
+          failed_attempts: number
+          fallback_attempts: number
+          fallback_rate: number
+          initial_attempts: number
+          p50_latency_ms: number
+          p95_latency_ms: number
+          repair_attempts: number
+          repair_rate: number
+          semantic_failure_attempts: number
+          successful_output_rate: number
+          task_id: string
+          timeout_attempts: number
+          timeout_rate: number
+          total_cost: number
+          total_input_units: number
+          total_output_units: number
+          truncation_attempts: number
+          truncation_rate: number
+        }[]
+      }
       initialize_candidate_qualification_batch_v2: {
         Args: {
           target_campaign_run_id: string
@@ -12102,6 +13593,17 @@ export type Database = {
         Returns: Json
       }
       load_campaign_run_memory_snapshot_v2: {
+        Args: { target_campaign_run_id: string; target_workspace_id: string }
+        Returns: Json
+      }
+      load_discovery_source_expansion_v2: {
+        Args: {
+          target_source_expansion_id: string
+          target_workspace_id: string
+        }
+        Returns: Json
+      }
+      materialize_campaign_organization_references_v2: {
         Args: { target_campaign_run_id: string; target_workspace_id: string }
         Returns: Json
       }
@@ -12269,6 +13771,23 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      persist_discovery_source_expansion_v2: {
+        Args: {
+          target_archetype_key: string
+          target_campaign_id: string
+          target_created_at: string
+          target_normalization_version: string
+          target_page: Json
+          target_provider_execution_id: string
+          target_provider_source_record_id: string
+          target_query_fingerprint: string
+          target_segment_key: string
+          target_source_family: string
+          target_source_type: string
+          target_workspace_id: string
+        }
+        Returns: Json
+      }
       persist_provider_candidate_preclassifications_v2: {
         Args: {
           target_classifications: Json
@@ -12285,7 +13804,9 @@ export type Database = {
           target_evaluation_version_id: string
           target_proposed_value_json: Json
           target_reason: string
+          target_relationship_dimension?: string
           target_scope?: string
+          target_source_relationship_assessment_version_id?: string
           target_workspace_id: string
         }
         Returns: string
@@ -12399,6 +13920,14 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      record_campaign_strategy_ai_requests_v2: {
+        Args: {
+          target_requests: Json
+          target_strategy_draft_id: string
+          target_workspace_id: string
+        }
+        Returns: number
+      }
       record_candidate_review_decision_v2: {
         Args: {
           target_campaign_candidate_id: string
@@ -12445,6 +13974,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      reserve_campaign_research_continuation_v2: {
+        Args: {
+          target_budget: Json
+          target_campaign_run_id: string
+          target_workspace_id: string
+        }
+        Returns: Json
       }
       resolve_campaign_entities_before_retry_safe_reuse_v2: {
         Args: {

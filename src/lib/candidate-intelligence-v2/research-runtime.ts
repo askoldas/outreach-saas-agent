@@ -7,9 +7,14 @@ import type {
   ResearchScope,
 } from "./contracts.ts";
 import { compileCandidateResearchPlan } from "./research-plan.ts";
+import {
+  prioritizeResearchCandidate,
+  type CandidatePrioritization,
+} from "./candidate-prioritization.ts";
+import type { ResearchBlueprint } from "../intelligence/core/research-blueprint.ts";
 
 export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION =
-  "candidate-research-v2.3-multipage";
+  "candidate-research-v2.4-blueprints";
 
 export type CandidateResearchClaimState = {
   key: string;
@@ -56,6 +61,7 @@ export type PreparedCampaignResearchPlan = {
     maximumFirstPartyFetches: number;
     deferredQuestionKeys: string[];
     deferredReusableQuestionKeys: string[];
+    prioritization: CandidatePrioritization;
   };
   reusableIntelligenceVersionId: string | null;
 };
@@ -64,15 +70,18 @@ export function prepareCampaignResearchPlans(input: {
   campaignRunId: string;
   strategyVersionId: string;
   strategy: CampaignStrategyV2;
+  researchBlueprints?: ResearchBlueprint[];
   candidates: CampaignResearchCandidateInput[];
 }): PreparedCampaignResearchPlan[] {
   const archetypeById = new Map(
     input.strategy.archetypes.map((archetype) => [archetype.id, archetype] as const),
   );
+  const blueprintByArchetypeId = new Map(
+    (input.researchBlueprints ?? []).map(
+      (blueprint) => [blueprint.targetArchetypeId, blueprint] as const,
+    ),
+  );
   return [...input.candidates]
-    .sort((left, right) =>
-      left.campaignCandidateId.localeCompare(right.campaignCandidateId),
-    )
     .map((candidate) => {
       const matchedArchetypes = candidate.matchedArchetypeIds.map((id) => {
         const archetype = archetypeById.get(id);
@@ -82,6 +91,10 @@ export function prepareCampaignResearchPlans(input: {
           );
         }
         return archetype;
+      });
+      const matchedBlueprints = candidate.matchedArchetypeIds.flatMap((id) => {
+        const blueprint = blueprintByArchetypeId.get(id);
+        return blueprint ? [blueprint] : [];
       });
       const required = new Set(["business_model", "products_services"]);
       const optional = new Set(["operating_markets"]);
@@ -106,6 +119,12 @@ export function prepareCampaignResearchPlans(input: {
           } else {
             optional.add(question.questionKey);
           }
+        }
+      }
+      for (const blueprint of matchedBlueprints) {
+        for (const question of blueprint.researchQuestions) {
+          (question.required ? required : optional).add(question.key);
+          reusableQuestionKeys.add(question.key);
         }
       }
       for (const question of input.strategy.qualificationPolicy
@@ -165,6 +184,7 @@ export function prepareCampaignResearchPlans(input: {
         organizationId: candidate.organizationId,
         campaignCandidateId: candidate.campaignCandidateId,
         strategyVersionId: input.strategyVersionId,
+        researchBlueprintVersionIds: matchedBlueprints.map(({ id }) => id),
         requiredQuestionKeys: prioritizeTargetGeography(required),
         optionalQuestionKeys: [...optional].sort(compareText),
         resolvedQuestionKeys,
@@ -174,7 +194,10 @@ export function prepareCampaignResearchPlans(input: {
         procurementUnknown:
           !candidate.procurementAutonomy || candidate.procurementAutonomy === "unknown",
         pageBudget: Math.min(8, Math.max(3, required.size)),
-        questionOverrides: buildQuestionOverrides(input.strategy),
+        questionOverrides: {
+          ...buildBlueprintQuestionOverrides(matchedBlueprints),
+          ...buildQuestionOverrides(input.strategy),
+        },
       });
       const frozenQuestionKeys = new Set(plan.questions.map(({ key }) => key));
       const requestedQuestionKeys = new Set([
@@ -186,6 +209,7 @@ export function prepareCampaignResearchPlans(input: {
           ? ["procurement_authority"]
           : []),
       ]);
+      const prioritization = prioritizeResearchCandidate(candidate);
       const sourcePlan = {
         canonicalDomain: candidate.canonicalDomain,
         canonicalUrl: candidate.canonicalUrl,
@@ -199,6 +223,7 @@ export function prepareCampaignResearchPlans(input: {
         deferredReusableQuestionKeys: [...requestedQuestionKeys]
           .filter((key) => reusableQuestionKeys.has(key) && !frozenQuestionKeys.has(key))
           .sort(compareText),
+        prioritization,
       };
       const contentHash = hashCanonical({
         campaignRunId: input.campaignRunId,
@@ -216,13 +241,61 @@ export function prepareCampaignResearchPlans(input: {
           contractVersion: CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION,
         }),
         contentHash,
-        priority: highestPriority(plan.questions),
+        priority: prioritization.score,
         plan,
         sourcePlan,
         reusableIntelligenceVersionId:
           plan.questions.length === 0 ? candidate.currentIntelligenceVersionId : null,
       };
-    });
+    })
+    .sort(
+      (left, right) =>
+        right.priority - left.priority ||
+        left.campaignCandidateId.localeCompare(right.campaignCandidateId),
+    );
+}
+
+function buildBlueprintQuestionOverrides(
+  blueprints: ResearchBlueprint[],
+): NonNullable<Parameters<typeof compileCandidateResearchPlan>[0]["questionOverrides"]> {
+  const overrides: NonNullable<
+    Parameters<typeof compileCandidateResearchPlan>[0]["questionOverrides"]
+  > = {};
+  for (const blueprint of blueprints) {
+    for (const question of blueprint.researchQuestions) {
+      overrides[question.key] = {
+        question: question.question,
+        purpose: blueprintPurpose(question.key),
+        reusableScope: "organization",
+        expectedEvidenceTypes: blueprintEvidenceTypes(question.evidenceRoles),
+      };
+    }
+  }
+  return overrides;
+}
+
+function blueprintPurpose(key: string) {
+  if (key === "identity" || key === "operating_markets") return "identity" as const;
+  if (key === "business_model" || key === "products_services" || key === "operations") {
+    return "business_model" as const;
+  }
+  if (key === "scale") return "freshness" as const;
+  return "relationship" as const;
+}
+
+function blueprintEvidenceTypes(
+  roles: ResearchBlueprint["researchQuestions"][number]["evidenceRoles"],
+) {
+  const evidenceTypes = roles.flatMap((role) => {
+    if (role === "identity")
+      return ["legal_registry" as const, "official_web_page" as const];
+    if (role === "first_party")
+      return ["official_web_page" as const, "official_document" as const];
+    if (role === "supporting")
+      return ["company_database" as const, "directory_profile" as const];
+    return [];
+  });
+  return [...new Set(evidenceTypes)];
 }
 
 export function freshnessClassForQuestion(
@@ -235,10 +308,6 @@ export function freshnessClassForQuestion(
   if (question.purpose === "procurement") return "dynamic";
   if (question.purpose === "freshness") return "volatile";
   return "dynamic";
-}
-
-function highestPriority(questions: CandidateResearchQuestion[]) {
-  return Math.max(1, Math.min(100, questions[0]?.priority ?? 1));
 }
 
 function compareText(left: string, right: string) {

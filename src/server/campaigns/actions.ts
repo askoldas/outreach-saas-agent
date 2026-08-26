@@ -19,6 +19,7 @@ import {
   parseConfirmedCampaignBrief,
   parseCampaignBriefProposal,
 } from "@/lib/campaign-workflow/contracts";
+import { LEGACY_CAMPAIGN_VOLUME_PROJECTION } from "@/lib/research-budget-v2/contracts";
 import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
 import { createInitialCampaignStrategyV2 } from "@/server/campaign-strategy-v2/service";
 import { dispatchCampaignStrategyV2Compilation } from "@/server/trigger/dispatch";
@@ -287,7 +288,7 @@ export async function createCampaignAction(formData: FormData) {
   }
 
   const campaign = await createCampaign(currentWorkspace.id, {
-    desiredLeadCount: confirmedBrief.desiredQualifiedCompanies,
+    desiredLeadCount: LEGACY_CAMPAIGN_VOLUME_PROJECTION,
     exclusions: Array.from(
       new Set(confirmedTargetSegments.flatMap((segment) => segment.exclusions)),
     ),

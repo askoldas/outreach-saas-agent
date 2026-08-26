@@ -36,7 +36,7 @@ test("the parent checks controls before and after every durable child stage", ()
   assert.match(parent, /beforeStage/);
   assert.match(parent, /afterStage/);
   assert.match(parent, /consumeWorkflowControl/);
-  assert.match(parent, /remainingCampaignStages/);
+  assert.match(parent, /stagesForResearchCycle/);
 });
 
 test("workflow settlement reconciles Campaign Run progress and terminal states", () => {

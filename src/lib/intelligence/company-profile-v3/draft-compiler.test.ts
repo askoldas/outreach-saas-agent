@@ -219,6 +219,42 @@ test("multi-offering compilation keeps product and consulting buyer logic distin
   );
 });
 
+test("compilation scopes duplicate archetype keys emitted for different offerings", () => {
+  const input = compilationFixture();
+  input.offerings = profileOfferingDecompositionOutputSchema.parse({
+    offerings: [
+      offering("product", "Core product", "resell", "wholesale_order"),
+      offering("consulting", "Consulting service", "use", "project"),
+    ],
+    ungroupedItems: [],
+    groupingWarnings: [],
+  });
+  input.buyerLogic = profileBuyerLogicOutputSchema.parse({
+    offeringBuyerLogic: [
+      buyerLogic("product", ["Stock the product"]),
+      buyerLogic("consulting", ["Improve operations"]),
+    ],
+    archetypes: [
+      archetype("horeca-operator", "product", "distributor"),
+      archetype("horeca-operator", "consulting", "direct_buyer"),
+    ],
+    proposedOfferingRules: [],
+    unresolvedQuestions: [],
+  });
+
+  const compiled = compileProfileV3Draft(input);
+
+  assert.equal(compiled.offerings[0]?.archetypes[0]?.archetypeKey, "horeca-operator");
+  assert.equal(
+    compiled.offerings[1]?.archetypes[0]?.archetypeKey,
+    "horeca-operator--consulting",
+  );
+  assert.equal(
+    compiled.compiledSnapshot.buyerLogic.archetypes[1]?.archetypeKey,
+    "horeca-operator--consulting",
+  );
+});
+
 test("compilation rejects missing, unknown, and duplicate offering buyer logic", () => {
   const input = compilationFixture();
   assert.throws(

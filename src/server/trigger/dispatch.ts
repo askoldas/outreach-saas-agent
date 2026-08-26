@@ -151,6 +151,34 @@ export async function dispatchCampaignV2Resume(input: {
   ).id;
 }
 
+export async function dispatchCampaignV2Continuation(input: {
+  campaignRunId: string;
+  cycleNumber: number;
+  requestedAction:
+    | "research_existing_pool"
+    | "discover_more"
+    | "expand_source_pages"
+    | "stop_budget";
+  workspaceId: string;
+}) {
+  return (
+    await tasks.trigger<typeof executeCampaignV2Task>(
+      "execute-campaign-v2",
+      { ...input },
+      {
+        idempotencyKey: `execute-campaign-v2:${input.campaignRunId}:cycle-${input.cycleNumber}`,
+        tags: [
+          `workspace:${input.workspaceId}`,
+          `campaign_run:${input.campaignRunId}`,
+          `research_cycle:${input.cycleNumber}`,
+          "workflow:v2",
+          "campaign_research_continuation",
+        ],
+      },
+    )
+  ).id;
+}
+
 export async function dispatchProviderExecution(input: {
   providerExecutionId: string;
   workspaceId: string;

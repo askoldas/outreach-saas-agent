@@ -2,7 +2,10 @@ import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
 import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import { generateTextResult, type AiCallResult } from "@/lib/providers/openrouter";
 import { executeValidatedAiTask } from "@/lib/intelligence/runtime/execute-ai-task";
-import { IntelligenceTaskRegistry, type PromptDefinition } from "@/lib/intelligence/runtime/task-registry";
+import {
+  IntelligenceTaskRegistry,
+  type PromptDefinition,
+} from "@/lib/intelligence/runtime/task-registry";
 import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 import {
@@ -51,6 +54,7 @@ export async function executeQualificationMember(input: {
     objective: member.objective,
     claims: member.claims,
     evidence: member.evidence,
+    commercialRelationshipAssessment: member.commercialRelationshipAssessment ?? null,
   });
   const relationship = await evaluateRelationship({
     member,
@@ -136,6 +140,14 @@ export async function executeQualificationMember(input: {
     campaignCandidateId: member.campaignCandidateId,
     campaignStrategyVersionId: member.strategyVersionId,
     candidateIntelligenceVersionId: member.candidateIntelligenceVersionId,
+    companyIntelligenceVersionId:
+      "companyIntelligenceVersionId" in member
+        ? member.companyIntelligenceVersionId
+        : null,
+    commercialRelationshipAssessmentVersionId:
+      member.commercialRelationshipAssessment?.id ?? null,
+    commercialRelationshipDimensions:
+      member.commercialRelationshipAssessment?.relationships ?? null,
     claimApplicability: member.claims.map(({ id, applicability }) => ({
       claimId: id,
       applicability,
@@ -215,6 +227,7 @@ async function evaluateRelationship(input: {
     desiredRelationships: input.member.rubric.desiredRelationships,
     normallyExcludedRelationships: input.member.rubric.normallyExcludedRelationships,
     organization: input.member.organization,
+    commercialRelationshipAssessment: input.member.commercialRelationshipAssessment,
     claims: input.member.claims,
     evidence: input.member.evidence,
   };
@@ -389,7 +402,9 @@ async function executeQualificationAiTask<TRequest, TOutput>(input: {
   };
 }
 
-function aiCallFromResult<T>(result: Awaited<ReturnType<typeof executeValidatedAiTask<unknown, T>>>): AiCallResult<string> {
+function aiCallFromResult<T>(
+  result: Awaited<ReturnType<typeof executeValidatedAiTask<unknown, T>>>,
+): AiCallResult<string> {
   return {
     data: JSON.stringify(result.data),
     provider: "openrouter",

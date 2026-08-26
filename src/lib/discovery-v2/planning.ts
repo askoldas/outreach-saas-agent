@@ -34,6 +34,7 @@ export const discoveryPlanV2Schema = z
     workspaceId: z.string().min(1),
     campaignId: z.string().min(1),
     campaignStrategyVersionId: z.string().min(1),
+    marketResearchPlanVersionId: z.string().min(1).optional(),
     memorySnapshotId: z.string().min(1),
     versionNumber: z.number().int().positive(),
     status: z.enum(["draft", "ready", "running", "completed", "superseded"]),
@@ -107,6 +108,8 @@ export function compileDiscoveryPlanV2(input: {
   id: string;
   workspaceId: string;
   strategy: CampaignStrategyV2;
+  segments?: CampaignStrategyV2["discoverySegments"];
+  marketResearchPlanVersionId?: string;
   routes: SegmentProviderRouteV2[];
   providerCapabilities: Array<z.infer<typeof discoveryProviderCapabilitiesSchema>>;
   versionNumber: number;
@@ -125,10 +128,13 @@ export function compileDiscoveryPlanV2(input: {
     workspaceId: input.workspaceId,
     campaignId: strategy.campaignId,
     campaignStrategyVersionId: strategy.id,
+    ...(input.marketResearchPlanVersionId
+      ? { marketResearchPlanVersionId: input.marketResearchPlanVersionId }
+      : {}),
     memorySnapshotId: strategy.memorySnapshotId,
     versionNumber: input.versionNumber,
     status: "ready" as const,
-    segments: [...strategy.discoverySegments].sort(
+    segments: [...(input.segments ?? strategy.discoverySegments)].sort(
       (left, right) => left.priority - right.priority || compareText(left.id, right.id),
     ),
     routes: [...input.routes]

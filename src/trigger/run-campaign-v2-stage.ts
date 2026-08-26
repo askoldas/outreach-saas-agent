@@ -9,6 +9,7 @@ export type RunCampaignV2StagePayload = {
   stage: CampaignV2Stage;
   workflowRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 };
 
 export const runCampaignV2StageTask = task({

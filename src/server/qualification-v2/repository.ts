@@ -8,10 +8,24 @@ import type {
 } from "@/lib/qualification-v2";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
+import {
+  loadCompanyIntelligenceForCandidateSource,
+  loadCompanyIntelligenceVersion,
+} from "@/server/core-intelligence-v2/repository";
+import type { CommercialRelationshipAssessment } from "@/lib/intelligence/core";
+import { loadCommercialRelationshipAssessmentVersion } from "@/server/core-intelligence-v2/repository";
 
 type RpcResult = {
   data: unknown;
   error: { message: string } | null;
+};
+
+type RelationshipBindingQuery = {
+  eq(column: string, value: string): RelationshipBindingQuery;
+  single(): PromiseLike<{
+    data: unknown;
+    error: { message: string } | null;
+  }>;
 };
 
 const qualificationCandidateInputSchema = z
@@ -255,6 +269,7 @@ export type QualificationMemberContext = Omit<
   rubric: QualificationRubricRuntime;
   claims: QualificationClaim[];
   evidence: QualificationEvidence[];
+  commercialRelationshipAssessment?: CommercialRelationshipAssessment;
 };
 export type QualificationMemberResult = z.infer<typeof memberResultSchema>;
 
@@ -290,6 +305,22 @@ export async function initializeQualificationBatch(input: {
   );
 }
 
+export async function bindQualificationRelationshipAssessments(input: {
+  batchId: string;
+  workspaceId: string;
+  bindings: Array<{
+    campaignCandidateId: string;
+    assessmentVersionId: string;
+  }>;
+}) {
+  if (!input.bindings.length) return;
+  await rpc("bind_qualification_relationship_assessments_v2", {
+    target_workspace_id: input.workspaceId,
+    target_batch_id: input.batchId,
+    target_bindings: input.bindings as unknown as Json,
+  });
+}
+
 export async function claimQualificationMember(input: {
   memberId: string;
   triggerRunId: string;
@@ -310,8 +341,55 @@ export async function claimQualificationMember(input: {
       return typeof key === "string" ? [key] : [];
     }),
   );
+  const coreBindings = await loadBoundCoreIntelligenceIds({
+    memberId: parsed.memberId,
+    workspaceId: input.workspaceId,
+  });
+  const relationshipAssessment = coreBindings.relationshipAssessmentVersionId
+    ? await loadCommercialRelationshipAssessmentVersion({
+        workspaceId: input.workspaceId,
+        id: coreBindings.relationshipAssessmentVersionId,
+      })
+    : null;
+  const companyIntelligence = coreBindings.companyIntelligenceVersionId
+    ? asQualificationCompanyIntelligence(
+        await loadCompanyIntelligenceVersion({
+          workspaceId: input.workspaceId,
+          id: coreBindings.companyIntelligenceVersionId,
+        }),
+      )
+    : await loadCompanyIntelligenceForCandidateSource({
+        workspaceId: input.workspaceId,
+        sourceCandidateIntelligenceVersionId: parsed.candidateIntelligenceVersionId,
+      });
+  if (
+    relationshipAssessment &&
+    companyIntelligence &&
+    relationshipAssessment.companyIntelligenceVersionId !== companyIntelligence.id
+  ) {
+    throw new Error("Qualification relationship assessment input mismatch.");
+  }
+  const reusableClaimIds = companyIntelligence
+    ? new Set(companyIntelligence.artifact.claims.map(({ claimId }) => claimId))
+    : null;
+  if (
+    reusableClaimIds &&
+    [...reusableClaimIds].some(
+      (claimId) => !parsed.claims.some(({ id }) => id === claimId),
+    )
+  ) {
+    throw new Error(
+      "Company Intelligence compatibility projection references an unavailable claim.",
+    );
+  }
   return {
     ...parsed,
+    ...(companyIntelligence
+      ? { companyIntelligenceVersionId: companyIntelligence.id }
+      : {}),
+    ...(relationshipAssessment
+      ? { commercialRelationshipAssessment: relationshipAssessment }
+      : {}),
     claims: parsed.claims.map((claim) => ({
       ...claim,
       applicability: {
@@ -334,6 +412,55 @@ export async function claimQualificationMember(input: {
       },
     })),
   } as QualificationMemberContext;
+}
+
+function asQualificationCompanyIntelligence(
+  artifact: NonNullable<Awaited<ReturnType<typeof loadCompanyIntelligenceVersion>>>,
+) {
+  return { id: artifact.id, artifact };
+}
+
+async function loadBoundCoreIntelligenceIds(input: {
+  memberId: string;
+  workspaceId: string;
+}) {
+  const supabase = createServiceRoleClient() as unknown as {
+    from(table: string): {
+      select(columns: string): {
+        eq(column: string, value: string): RelationshipBindingQuery;
+      };
+    };
+  };
+  const { data, error } = await supabase
+    .from("candidate_qualification_batch_members_v2")
+    .select(
+      "company_intelligence_version_id,commercial_relationship_assessment_version_id",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.memberId)
+    .single();
+  if (error) {
+    throw new Error(
+      `Could not load Qualification relationship binding: ${error.message}`,
+    );
+  }
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return {
+      companyIntelligenceVersionId: null,
+      relationshipAssessmentVersionId: null,
+    };
+  }
+  const record = data as Record<string, unknown>;
+  return {
+    companyIntelligenceVersionId:
+      typeof record.company_intelligence_version_id === "string"
+        ? record.company_intelligence_version_id
+        : null,
+    relationshipAssessmentVersionId:
+      typeof record.commercial_relationship_assessment_version_id === "string"
+        ? record.commercial_relationship_assessment_version_id
+        : null,
+  };
 }
 
 export async function saveQualificationAiOutput(input: {

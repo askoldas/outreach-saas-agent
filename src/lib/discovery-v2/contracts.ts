@@ -162,6 +162,7 @@ export const providerSourceRecordInputSchema = z
 export const normalizedProviderCandidateInputSchema = z
   .object({
     sourceRecordKey: z.string().min(1),
+    candidateReferenceKey: z.string().length(64).optional(),
     name: z.string().min(1),
     normalizedName: z.string().min(1).optional(),
     websiteUrl: z.url().optional(),
@@ -197,6 +198,18 @@ export const normalizedProviderCandidateInputSchema = z
         confidence: z.number().min(0).max(1),
       })
       .strict(),
+    discoverySource: z
+      .object({
+        sourceUrl: z.url(),
+        sourceFamily: z.string().min(1),
+        sourceType: z.string().min(1),
+        queryFingerprint: z.string().min(1),
+        extractionMethod: z.string().min(1),
+        extractionVersion: z.string().min(1),
+        sourceOrdinal: z.number().int().nonnegative(),
+      })
+      .strict()
+      .optional(),
     createdAt: z.iso.datetime(),
   })
   .strict();
@@ -293,13 +306,14 @@ export const providerDiscoveryResponseSchema = z
       );
       if (
         !classification ||
-        !["candidate", "needs_review"].includes(classification.disposition)
+        (!["candidate", "needs_review"].includes(classification.disposition) &&
+          !candidate.discoverySource)
       ) {
         context.addIssue({
           code: "custom",
           path: ["normalizedCandidates"],
           message:
-            "Only candidate or needs-review records may be normalized as candidates.",
+            "Only candidate, needs-review, or source-extracted organization references may be normalized as candidates.",
         });
       }
     }

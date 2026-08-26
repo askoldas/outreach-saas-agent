@@ -11,6 +11,13 @@ export type ResultLane = (typeof resultLanes)[number];
 
 export type CampaignResultCandidate = {
   archetypes: string[];
+  artifactVersions: {
+    campaignTargetModelVersionId: string | null;
+    candidateIntelligenceVersionId: string;
+    commercialRelationshipAssessmentVersionId: string | null;
+    companyIntelligenceVersionId: string | null;
+    qualificationEvaluationVersionId: string;
+  };
   candidateId: string;
   confidence: number | null;
   correctionCount: number;
@@ -50,6 +57,24 @@ export type CampaignResultCandidate = {
   rank: number;
   relationship: string;
   relationshipConfidence: number | null;
+  relationshipCorrectionProposals: Array<{
+    createdAt: string;
+    dimension: string;
+    id: string;
+    proposedValue: string;
+    reason: string;
+    sourceRelationshipAssessmentVersionId: string;
+    status: string;
+  }>;
+  relationshipDimensions: Array<{
+    confidence: number;
+    counterEvidenceIds: string[];
+    evidenceIds: string[];
+    rationale: string;
+    state: string;
+    type: string;
+    unresolvedQuestions: string[];
+  }>;
   reviewDecision: string | null;
   reviewReason: string | null;
   sourceUrl: string | null;
@@ -59,6 +84,18 @@ export type CampaignResultCandidate = {
 };
 
 export type CampaignV2Results = {
+  funnel: {
+    sourceRecords: number;
+    organizationReferences: number;
+    uniqueOrganizations: number;
+    plausibleCandidates: number;
+    deeplyResearched: number;
+  };
+  researchOutcome: {
+    action: string;
+    rationale: string;
+    additionalOpportunityRemains: boolean;
+  } | null;
   appliedMemorySnapshotId: string | null;
   anomalies: Array<{
     blocking: boolean;

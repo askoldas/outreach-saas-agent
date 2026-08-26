@@ -8,6 +8,7 @@ import type {
 } from "../contracts.ts";
 import { preclassifyWebResult } from "../candidate-preclassification.ts";
 import type { WebDiscoveryQuery } from "./web-query-generator.ts";
+import { extractOrganizationsFromDiscoverySource } from "./discovery-source-extraction.ts";
 
 export type WebResultPageType =
   | "company_homepage"
@@ -88,32 +89,42 @@ export function normalizeWebSearchResult(input: {
 }): {
   record: ProviderSourceRecordInput;
   classification: CandidatePreclassification;
-  candidate?: NormalizedProviderCandidateInput;
+  candidates: NormalizedProviderCandidateInput[];
 } {
-  const pageType = classifyWebResult(input.result);
+  const result = sanitizeSearchResult(input.result);
+  const pageType = classifyWebResult(result);
+  const sourceExpansion = isDiscoverySourcePage(pageType)
+    ? extractOrganizationsFromDiscoverySource({
+        sourceUrl: result.url,
+        content: result.content,
+        maximumOrganizations: 25,
+      })
+    : null;
   const rawPayload = {
-    title: input.result.title,
-    url: input.result.url,
-    content: input.result.content,
-    score: input.result.score,
+    title: result.title,
+    url: result.url,
+    content: result.content,
+    score: result.score,
     pageType,
     providerVersion: input.providerVersion,
     query: {
       id: input.query.id,
       family: input.query.family,
+      sourceFamily: input.query.sourceFamily,
       language: input.query.language,
       purpose: input.query.purpose,
     },
+    sourceExpansion,
   };
-  const sourceRecordKey = digest(`${input.query.fingerprint}|${input.result.url}`);
+  const sourceRecordKey = digest(`${input.query.fingerprint}|${result.url}`);
   const record: ProviderSourceRecordInput = {
     sourceRecordKey,
-    providerRecordId: digest(input.result.url),
+    providerRecordId: digest(result.url),
     sourceType:
       pageType === "directory_list" || pageType === "association_member_list"
         ? "industry_directory"
         : "web_search",
-    sourceUrl: input.result.url,
+    sourceUrl: result.url,
     resultRank: input.rank,
     queryOrFilterFingerprint: input.query.fingerprint,
     rawPayload,
@@ -122,7 +133,7 @@ export function normalizeWebSearchResult(input: {
   };
   const classification = preclassifyWebResult({
     pageType,
-    result: input.result,
+    result,
     segment: input.segment,
     sourceRecordKey,
   });
@@ -130,38 +141,101 @@ export function normalizeWebSearchResult(input: {
     !isDirectOrganizationPage(pageType) ||
     !["candidate", "needs_review"].includes(classification.disposition)
   ) {
-    return { record, classification };
+    return {
+      record,
+      classification,
+      candidates: sourceExpansion
+        ? sourceExpansion.organizations.map((organization) => ({
+            sourceRecordKey,
+            candidateReferenceKey: organization.referenceKey,
+            name: organization.name,
+            ...(organization.canonicalDomainHint
+              ? { canonicalDomainHint: organization.canonicalDomainHint }
+              : {}),
+            ...(organization.websiteUrl ? { websiteUrl: organization.websiteUrl } : {}),
+            sourceUrl: organization.websiteUrl ?? result.url,
+            description: `Discovered through ${result.title}`,
+            organizationTypeHint: "company" as const,
+            matchedSegmentId: input.query.discoverySegmentId,
+            matchedArchetypeId: input.segment.archetypeId,
+            matchedSignals: [],
+            preliminaryQuality: {
+              likelyOperatingOrganization: null,
+              likelyTargetGeography: null,
+              hasUsableIdentity: true,
+              confidence: organization.websiteUrl ? 0.68 : 0.45,
+            },
+            discoverySource: {
+              sourceUrl: result.url,
+              sourceFamily: input.query.sourceFamily,
+              sourceType: pageType,
+              queryFingerprint: input.query.fingerprint,
+              extractionMethod: organization.extractionMethod,
+              extractionVersion: organization.extractionVersion,
+              sourceOrdinal: organization.sourceOrdinal,
+            },
+            createdAt: input.retrievedAt,
+          }))
+        : [],
+    };
   }
 
-  const domain = canonicalDomainHint(input.result.url);
-  const name = cleanResultName(input.result.title, input.result.url, pageType);
-  const websiteUrl = websiteOrigin(input.result.url);
-  if (!name || !domain || !websiteUrl) return { record, classification };
+  const domain = canonicalDomainHint(result.url);
+  const name = cleanResultName(result.title, result.url, pageType);
+  const websiteUrl = websiteOrigin(result.url);
+  if (!name || !domain || !websiteUrl) return { record, classification, candidates: [] };
 
   return {
     record,
     classification,
-    candidate: {
-      sourceRecordKey,
-      name,
-      canonicalDomainHint: domain,
-      websiteUrl,
-      sourceUrl: input.result.url,
-      description: input.result.content.slice(0, 1000),
-      organizationTypeHint: "company",
-      matchedSegmentId: input.query.discoverySegmentId,
-      matchedArchetypeId: input.segment.archetypeId,
-      matchedSignals:
-        input.query.family === "positive_signal" ? [input.query.purpose] : [],
-      preliminaryQuality: {
-        likelyOperatingOrganization: true,
-        likelyTargetGeography: null,
-        hasUsableIdentity: true,
-        confidence: pageType === "company_homepage" ? 0.78 : 0.68,
+    candidates: [
+      {
+        sourceRecordKey,
+        name,
+        canonicalDomainHint: domain,
+        websiteUrl,
+        sourceUrl: result.url,
+        description: result.content.slice(0, 1000),
+        organizationTypeHint: "company",
+        matchedSegmentId: input.query.discoverySegmentId,
+        matchedArchetypeId: input.segment.archetypeId,
+        matchedSignals:
+          input.query.family === "positive_signal" ? [input.query.purpose] : [],
+        preliminaryQuality: {
+          likelyOperatingOrganization: true,
+          likelyTargetGeography: null,
+          hasUsableIdentity: true,
+          confidence: pageType === "company_homepage" ? 0.78 : 0.68,
+        },
+        createdAt: input.retrievedAt,
       },
-      createdAt: input.retrievedAt,
-    },
+    ],
   };
+}
+
+function sanitizeSearchResult(result: SearchResult): SearchResult {
+  return {
+    ...result,
+    title: stripPostgresUnsupportedCharacters(result.title),
+    url: stripPostgresUnsupportedCharacters(result.url),
+    content: stripPostgresUnsupportedCharacters(result.content),
+  };
+}
+
+function stripPostgresUnsupportedCharacters(value: string) {
+  return value.replaceAll("\u0000", "");
+}
+
+function isDiscoverySourcePage(pageType: WebResultPageType) {
+  return [
+    "directory_list",
+    "association_member_list",
+    "marketplace_listing",
+    "registry_record",
+    "content_page",
+    "news_article",
+    "document",
+  ].includes(pageType);
 }
 
 export function classifyWebResult(result: SearchResult): WebResultPageType {

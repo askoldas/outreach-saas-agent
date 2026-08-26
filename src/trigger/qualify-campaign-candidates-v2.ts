@@ -49,6 +49,7 @@ export const qualifyCampaignCandidateV2Task = task({
 export async function executeQualificationFanOut(input: {
   campaignRunId: string;
   workspaceId: string;
+  cycleNumber?: number;
 }) {
   const batch = await prepareQualificationStage(input);
   if (batch.pendingMemberIds.length) {

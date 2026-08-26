@@ -217,6 +217,15 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
       },
     );
   } catch (dispatchError) {
+    if (isIndeterminateTriggerDispatchError(dispatchError)) {
+      // Trigger.dev may accept the idempotent run before the client-side request times
+      // out. The task links its own run ID on start, so keep the durable draft alive.
+      return {
+        profileDraftId: draft.id,
+        triggerRunId: null,
+        dispatchPending: true as const,
+      };
+    }
     await supabase
       .from("company_profile_drafts")
       .update({ state: "failed", updated_at: new Date().toISOString() })
@@ -238,6 +247,17 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
   if (linkError)
     throw new Error(`Could not link Company Intelligence run: ${linkError.message}`);
   return { profileDraftId: draft.id, triggerRunId: handle.id };
+}
+
+export function isIndeterminateTriggerDispatchError(error: unknown) {
+  const name = error instanceof Error ? error.name.toLowerCase() : "";
+  const message = errorMessage(error).toLowerCase();
+  return (
+    name === "aborterror" ||
+    /aborted due to timeout|operation was aborted|request timed out|fetch failed.*timeout/.test(
+      message,
+    )
+  );
 }
 
 async function ensureCompanyProfileContainer(workspaceId: string) {

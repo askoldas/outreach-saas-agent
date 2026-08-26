@@ -54,6 +54,67 @@ test("registry and directory hosts never become canonical domains", () => {
   assert.equal(prepared.groupKey, "name_country:acme:LT");
 });
 
+test("an explicit company link mined from a directory is a safe identity hint", () => {
+  const prepared = prepareResolutionCandidate({
+    ...baseInput,
+    sourcePageType: "association_member_list",
+    sourceUrl: "https://association.example/members",
+    websiteUrl: "https://acme.example/",
+    canonicalDomainHint: "acme.example",
+    discoverySource: {
+      extractionMethod: "public_link",
+      sourceUrl: "https://association.example/members",
+    },
+  });
+  assert.equal(prepared.invalidIdentity, false);
+  assert.equal(prepared.safeOfficialDomain, true);
+  assert.equal(prepared.canonicalDomain, "acme.example");
+});
+
+test("a name-only directory reference stays unresolved without inventing a domain", () => {
+  const prepared = prepareResolutionCandidate({
+    ...baseInput,
+    sourcePageType: "association_member_list",
+    sourceUrl: "https://association.example/members",
+    websiteUrl: null,
+    canonicalDomainHint: null,
+    discoverySource: {
+      extractionMethod: "name_only_list_item",
+      sourceUrl: "https://association.example/members",
+    },
+  });
+  assert.equal(prepared.invalidIdentity, false);
+  assert.equal(prepared.safeOfficialDomain, false);
+  assert.equal(prepared.canonicalDomain, null);
+  assert.equal(prepared.groupingBasis, "name_country");
+});
+
+test("Organization Reference website hints require first-party identity evidence", () => {
+  const hinted = prepareResolutionCandidate({
+    ...baseInput,
+    organizationReferenceId: "reference-1",
+    sourcePageType: null,
+    sourceUrl: "https://association.example/members",
+    websiteUrl: "https://acme.example/",
+    canonicalDomainHint: "acme.example",
+    sourceRoles: ["discovery"],
+  });
+  assert.equal(hinted.safeOfficialDomain, false);
+  assert.equal(hinted.canonicalDomain, null);
+
+  const firstParty = prepareResolutionCandidate({
+    ...baseInput,
+    organizationReferenceId: "reference-2",
+    sourcePageType: null,
+    sourceUrl: "https://acme.example/about",
+    websiteUrl: "https://acme.example/",
+    canonicalDomainHint: "acme.example",
+    sourceRoles: ["discovery", "identity", "first_party"],
+  });
+  assert.equal(firstParty.safeOfficialDomain, true);
+  assert.equal(firstParty.organizationReferenceId, "reference-2");
+});
+
 test("curated company identity subpages retain the official company website", () => {
   const prepared = prepareResolutionCandidate({
     ...baseInput,
@@ -67,12 +128,7 @@ test("curated company identity subpages retain the official company website", ()
 });
 
 test("content and unknown pages cannot become organizations", () => {
-  for (const sourcePageType of [
-    "content_page",
-    "news_article",
-    "document",
-    "unknown",
-  ]) {
+  for (const sourcePageType of ["content_page", "news_article", "document", "unknown"]) {
     assert.equal(
       prepareResolutionCandidate({
         ...baseInput,

@@ -6,6 +6,7 @@ export * from "./provider-registry";
 export * from "./provider-router";
 export * from "./gaps";
 export * from "./planning";
+export * from "./market-research-plan-adapter";
 export * from "./progress";
 export * from "./stopping";
 export * from "./providers/web-query-generator";

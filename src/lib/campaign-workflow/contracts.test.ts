@@ -88,7 +88,6 @@ test("confirmed campaign brief requires one primary profile offering", () => {
             profileOfferingIds: ["offering-1", "offering-2"],
           },
           targetClient: valid.targetClient,
-          desiredQualifiedCompanies: 50,
         },
         new Set(["offering-1", "offering-2"]),
       ),
@@ -96,12 +95,11 @@ test("confirmed campaign brief requires one primary profile offering", () => {
   );
 });
 
-test("confirmed campaign brief rejects unknown offerings and invalid volume", () => {
+test("confirmed campaign brief rejects unknown offerings and ignores legacy volume", () => {
   const brief = {
     geography: valid.geography,
     offering: valid.offering,
     targetClient: valid.targetClient,
-    desiredQualifiedCompanies: 25,
   };
   assert.throws(
     () =>
@@ -111,14 +109,11 @@ test("confirmed campaign brief rejects unknown offerings and invalid volume", ()
       ),
     /exactly one known Company Profile offering/,
   );
-  assert.throws(
-    () =>
-      parseConfirmedCampaignBrief(
-        { ...brief, desiredQualifiedCompanies: 501 },
-        new Set(["offering-1"]),
-      ),
-    /desiredQualifiedCompanies/,
+  const parsed = parseConfirmedCampaignBrief(
+    { ...brief, desiredQualifiedCompanies: 501 },
+    new Set(["offering-1"]),
   );
+  assert.equal("desiredQualifiedCompanies" in parsed, false);
 });
 
 test("confirmed campaign brief rejects an inverted employee range", () => {
@@ -132,7 +127,6 @@ test("confirmed campaign brief rejects an inverted employee range", () => {
             ...valid.targetClient,
             employeeRange: { min: 100, max: 10 },
           },
-          desiredQualifiedCompanies: 25,
         },
         new Set(["offering-1"]),
       ),
@@ -167,7 +161,6 @@ test("confirmed brief enforces objective and relationship compatibility", () => 
               status: "confirmed",
             },
           ],
-          desiredQualifiedCompanies: 25,
         },
         new Set(["offering-1"]),
         "direct_buyer",

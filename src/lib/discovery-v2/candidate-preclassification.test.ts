@@ -33,14 +33,33 @@ test("a plausible buyer homepage becomes a candidate with frozen Strategy proven
   assert.deepEqual(result.sourceEvidenceIds, ["source-1"]);
 });
 
-test("an explicit supplier in a buyer Campaign is rejected before Entity Resolution", () => {
+test("a manufacturer remains reviewable for a direct-buyer Campaign", () => {
   const result = classify({
     title: "API Supplier",
     content: "We manufacture and supply active pharmaceutical ingredients.",
   });
-  assert.equal(result.disposition, "reject");
+  assert.equal(result.disposition, "needs_review");
   assert.equal(result.objectiveCompatibility, "incompatible");
-  assert.ok(result.reasonCodes.includes("explicit_incompatible_commercial_role"));
+  assert.ok(result.probableRelationshipTypes.includes("supplier"));
+  assert.ok(result.reasonCodes.includes("commercial_role_requires_verification"));
+});
+
+test("a distributor remains reviewable for a buyer Campaign", () => {
+  const result = classify({
+    title: "Industrial Distributor",
+    content: "We distribute industrial equipment throughout the Baltics.",
+  });
+  assert.equal(result.disposition, "needs_review");
+  assert.ok(result.probableRelationshipTypes.includes("distributor"));
+});
+
+test("a reseller remains reviewable when another relationship may exist", () => {
+  const result = classify({
+    title: "Technology Dealer",
+    content: "We are a dealer and reseller of manufacturing systems.",
+  });
+  assert.equal(result.disposition, "needs_review");
+  assert.ok(result.probableRelationshipTypes.includes("reseller"));
 });
 
 test("news, directory, and marketplace results remain source-only", () => {
@@ -54,16 +73,22 @@ test("news, directory, and marketplace results remain source-only", () => {
   }
 });
 
-test("a reliable wrong-country domain is rejected", () => {
+test("a ccTLD alone does not create a false geography rejection", () => {
   const result = classify({ url: "https://wrong-country.de/" });
-  assert.equal(result.disposition, "reject");
-  assert.equal(result.geographyPlausible, false);
-  assert.ok(result.reasonCodes.includes("reliable_geography_mismatch"));
+  assert.equal(result.disposition, "candidate");
+  assert.equal(result.geographyPlausible, null);
+  assert.ok(!result.reasonCodes.includes("reliable_geography_mismatch"));
 });
 
 test("ambiguous company subpages are deliberately marked needs-review", () => {
   const result = classify({ pageType: "company_subpage" });
   assert.equal(result.disposition, "needs_review");
+});
+
+test("an unresolvable identity remains a strong invalid-entity rejection", () => {
+  const result = classify({ pageType: "unknown" });
+  assert.equal(result.disposition, "reject");
+  assert.ok(result.reasonCodes.includes("missing_reliable_organization_identity"));
 });
 
 test("a confirmed excluded competitor domain is rejected deterministically", () => {

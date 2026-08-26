@@ -36,6 +36,26 @@ export const profileV3StageIds = profileV3TaskDefinitions.map(
 );
 export type ProfileV3StageId = (typeof profileV3StageIds)[number];
 
+export async function linkProfileV3TriggerRun(input: {
+  workspaceId: string;
+  profileDraftId: string;
+  triggerRunId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase
+    .from("company_profile_drafts")
+    .update({
+      created_by_run_id: input.triggerRunId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.profileDraftId)
+    .is("created_by_run_id", null);
+  if (error) {
+    throw new Error(`Could not link Company Intelligence run: ${error.message}`);
+  }
+}
+
 export async function executeProfileV3Stage(input: {
   workspaceId: string;
   profileDraftId: string;
@@ -81,14 +101,13 @@ export async function executeProfileV3Stage(input: {
   const requiresEvidence =
     input.taskId === "profile.fact_extraction" ||
     input.taskId === "profile.consistency_audit";
-  const { data: evidence, error: evidenceError } =
-    requiresEvidence
-      ? await loadProfileEvidence({
-          workspaceId: input.workspaceId,
-          subjectId: draft.base_version_id ?? input.profileDraftId,
-          nativeDraft: !draft.base_version_id,
-        })
-      : { data: [], error: null };
+  const { data: evidence, error: evidenceError } = requiresEvidence
+    ? await loadProfileEvidence({
+        workspaceId: input.workspaceId,
+        subjectId: draft.base_version_id ?? input.profileDraftId,
+        nativeDraft: !draft.base_version_id,
+      })
+    : { data: [], error: null };
   if (evidenceError)
     throw new Error(`Could not load profile evidence: ${evidenceError.message}`);
 
@@ -105,11 +124,13 @@ export async function executeProfileV3Stage(input: {
     ...(!buyerLogicStage ? { draftSnapshot: draft.compiled_snapshot_json } : {}),
     evidence: evidence ?? [],
     previousStageOutputs: buyerLogicStage
-      ? previousStageOutputs.filter(({ taskId }) => [
-          "profile.fact_extraction",
-          "profile.commercial_synthesis",
-          "profile.offering_decomposition",
-        ].includes(taskId))
+      ? previousStageOutputs.filter(({ taskId }) =>
+          [
+            "profile.fact_extraction",
+            "profile.commercial_synthesis",
+            "profile.offering_decomposition",
+          ].includes(taskId),
+        )
       : previousStageOutputs,
     ...(input.taskId === "profile.consistency_audit"
       ? {
@@ -473,9 +494,12 @@ async function generateValidatedProfileStageOutput(input: {
         inputHash: hash({ inputHash: input.inputHash, offeringKey }),
         offeringKey,
       }).catch((error) => {
-        throw new Error(`Buyer logic failed for offering ${offeringKey}: ${errorMessage(error)}`, {
-          cause: error,
-        });
+        throw new Error(
+          `Buyer logic failed for offering ${offeringKey}: ${errorMessage(error)}`,
+          {
+            cause: error,
+          },
+        );
       }),
     ),
   );
@@ -537,9 +561,7 @@ async function generateSingleValidatedProfileStageOutput(input: {
         role: modelRole(input.taskId),
         maxCompletionTokens: request.maxCompletionTokens,
         reasoningEffort:
-          request.reasoningClass === "standard"
-            ? "medium"
-            : request.reasoningClass,
+          request.reasoningClass === "standard" ? "medium" : request.reasoningClass,
         taskName: input.taskId.replaceAll(".", " "),
         ...(request.output.mode === "json_schema"
           ? { jsonSchema: request.output }
@@ -562,18 +584,20 @@ async function generateSingleValidatedProfileStageOutput(input: {
   });
   const provenance = result.provenance;
   return {
-    calls: [{
-      data: JSON.stringify(result.data),
-      provider: "openrouter",
-      requestedModel: provenance.requestedModel,
-      actualModel: provenance.actualModel,
-      fallbackUsed: provenance.fallbackUsed,
-      inputTokens: provenance.inputUnits,
-      outputTokens: provenance.outputUnits,
-      providerReportedCost: provenance.actualCost,
-      providerCurrency: provenance.currency === "USD" ? "USD" : undefined,
-      latencyMs: provenance.latencyMs ?? 0,
-    }],
+    calls: [
+      {
+        data: JSON.stringify(result.data),
+        provider: "openrouter",
+        requestedModel: provenance.requestedModel,
+        actualModel: provenance.actualModel,
+        fallbackUsed: provenance.fallbackUsed,
+        inputTokens: provenance.inputUnits,
+        outputTokens: provenance.outputUnits,
+        providerReportedCost: provenance.actualCost,
+        providerCurrency: provenance.currency === "USD" ? "USD" : undefined,
+        latencyMs: provenance.latencyMs ?? 0,
+      },
+    ],
     output: result.data,
     structuredOutputFallbackUsed: provenance.structuredOutputFallbackUsed,
     truncationRetryUsed: false,

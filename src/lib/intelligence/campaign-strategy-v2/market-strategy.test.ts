@@ -143,13 +143,15 @@ test("market normalization derives a rationale from structure relevance", () => 
   );
 });
 
-test("market context precedes the advisory request and both remain compact", () => {
+test("market analysis and Strategy advisory remain independent compact tasks", () => {
   const source = readFileSync(
     "src/lib/intelligence/campaign-strategy-v2/market-strategy.ts",
     "utf8",
   );
-  assert.doesNotMatch(source, /Promise\.all/);
-  assert.match(source, /marketContext: market\.output/);
+  assert.doesNotMatch(source, /generateMarketSpecificStrategy/);
+  assert.doesNotMatch(source, /marketContext: market\.output/);
+  assert.match(source, /generateCampaignMarketContext/);
+  assert.match(source, /generateCampaignStrategyAdvisoryDelta/);
   assert.match(source, /maxCompletionTokens: 2_000/);
   assert.match(source, /executeValidatedAiTask/);
   assert.match(source, /allowsRepair: true/);

@@ -81,7 +81,9 @@ export function compileMarketAnalysis(input: {
       importance: "important" as const,
     })),
     confidence: input.marketContext.confidence,
-    requiresUserConfirmation: true,
+    // The confirmed Strategy is the user approval boundary. This run-scoped
+    // analysis is execution guidance and must not introduce a second gate.
+    requiresUserConfirmation: false,
   };
   return marketAnalysisSchema.parse({
     id: input.artifactId,

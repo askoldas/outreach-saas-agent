@@ -72,6 +72,14 @@ test("Campaign Strategy compatibility projection rejects divergent archetypes", 
     archetypes: [{ id: "manufacturer" }],
   } as unknown as CampaignStrategyV2;
   assert.equal(assertCampaignTargetStrategyProjection({ target, strategy: base }), base);
+  assert.equal(
+    assertCampaignTargetStrategyProjection({
+      target,
+      strategy: { ...base, campaignId: "external-campaign-id" },
+      campaignIdentityVerifiedByRun: true,
+    }).campaignId,
+    "external-campaign-id",
+  );
   assert.throws(
     () =>
       assertCampaignTargetStrategyProjection({

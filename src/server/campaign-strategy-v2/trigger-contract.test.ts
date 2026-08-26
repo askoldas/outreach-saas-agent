@@ -23,9 +23,9 @@ test("Campaign Strategy compilation runs as a durable Trigger task", () => {
   assert.match(task, /id: "compile-campaign-strategy-v2"/);
   assert.match(task, /onFailure:/);
   assert.match(task, /runCampaignStrategyV2StageTask\.triggerAndWait/);
-  assert.match(task, /stageId: "market_context"/);
+  assert.doesNotMatch(task, /stageId: "market_context"/);
   assert.match(task, /stageId: "advisory_delta"/);
-  assert.ok(task.indexOf('stageId: "market_context"') < task.indexOf('stageId: "advisory_delta"'));
+  assert.doesNotMatch(stageService, /generateCampaignMarketContext/);
   assert.match(stageTask, /id: "run-campaign-strategy-v2-stage"/);
   assert.match(stageService, /claimCampaignStrategyStage/);
   assert.match(stageService, /claimed\.status === "completed"/);

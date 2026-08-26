@@ -9,18 +9,16 @@ const compiler = readFileSync(
   "utf8",
 );
 
-test("new discovery runs prefer a pre-run Market Research Plan", () => {
+test("new discovery runs require the run's Market Research Plan", () => {
   assert.match(stage, /loadMarketResearchPlanForDiscovery/);
   assert.match(stage, /compileAndPersistDiscoveryPlanFromMarketResearch/);
-  assert.ok(
-    stage.indexOf("if (marketResearchPlan)") <
-      stage.indexOf("compileAndPersistDiscoveryPlan({"),
-  );
-  assert.match(adapter, /\.lte\("created_at", input\.runCreatedAt\)/);
+  assert.match(stage, /if \(!marketResearchPlan\)/);
+  assert.doesNotMatch(stage, /compileAndPersistDiscoveryPlan\(/);
+  assert.match(adapter, /\.eq\("campaign_run_id", input\.campaignRunId\)/);
 });
 
-test("historical and unadapted runs retain the Strategy planner fallback", () => {
-  assert.match(stage, /else \{[\s\S]+compileAndPersistDiscoveryPlan\(/);
+test("frozen discovery plans remain replayable without a Strategy fallback", () => {
+  assert.doesNotMatch(stage, /else \{[\s\S]+compileAndPersistDiscoveryPlan\(/);
   assert.match(stage, /if \(existingPlanRecord\)/);
   assert.match(compiler, /marketResearchPlanVersionId/);
   assert.match(adapter, /loadProviderCapabilitySnapshots/);

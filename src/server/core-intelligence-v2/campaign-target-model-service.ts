@@ -53,6 +53,7 @@ export async function compileAndPersistCampaignTargetModel(
     geography: CampaignGeographyV2;
     confirmedConstraints: string[];
     strategyProjection?: CampaignStrategyV2;
+    campaignIdentityVerifiedByRun?: boolean;
   },
   adapters: CampaignTargetModelServiceAdapters = productionAdapters,
 ) {
@@ -71,12 +72,16 @@ export async function compileAndPersistCampaignTargetModel(
     objective: input.objective,
     geography: input.geography,
     confirmedConstraints: input.confirmedConstraints,
+    ...(input.strategyProjection ? { strategyProjection: input.strategyProjection } : {}),
     createdAt: adapters.now(),
   });
   if (input.strategyProjection) {
     assertCampaignTargetStrategyProjection({
       target: artifact,
       strategy: input.strategyProjection,
+      ...(input.campaignIdentityVerifiedByRun
+        ? { campaignIdentityVerifiedByRun: true }
+        : {}),
     });
   }
   const latestVersion = await adapters.latestVersionNumber({

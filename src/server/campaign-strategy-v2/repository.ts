@@ -28,7 +28,10 @@ export async function getCampaignStrategyV2EnrichmentStatus(
 ): Promise<CampaignStrategyEnrichmentStatus> {
   const { supabase } = await createAuthenticatedDatabaseClient();
   type EnrichmentRpc = {
-    rpc(name: string, args: Record<string, unknown>): Promise<{
+    rpc(
+      name: string,
+      args: Record<string, unknown>,
+    ): Promise<{
       data: unknown;
       error: { message: string } | null;
     }>;
@@ -43,7 +46,7 @@ export async function getCampaignStrategyV2EnrichmentStatus(
   if (error) throw new Error(`Could not load Strategy enrichment: ${error.message}`);
   const rows = Array.isArray(data) ? data.map(objectValue) : [];
   const byStage = new Map(rows.map((row) => [optionalString(row.stage_id), row]));
-  const relevant = ["market_context", "advisory_delta", "compilation"]
+  const relevant = ["advisory_delta", "compilation"]
     .map((stage) => byStage.get(stage))
     .filter((row): row is Record<string, Json | undefined> => Boolean(row));
   const failed = relevant.find((row) => row.status === "failed");
@@ -58,11 +61,23 @@ export async function getCampaignStrategyV2EnrichmentStatus(
     };
   }
   if (relevant.some((row) => row.status === "running")) {
-    return { state: "running", applied: 0, rejected: 0, requiresUserReview: 0, omittedByBudget: 0 };
+    return {
+      state: "running",
+      applied: 0,
+      rejected: 0,
+      requiresUserReview: 0,
+      omittedByBudget: 0,
+    };
   }
   const compilation = byStage.get("compilation");
   if (compilation?.status !== "completed") {
-    return { state: "baseline_ready", applied: 0, rejected: 0, requiresUserReview: 0, omittedByBudget: 0 };
+    return {
+      state: "baseline_ready",
+      applied: 0,
+      rejected: 0,
+      requiresUserReview: 0,
+      omittedByBudget: 0,
+    };
   }
   const summary = objectValue(objectValue(compilation.output_json).dispositionSummary);
   const result = {
@@ -191,7 +206,8 @@ export async function failCampaignStrategyV2Draft(input: {
   strategyDraftId: string;
   error: unknown;
 }) {
-  const message = input.error instanceof Error ? input.error.message : "Strategy compilation failed.";
+  const message =
+    input.error instanceof Error ? input.error.message : "Strategy compilation failed.";
   const supabase = createServiceRoleClient();
   const { data: draft } = await supabase
     .from("campaign_strategy_drafts")

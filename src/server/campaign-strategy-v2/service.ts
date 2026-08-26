@@ -9,7 +9,6 @@ import {
   compileCampaignCommercialContext,
   compileCampaignStrategyV2,
   hashCanonical,
-  generateMarketSpecificStrategy,
   nativeCampaignStrategyEntryContract,
   resolveCampaignObjective,
 } from "@/lib/intelligence/campaign-strategy-v2";
@@ -23,9 +22,7 @@ import {
   getPublishedCampaignPlanningProfile,
   getPublishedCampaignProfileContext,
   persistCampaignStrategyV2Compilation,
-  recordCampaignStrategyModelCalls,
 } from "./repository";
-import { campaignV2TaskContracts } from "@/lib/intelligence/campaign-strategy-v2/task-contracts";
 import { LEGACY_CAMPAIGN_VOLUME_PROJECTION } from "@/lib/research-budget-v2/contracts";
 import { intelligenceResultCacheKey } from "@/lib/intelligence/runtime/cache-key";
 import {
@@ -254,17 +251,6 @@ export async function resumeInitialCampaignStrategyV2(input: {
   strategyDraftId: string;
 }) {
   const prepared = await prepareCampaignStrategyV2Compilation(input);
-  const marketSpecific = await generateMarketSpecificStrategy({
-    frozenContext: prepared.storedContext,
-    campaignInput: prepared.campaignInput,
-  });
-  await recordMarketStrategyCalls({
-    workspaceId: input.workspaceId,
-    strategyDraftId: prepared.recovery.id,
-    inputHash:
-      prepared.recovery.id + ":" + prepared.recovery.compiledContextHash,
-    generated: marketSpecific,
-  });
   const compilation = compileCampaignStrategyV2({
     draft: prepared.deterministicBase,
     compiledContextHash: prepared.recovery.compiledContextHash,
@@ -283,7 +269,9 @@ export async function prepareCampaignStrategyV2Compilation(input: {
   strategyDraftId: string;
 }) {
   const recovery = await getCampaignStrategyV2RecoveryData(input);
-  if (!["building", "needs_input", "failed", "ready_for_review"].includes(recovery.state)) {
+  if (
+    !["building", "needs_input", "failed", "ready_for_review"].includes(recovery.state)
+  ) {
     throw new Error(`Campaign Strategy draft cannot be retried from ${recovery.state}.`);
   }
   const profile = await getPublishedCampaignPlanningProfile(input.workspaceId);
@@ -374,33 +362,4 @@ function jsonArray(value: Json | undefined): Json[] {
 
 function jsonString(value: Json | undefined) {
   return typeof value === "string" ? value : "";
-}
-
-async function recordMarketStrategyCalls(input: {
-  workspaceId: string;
-  strategyDraftId: string;
-  inputHash: string;
-  generated: Awaited<ReturnType<typeof generateMarketSpecificStrategy>>;
-}) {
-  await recordCampaignStrategyModelCalls({
-    workspaceId: input.workspaceId,
-    strategyDraftId: input.strategyDraftId,
-    inputHash: hashCanonical(input.inputHash),
-    calls: [
-      {
-        taskId: campaignV2TaskContracts.marketContext.taskId,
-        promptVersion: campaignV2TaskContracts.marketContext.promptVersion,
-        schemaVersion: campaignV2TaskContracts.marketContext.schemaVersion,
-        outputHash: hashCanonical(input.generated.marketContext),
-        call: input.generated.marketCall,
-      },
-      {
-        taskId: campaignV2TaskContracts.advisoryDelta.taskId,
-        promptVersion: campaignV2TaskContracts.advisoryDelta.promptVersion,
-        schemaVersion: campaignV2TaskContracts.advisoryDelta.schemaVersion,
-        outputHash: hashCanonical(input.generated.strategyProposal),
-        call: input.generated.strategyCall,
-      },
-    ],
-  });
 }

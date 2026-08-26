@@ -50,7 +50,8 @@ test("discovery settles provider failure evidence and checks worker configuratio
 
 test("initial breadth durably attaches semantic audit and remains partial", () => {
   assert.match(stage, /prepareSemanticDiscoveryContext/);
-  assert.match(stage, /compileAndPersistDiscoveryPlan/);
+  assert.match(stage, /compileAndPersistDiscoveryPlanFromMarketResearch/);
+  assert.match(stage, /completed Market Research Plan/);
   assert.match(stage, /startCampaignDiscoveryRun/);
   assert.match(stage, /startDiscoverySegmentPassOnce/);
   assert.match(stage, /recordDiscoveryQueryAudit/);

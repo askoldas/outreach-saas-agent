@@ -1,9 +1,7 @@
 import {
-  campaignMarketContextOutputSchema,
   campaignStrategyAdvisoryDeltaOutputSchema,
   campaignV2TaskContracts,
   compileCampaignStrategyV2,
-  generateCampaignMarketContext,
   generateCampaignStrategyAdvisoryDelta,
   hashCanonical,
   mergeCampaignStrategyAdvisoryDelta,
@@ -11,7 +9,10 @@ import {
 import { intelligenceResultCacheKey } from "@/lib/intelligence/runtime/cache-key";
 import type { AiCallResult } from "@/lib/providers/openrouter";
 import type { Json } from "@/types/database.types";
-import { recordCampaignStrategyModelCalls, persistCampaignStrategyV2Compilation } from "./repository";
+import {
+  recordCampaignStrategyModelCalls,
+  persistCampaignStrategyV2Compilation,
+} from "./repository";
 import { prepareCampaignStrategyV2Compilation } from "./service";
 import {
   claimCampaignStrategyStage,
@@ -23,7 +24,10 @@ import { campaignStrategyModelRouteVersion } from "./stage-contracts";
 import { recordIntelligenceCacheHit } from "@/server/intelligence-runtime/event-repository";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 
-type CampaignStrategyModelStageId = Exclude<CampaignStrategyStageId, "baseline">;
+type CampaignStrategyModelStageId = Exclude<
+  CampaignStrategyStageId,
+  "baseline" | "market_context"
+>;
 
 export type CampaignStrategyStagePayload = {
   workspaceId: string;
@@ -31,7 +35,6 @@ export type CampaignStrategyStagePayload = {
   strategyDraftId: string;
   stageId: CampaignStrategyModelStageId;
   triggerRunId: string;
-  marketContext?: Json;
   advisoryDelta?: Json;
 };
 
@@ -39,12 +42,7 @@ export async function executeCampaignStrategyStage(input: CampaignStrategyStageP
   const prepared = await prepareCampaignStrategyV2Compilation(input);
   const contract = stageContract(input.stageId);
   const dependencyInput =
-    input.stageId === "compilation"
-      ? {
-          marketContext: input.marketContext,
-          advisoryDelta: input.advisoryDelta,
-        }
-      : null;
+    input.stageId === "compilation" ? { advisoryDelta: input.advisoryDelta } : null;
   const frozenInputHash = hashCanonical({
     strategyDraftId: input.strategyDraftId,
     compiledContextHash: prepared.recovery.compiledContextHash,
@@ -106,27 +104,10 @@ async function runStage(
   prepared: Awaited<ReturnType<typeof prepareCampaignStrategyV2Compilation>>,
   frozenInputHash: string,
 ): Promise<Json> {
-  if (input.stageId === "market_context") {
-    const generated = await generateCampaignMarketContext({
-      frozenContext: prepared.storedContext,
-      campaignInput: prepared.campaignInput,
-      runtime: { recordAttempt: attemptRecorder(input, frozenInputHash) },
-    });
-    await auditStageCall(input, frozenInputHash, {
-      taskId: campaignV2TaskContracts.marketContext.taskId,
-      promptVersion: campaignV2TaskContracts.marketContext.promptVersion,
-      schemaVersion: campaignV2TaskContracts.marketContext.schemaVersion,
-      output: generated.output,
-      call: generated.call,
-    });
-    return generated.output as unknown as Json;
-  }
   if (input.stageId === "advisory_delta") {
-    const marketContext = campaignMarketContextOutputSchema.parse(input.marketContext);
     const generated = await generateCampaignStrategyAdvisoryDelta({
       frozenContext: prepared.storedContext,
       campaignInput: prepared.campaignInput,
-      marketContext,
       runtime: { recordAttempt: attemptRecorder(input, frozenInputHash) },
     });
     await auditStageCall(input, frozenInputHash, {
@@ -138,7 +119,6 @@ async function runStage(
     });
     return generated.output as unknown as Json;
   }
-  campaignMarketContextOutputSchema.parse(input.marketContext);
   const advisoryDelta = campaignStrategyAdvisoryDeltaOutputSchema.parse(
     input.advisoryDelta,
   );
@@ -206,7 +186,6 @@ async function auditStageCall(
 }
 
 function stageContract(stageId: CampaignStrategyModelStageId) {
-  if (stageId === "market_context") return campaignV2TaskContracts.marketContext;
   if (stageId === "advisory_delta") {
     return campaignV2TaskContracts.advisoryDelta;
   }

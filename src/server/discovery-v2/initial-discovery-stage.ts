@@ -3,7 +3,6 @@ import {
   calculateDiscoveryCoverage,
   createConfiguredDiscoveryProviderRegistry,
   decideDiscoveryContinuation,
-  discoveryProviderCapabilitiesSchema,
   generateWebDiscoveryQueries,
   providerDiscoveryRequestSchema,
   webDiscoveryQuerySchema,
@@ -27,14 +26,12 @@ import {
   type CampaignDiscoveryPlanRecord,
 } from "./coverage-repository";
 import {
-  compileAndPersistDiscoveryPlan,
   compileAndPersistDiscoveryPlanFromMarketResearch,
   loadMarketResearchPlanForDiscovery,
   parsePersistedFrozenDiscoveryPlan,
 } from "./plan-discovery";
 import { reconstructSettledProviderExecution } from "./provider-coverage";
 import { executeAndPersistDiscoveryProvider } from "./provider-service";
-import { routeSemanticSegments } from "./route-segments";
 import { prepareSemanticDiscoveryContext } from "./semantic-context";
 import { loadEnabledDiscoveryProviderIds } from "./stage-context";
 
@@ -75,61 +72,28 @@ export async function executeInitialDiscoveryStage(input: {
       workspaceId: input.workspaceId,
       campaignId: context.campaignInternalId,
       campaignRunId: input.campaignRunId,
-      runCreatedAt: context.campaignRunCreatedAt,
     });
     const maximumPlanProviderCalls =
       DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET.maxProviderCalls;
-    if (marketResearchPlan) {
-      const compiled = await compileAndPersistDiscoveryPlanFromMarketResearch({
-        id: logicalPlanId,
-        workspaceId: input.workspaceId,
-        campaignRunId: input.campaignRunId,
-        strategy: context.strategy,
-        researchPlan: marketResearchPlan,
-        enabledProviderIds,
-        versionNumber: 1,
-        maximumProviderCalls: maximumPlanProviderCalls,
-        ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
-        compiledAt: context.campaignRunCreatedAt,
-      });
-      plan = compiled.plan;
-      planRecord = compiled.record;
-    } else {
-      const initialRequests = buildRequests({
-        workspaceId: input.workspaceId,
-        campaignId: context.campaignInternalId,
-        discoveryPlanId: logicalPlanId,
-        segments: context.strategy.discoverySegments,
-        maximumCalls: maximumInitialProviderCalls,
-        deadlineAt: discoveryDeadline(context),
-      });
-      const routes = await routeSemanticSegments({
-        registry,
-        requests: initialRequests,
-        enabledProviderIds,
-      });
-      const providerCapabilities = await Promise.all(
-        enabledProviderIds.map(async (providerId) =>
-          discoveryProviderCapabilitiesSchema.parse(
-            await registry.get(providerId).getCapabilities(),
-          ),
-        ),
+    if (!marketResearchPlan) {
+      throw new Error(
+        "Discovery requires the Campaign Run's completed Market Research Plan.",
       );
-      const compiled = await compileAndPersistDiscoveryPlan({
-        id: logicalPlanId,
-        workspaceId: input.workspaceId,
-        campaignRunId: input.campaignRunId,
-        strategy: context.strategy,
-        routes,
-        providerCapabilities,
-        versionNumber: 1,
-        maximumProviderCalls: maximumPlanProviderCalls,
-        ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
-        compiledAt: context.campaignRunCreatedAt,
-      });
-      plan = compiled.plan;
-      planRecord = compiled.record;
     }
+    const compiled = await compileAndPersistDiscoveryPlanFromMarketResearch({
+      id: logicalPlanId,
+      workspaceId: input.workspaceId,
+      campaignRunId: input.campaignRunId,
+      strategy: context.strategy,
+      researchPlan: marketResearchPlan,
+      enabledProviderIds,
+      versionNumber: 1,
+      maximumProviderCalls: maximumPlanProviderCalls,
+      ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
+      compiledAt: context.campaignRunCreatedAt,
+    });
+    plan = compiled.plan;
+    planRecord = compiled.record;
   }
   assertFrozenPlanContext({
     plan,

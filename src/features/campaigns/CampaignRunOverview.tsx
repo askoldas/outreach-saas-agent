@@ -52,6 +52,7 @@ export function CampaignRunOverview({
 function stageLabel(phase: string) {
   const labels: Record<string, string> = {
     discovery_queued: "Queued",
+    initializing: "Market analysis",
     market_analysis: "Market analysis",
     discovery_planning: "Discovery planning",
     discovering: "Discovering",

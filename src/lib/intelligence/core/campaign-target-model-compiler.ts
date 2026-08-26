@@ -29,6 +29,7 @@ export function compileCampaignTargetModel(input: {
   objective: CampaignObjectiveV2;
   geography: CampaignGeographyV2;
   confirmedConstraints: string[];
+  strategyProjection?: CampaignStrategyV2;
   createdAt: string;
 }): CampaignTargetModel {
   assertCommercialInput(input);
@@ -44,7 +45,7 @@ export function compileCampaignTargetModel(input: {
   const desiredRelationships = uniqueSorted(
     input.objective.targetRelationshipTypes.map(normalizeCampaignRelationship),
   );
-  const archetypes = selectedOfferings
+  const commercialArchetypes = selectedOfferings
     .flatMap(({ possibleCustomerArchetypes }) => possibleCustomerArchetypes)
     .filter((archetype) =>
       archetype.possibleRelationships.some((relationship) =>
@@ -75,6 +76,58 @@ export function compileCampaignTargetModel(input: {
         confidence: archetype.confidence,
       }),
     );
+  const strategyProjection = input.strategyProjection;
+  const archetypes = strategyProjection
+    ? strategyProjection.archetypes
+        .filter(({ priority }) => priority !== "incompatible")
+        .map(
+          (archetype): TargetArchetype => ({
+            id: archetype.id,
+            label: boundedText(archetype.label, 200),
+            organizationType: boundedText(
+              uniqueSorted(archetype.organizationRoles).join(", "),
+              300,
+            ),
+            businessModel: uniqueSorted([
+              ...archetype.businessModels,
+              ...archetype.industries,
+            ]).map((value) => boundedText(value, 240)),
+            priority:
+              archetype.priority === "priority"
+                ? "priority"
+                : archetype.priority === "conditional"
+                  ? "secondary"
+                  : "exploratory",
+            whyItCanBuyOrUse: boundedText(archetype.commercialRationale, 1200),
+            operationalEvidenceOfNeed:
+              archetype.requiredEvidenceQuestions.length > 0
+                ? archetype.requiredEvidenceQuestions.map(({ question }) =>
+                    boundedText(question, 500),
+                  )
+                : [boundedText(archetype.description, 500)],
+            positiveSignals: archetype.positiveSignals.map(strategySignal),
+            negativeSignals: archetype.negativeSignals.map(strategySignal),
+            scaleSignals: [],
+            geographyRequirements: geographyRequirements(input.geography),
+            hardExclusionRuleKeys: strategyProjection.campaignRules
+              .filter(
+                ({ ruleType, strength, status, applicability }) =>
+                  ruleType === "hard_exclusion" &&
+                  strength === "hard" &&
+                  status === "confirmed" &&
+                  (!applicability.archetypeIds.length ||
+                    applicability.archetypeIds.includes(archetype.id)),
+              )
+              .map(({ ruleKey }) => ruleKey),
+            likelyRelationships: [
+              normalizeCampaignRelationship(archetype.relationshipType),
+            ],
+            optionalOrUnknown: [],
+            evidenceIds: [],
+            confidence: archetype.confidence,
+          }),
+        )
+    : commercialArchetypes;
   if (!archetypes.length) {
     throw new Error(
       "No selected-offering archetype supports the confirmed Campaign objective.",
@@ -99,7 +152,10 @@ export function compileCampaignTargetModel(input: {
   );
   const hardKeys = new Set(hardExclusions.map(({ ruleKey }) => ruleKey));
   for (const archetype of archetypes) {
-    archetype.hardExclusionRuleKeys = [...hardKeys].sort(compareText);
+    archetype.hardExclusionRuleKeys = uniqueSorted([
+      ...archetype.hardExclusionRuleKeys,
+      ...hardKeys,
+    ]);
   }
   const body = {
     workspaceId: input.workspaceId,
@@ -148,6 +204,7 @@ export function compileCampaignTargetModel(input: {
         objective: input.objective,
         geography: input.geography,
         confirmedConstraints: body.confirmedConstraints,
+        strategyProjection: input.strategyProjection ?? null,
         compilerVersion: CAMPAIGN_TARGET_MODEL_COMPILER_VERSION,
       }),
       contentHash: hashCanonical(body),
@@ -159,6 +216,7 @@ export function compileCampaignTargetModel(input: {
 export function assertCampaignTargetStrategyProjection(input: {
   target: CampaignTargetModel;
   strategy: CampaignStrategyV2;
+  campaignIdentityVerifiedByRun?: boolean;
 }) {
   const strategyOfferingIds = uniqueSorted(
     input.strategy.offeringReferences.flatMap(({ offeringId, offeringVersionId }) => [
@@ -166,7 +224,10 @@ export function assertCampaignTargetStrategyProjection(input: {
       offeringVersionId,
     ]),
   );
-  if (input.target.campaignId !== input.strategy.campaignId)
+  if (
+    input.target.campaignId !== input.strategy.campaignId &&
+    !input.campaignIdentityVerifiedByRun
+  )
     throw new Error("Campaign Target Model and Strategy reference different Campaigns.");
   if (input.target.offeringIds.some((id) => !strategyOfferingIds.includes(id)))
     throw new Error(
@@ -249,6 +310,24 @@ function dedupeSignals<T extends { key: string }>(signals: T[]) {
   return [...new Map(signals.map((signal) => [signal.key, signal])).values()].sort(
     (a, b) => compareText(a.key, b.key),
   );
+}
+
+function strategySignal(
+  signal: CampaignStrategyV2["archetypes"][number]["positiveSignals"][number],
+) {
+  return {
+    key: signal.key,
+    statement: boundedText(signal.description, 800),
+    evidenceIds: [],
+    confidence:
+      signal.reliability === "high" ? 0.85 : signal.reliability === "medium" ? 0.65 : 0.4,
+  };
+}
+
+function boundedText(value: string, maximum: number) {
+  const normalized = value.trim();
+  if (normalized.length <= maximum) return normalized;
+  return normalized.slice(0, maximum - 1).trimEnd() + "…";
 }
 
 function aggregateConfidence(values: number[]) {

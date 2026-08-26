@@ -16,6 +16,11 @@ import {
   persistMarketAnalysis,
   type PersistedArtifact,
 } from "./repository";
+import type { IntelligenceAttemptRecord } from "@/lib/intelligence/runtime/execute-ai-task";
+
+type MarketAnalysisRuntime = {
+  recordAttempt?: (attempt: IntelligenceAttemptRecord) => Promise<void>;
+};
 
 type GeneratedMarketContext = {
   output: MarketContextOutput;
@@ -35,6 +40,7 @@ export type MarketAnalysisServiceAdapters = {
   generateMarketContext: (input: {
     frozenContext: unknown;
     campaignInput: unknown;
+    runtime?: MarketAnalysisRuntime;
   }) => Promise<GeneratedMarketContext>;
   latestVersionNumber: (input: {
     workspaceId: string;
@@ -92,6 +98,7 @@ export async function compileAndPersistMarketAnalysis(
     frozenContext: unknown;
     campaignInput: unknown;
     allowedEvidenceIds: string[];
+    runtime?: MarketAnalysisRuntime;
   },
   adapters: MarketAnalysisServiceAdapters = productionAdapters,
 ) {
@@ -105,6 +112,7 @@ export async function compileAndPersistMarketAnalysis(
   const generated = await adapters.generateMarketContext({
     frozenContext: input.frozenContext,
     campaignInput: input.campaignInput,
+    ...(input.runtime ? { runtime: input.runtime } : {}),
   });
   const artifact = compileMarketAnalysis({
     artifactId: adapters.artifactId(),

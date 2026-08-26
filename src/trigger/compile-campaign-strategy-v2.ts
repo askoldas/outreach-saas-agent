@@ -13,7 +13,10 @@ export const compileCampaignStrategyV2Task = task({
   retry: {
     maxAttempts: 1,
   },
-  onFailure: async ({ payload, error }: {
+  onFailure: async ({
+    payload,
+    error,
+  }: {
     payload: CompileCampaignStrategyV2Payload;
     error: unknown;
   }) =>
@@ -31,25 +34,19 @@ export const compileCampaignStrategyV2Task = task({
         `strategy_stage:${stageId}`,
       ],
     });
-    const market = await runCampaignStrategyV2StageTask.triggerAndWait(
-      { ...payload, stageId: "market_context" },
-      childOptions("market_context"),
-    );
-    if (!market.ok) {
-      throw new Error(`Campaign market-context stage failed: ${errorMessage(market.error)}`);
-    }
     const advisory = await runCampaignStrategyV2StageTask.triggerAndWait(
-      { ...payload, stageId: "advisory_delta", marketContext: market.output.output },
+      { ...payload, stageId: "advisory_delta" },
       childOptions("advisory_delta"),
     );
     if (!advisory.ok) {
-      throw new Error(`Campaign advisory-delta stage failed: ${errorMessage(advisory.error)}`);
+      throw new Error(
+        `Campaign advisory-delta stage failed: ${errorMessage(advisory.error)}`,
+      );
     }
     const compilation = await runCampaignStrategyV2StageTask.triggerAndWait(
       {
         ...payload,
         stageId: "compilation",
-        marketContext: market.output.output,
         advisoryDelta: advisory.output.output,
       },
       childOptions("compilation"),
@@ -61,7 +58,6 @@ export const compileCampaignStrategyV2Task = task({
     }
     return {
       ...payload,
-      marketCached: market.output.cached,
       advisoryCached: advisory.output.cached,
       compilationCached: compilation.output.cached,
     };

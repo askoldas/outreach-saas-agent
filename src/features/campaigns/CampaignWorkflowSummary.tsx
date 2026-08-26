@@ -26,20 +26,31 @@ export function CampaignWorkflowSummary({
           <summary>
             <strong>Market Analysis</strong>
           </summary>
-          <p>{summary.marketAnalysis.summary}</p>
+          <p>{summary.marketAnalysis.marketSummary}</p>
           <p>
-            <strong>Market breadth:</strong>{" "}
-            {summary.marketAnalysis.marketBreadth.replaceAll("_", " ")}
+            <strong>Market:</strong> {summary.marketAnalysis.geography.displayName} (
+            {summary.marketAnalysis.geography.countryCodes.join(", ")})
           </p>
           <p>
             <strong>Local terminology:</strong>{" "}
-            {summary.marketAnalysis.localTerminology.join(", ") ||
-              "No special local terms"}
+            {summary.marketAnalysis.localTerminology
+              .map(({ term, meaning }) => `${term} (${meaning})`)
+              .join(", ") || "No special local terms"}
           </p>
           <p>
-            <strong>Approach:</strong>{" "}
-            {summary.marketAnalysis.recommendedDiscoveryApproach}
+            <strong>Recommended source approach:</strong>{" "}
+            {summary.marketAnalysis.majorSourceFamilies
+              .map((family) => family.replaceAll("_", " "))
+              .join(", ")}
           </p>
+          {summary.marketAnalysis.coverageRisks.length ? (
+            <p>
+              <strong>Coverage risks:</strong>{" "}
+              {summary.marketAnalysis.coverageRisks
+                .map(({ question }) => question)
+                .join(" · ")}
+            </p>
+          ) : null}
         </details>
       ) : null}
       {showMarket && summary.v2Strategy ? (

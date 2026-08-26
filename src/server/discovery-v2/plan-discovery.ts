@@ -86,7 +86,7 @@ export async function loadMarketResearchPlanForDiscovery(input: {
   workspaceId: string;
   campaignId: string;
   campaignRunId: string;
-  runCreatedAt: string;
+  runCreatedAt?: string;
 }) {
   const supabase = createServiceRoleClient();
   const { data, error } = await supabase
@@ -94,16 +94,15 @@ export async function loadMarketResearchPlanForDiscovery(input: {
     .select("id,workspace_id,campaign_id,campaign_run_id,plan_json,created_at")
     .eq("workspace_id", input.workspaceId)
     .eq("campaign_id", input.campaignId)
-    .lte("created_at", input.runCreatedAt)
+    .eq("campaign_run_id", input.campaignRunId)
     .order("version", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (error) throw new Error(`Could not load Market Research Plan: ${error.message}`);
   if (!data) return null;
   const row = researchPlanRowSchema.parse(data);
-  if (row.campaign_run_id && row.campaign_run_id !== input.campaignRunId) {
-    return null;
-  }
+  if (row.campaign_run_id !== input.campaignRunId)
+    throw new Error("Market Research Plan does not belong to this Campaign Run.");
   const plan = marketResearchPlanSchema.parse(row.plan_json);
   if (
     plan.id !== row.id ||

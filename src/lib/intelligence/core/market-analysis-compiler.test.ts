@@ -20,7 +20,7 @@ test("Market Analysis projects frozen targeting and bounded market interpretatio
     },
   ]);
   assert.deepEqual(analysis.majorSourceFamilies, ["industry_directory", "registry"]);
-  assert.equal(analysis.requiresUserConfirmation, true);
+  assert.equal(analysis.requiresUserConfirmation, false);
   assert.equal("discoveryRoutes" in analysis, false);
 });
 
@@ -55,18 +55,13 @@ test("Market Analysis rejects evidence outside the frozen evidence scope", () =>
   );
 });
 
-test("Market Analysis is deterministic and explicitly gates research planning", () => {
+test("Market Analysis is deterministic and uses confirmed Strategy as its approval gate", () => {
   const first = compile(undefined, "analysis-1", "2026-08-24T00:00:00.000Z");
   const second = compile(undefined, "analysis-2", "2026-08-25T00:00:00.000Z");
   assert.equal(first.version.inputHash, second.version.inputHash);
   assert.equal(first.version.contentHash, second.version.contentHash);
-  assert.throws(
-    () =>
-      assertMarketAnalysisReadyForResearchPlan({ analysis: first, userConfirmed: false }),
-    /explicit user confirmation/,
-  );
   assert.equal(
-    assertMarketAnalysisReadyForResearchPlan({ analysis: first, userConfirmed: true }),
+    assertMarketAnalysisReadyForResearchPlan({ analysis: first, userConfirmed: false }),
     first,
   );
 });

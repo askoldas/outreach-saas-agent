@@ -1,5 +1,6 @@
 export const campaignV2Stages = [
   "initialize",
+  "market_analysis",
   "discover",
   "resolve_entities",
   "research_candidates",

@@ -186,7 +186,8 @@ export const executeCampaignV2Task = task({
 });
 
 function workflowStatusForStage(stage: CampaignV2Stage) {
-  if (stage === "initialize") return "initializing" as const;
+  if (stage === "initialize" || stage === "market_analysis")
+    return "initializing" as const;
   if (stage === "discover") return "discovering" as const;
   if (stage === "resolve_entities") return "resolving_entities" as const;
   if (stage === "rank_candidates") return "ranking" as const;

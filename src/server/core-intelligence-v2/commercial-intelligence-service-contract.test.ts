@@ -9,14 +9,9 @@ const service = readFileSync(
 const repository = readFileSync("src/server/core-intelligence-v2/repository.ts", "utf8");
 
 test("Commercial Intelligence compiles from the exact published native V3 row", () => {
-  assert.match(service, /\.from\("company_profiles"\)/);
-  assert.match(service, /\.select\("current_version_id"\)/);
-  assert.match(service, /\.from\("company_profile_versions"\)/);
-  assert.match(service, /version\.intelligence_version !== "v2"/);
-  assert.match(service, /version\.profile_status !== "published"/);
-  assert.match(service, /companyIntelligenceV3Schema\.parse/);
-  assert.match(service, /parsed\.profileVersionId !== version\.id/);
-  assert.match(service, /parsed\.identity\.workspaceId !== workspaceId/);
+  assert.match(service, /getPublishedCampaignPlanningProfile/);
+  assert.match(service, /loadPublishedCompanyProfileV3/);
+  assert.match(service, /A published Company Profile V3 is required/);
 });
 
 test("Commercial Intelligence persistence reuses frozen input identity", () => {

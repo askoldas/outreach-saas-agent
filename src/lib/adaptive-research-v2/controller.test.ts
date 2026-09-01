@@ -1,13 +1,13 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "../research-budget-v2/contracts.ts";
+import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "../research-budget-v2/contracts.ts";
 import {
   decideAdaptiveResearchNextAction,
   nextConsecutiveLowYieldWaves,
 } from "./controller.ts";
 
 const base = {
-  budget: DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+  budget: DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS,
   usage: {
     providerCalls: 8,
     providerRecords: 100,

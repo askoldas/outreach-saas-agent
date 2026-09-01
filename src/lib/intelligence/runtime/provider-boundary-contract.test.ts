@@ -15,6 +15,11 @@ const migratedV2Adapters = [
 
 const activeV2Exceptions = [] as const;
 
+const budgetedProviderBoundaries = [
+  "src/server/discovery-v2/provider-service.ts",
+  "src/server/market-analysis-v2/stage-service.ts",
+] as const;
+
 const legacyOrInactiveCallers = [] as const;
 
 const providerCallPattern =
@@ -37,10 +42,39 @@ test("the remaining direct V2 provider exceptions are explicit and bounded", () 
   }
 });
 
+test("provider calls injected into shared runtime retain the credit boundary", () => {
+  for (const file of budgetedProviderBoundaries) {
+    const source = readFileSync(file, "utf8");
+    assert.match(source, /runBudgetedOpenRouterCall/, file);
+    assert.match(source, /generateTextResult/, file);
+  }
+});
+
+test("every Company Research Tavily path has an explicit credit boundary", () => {
+  const discovery = readFileSync("src/server/discovery-v2/provider-service.ts", "utf8");
+  const research = readFileSync(
+    "src/server/candidate-research-v2/source-service.ts",
+    "utf8",
+  );
+  const contact = readFileSync("src/server/contact-enrichment/service.ts", "utf8");
+  const contactHelper = readFileSync(
+    "src/lib/providers/contact-enrichment.ts",
+    "utf8",
+  );
+  assert.match(discovery, /runBudgetedTavilyCall/);
+  assert.match(research, /runBudgetedTavilyCall/);
+  assert.match(research, /searchWebResult/);
+  assert.match(research, /extractWebPagesResult/);
+  assert.match(contact, /contactCreditAuthorizationId/);
+  assert.match(contact, /settleContactEnrichmentCredits/);
+  assert.doesNotMatch(contactHelper, /search:\s*ContactSearch\s*=/);
+});
+
 test("every production OpenRouter call site belongs to a reviewed boundary class", () => {
   const reviewed = new Set<string>([
     ...migratedV2Adapters,
     ...activeV2Exceptions,
+    ...budgetedProviderBoundaries,
     ...legacyOrInactiveCallers,
   ]);
   const discovered = providerCallers();

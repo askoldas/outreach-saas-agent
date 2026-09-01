@@ -251,8 +251,8 @@ export default async function SettingsPage({
             <label className={form.field} htmlFor="clear-confirmation">
               <span>
                 Type CLEAR to remove all Company Profile, campaign, research, lead, draft,
-                export, usage, and activity data. Workspace settings and team members are
-                kept.
+                export, usage, and activity data. The credit balance is reset to the
+                fresh-workspace grant. Workspace settings and team members are kept.
               </span>
               <input
                 autoComplete="off"

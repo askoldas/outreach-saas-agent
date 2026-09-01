@@ -38,12 +38,12 @@ export function CampaignRunHistory({
                     {run.iteration ? ` · iteration ${run.iteration}` : ""}
                   </span>
                   <span className={shared.secondaryText}>
-                    <Link href={`/campaigns/${campaignId}/market-analysis?run=${run.id}`}>
-                      Market analysis
+                    <Link href={`/campaigns/${campaignId}/research?run=${run.id}`}>
+                      Company Research
                     </Link>{" "}
                     ·{" "}
-                    <Link href={`/campaigns/${campaignId}/discovery?run=${run.id}`}>
-                      Discovery audit
+                    <Link href={`/campaigns/${campaignId}/research?run=${run.id}`}>
+                      Evidence audit
                     </Link>
                   </span>
                 </td>

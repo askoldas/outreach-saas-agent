@@ -1,6 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { classifyWorkflowError } from "./errors";
 import { executeProviderAttempt } from "./provider-attempt";
+import { releaseContactEnrichmentCredits } from "@/server/credits/contact-enrichment-repository";
 
 type ProviderTaskContext = {
   attempt: { number: number };
@@ -41,7 +42,7 @@ export async function finalizeProviderTaskFailure(
   const completedAt = new Date().toISOString();
   const { data: execution, error: loadError } = await supabase
     .from("provider_executions")
-    .select("id,workspace_id,campaign_run_id,status,metadata")
+    .select("id,workspace_id,campaign_run_id,idempotency_key,status,metadata")
     .eq("id", providerExecutionId)
     .eq("operation", operation)
     .maybeSingle();
@@ -66,6 +67,9 @@ export async function finalizeProviderTaskFailure(
 
   if (operation === "contact_enrichment") {
     const enrichmentId = asString(asRecord(execution.metadata).contactEnrichmentId);
+    const authorizationId = asString(
+      asRecord(execution.metadata).contactCreditAuthorizationId,
+    );
     if (enrichmentId)
       await supabase
         .from("contact_enrichments")
@@ -78,6 +82,13 @@ export async function finalizeProviderTaskFailure(
         .eq("workspace_id", execution.workspace_id)
         .eq("id", enrichmentId)
         .in("status", ["pending", "running"]);
+    if (authorizationId)
+      await releaseContactEnrichmentCredits({
+        workspaceId: execution.workspace_id,
+        authorizationId,
+        idempotencyKey: execution.idempotency_key,
+        reason: classified.message,
+      });
   }
 }
 

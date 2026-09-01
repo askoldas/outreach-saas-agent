@@ -28,7 +28,8 @@ export const campaignResearchUsageSchema = z
 export type CampaignResearchBudget = z.infer<typeof campaignResearchBudgetSchema>;
 export type CampaignResearchUsage = z.infer<typeof campaignResearchUsageSchema>;
 
-export const DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET: CampaignResearchBudget =
+// Operational safety limits are independent from the customer-authorized credit cap.
+export const DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS: CampaignResearchBudget =
   Object.freeze({
     maxProviderCalls: 30,
     maxAiCostUsd: 2,

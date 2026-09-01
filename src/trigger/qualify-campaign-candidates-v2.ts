@@ -52,6 +52,7 @@ export async function executeQualificationFanOut(input: {
   cycleNumber?: number;
 }) {
   const batch = await prepareQualificationStage(input);
+  let budgetFailure: string | null = null;
   if (batch.pendingMemberIds.length) {
     const requests = batch.pendingMemberIds.map((memberId) => ({
       payload: {
@@ -72,6 +73,9 @@ export async function executeQualificationFanOut(input: {
     const results = await qualifyCampaignCandidateV2Task.batchTriggerAndWait(requests);
     for (const [index, run] of results.runs.entries()) {
       if (run.ok) continue;
+      if (isResearchBudgetError(run.error)) {
+        budgetFailure = errorMessage(run.error);
+      }
       const memberId = batch.pendingMemberIds[index];
       if (!memberId) continue;
       await blockQualificationMember({
@@ -82,10 +86,21 @@ export async function executeQualificationFanOut(input: {
       });
     }
   }
-  return finalizeQualificationStage({
+  const result = await finalizeQualificationStage({
     batchId: batch.batchId,
     workspaceId: input.workspaceId,
   });
+  return budgetFailure
+    ? {
+        ...result,
+        status: "blocked" as const,
+        outputReferences: {
+          ...result.outputReferences,
+          reason: "research_budget",
+          message: budgetFailure,
+        },
+      }
+    : result;
 }
 
 function errorMessage(error: unknown) {
@@ -102,4 +117,10 @@ function errorCode(error: unknown) {
     return error.code;
   }
   return "qualification_member_failed";
+}
+
+function isResearchBudgetError(error: unknown) {
+  return /research credit authorization|workspace credit balance|research budget|actual usage exceeds/i.test(
+    errorMessage(error),
+  );
 }

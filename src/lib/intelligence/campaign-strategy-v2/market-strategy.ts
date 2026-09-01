@@ -55,7 +55,8 @@ export async function generateCampaignStrategyAdvisoryDelta(input: {
   });
 }
 
-type StrategyRuntime = {
+export type StrategyRuntime = {
+  generateTextResult?: typeof generateTextResult;
   recordAttempt?: (attempt: IntelligenceAttemptRecord) => Promise<void>;
 };
 
@@ -115,7 +116,7 @@ async function executeStrategyTask<T>(options: {
       ? { recordAttempt: options.input.runtime.recordAttempt }
       : {}),
     transport: async (transport) => {
-      const call = await generateTextResult(transport.messages, {
+      const call = await (options.input.runtime?.generateTextResult ?? generateTextResult)(transport.messages, {
         role: "campaign_strategy_compilation",
         maxCompletionTokens: transport.maxCompletionTokens,
         reasoningEffort: "minimal",

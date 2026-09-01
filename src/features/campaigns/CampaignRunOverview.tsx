@@ -18,7 +18,7 @@ export function CampaignRunOverview({
           <span>{run.progress}% complete</span>
         </Card>
         <Card className={shared.metric}>
-          <p>Discovery cycle</p>
+          <p>Research cycle</p>
           <h2>{run.iteration || "—"}</h2>
           <span>Continues while productive work and research budget remain</span>
         </Card>
@@ -52,12 +52,12 @@ export function CampaignRunOverview({
 function stageLabel(phase: string) {
   const labels: Record<string, string> = {
     discovery_queued: "Queued",
-    initializing: "Market analysis",
-    market_analysis: "Market analysis",
+    initializing: "Starting company research",
+    market_analysis: "Updating market overview",
     discovery_planning: "Discovery planning",
-    discovering: "Discovering",
-    evaluating: "Classifying",
-    qualifying: "Evaluating",
+    discovering: "Company research",
+    evaluating: "Company research",
+    qualifying: "Company research",
     paused: "Paused",
     ready_for_review: "Ready for review",
     waiting_for_input: "Needs input",

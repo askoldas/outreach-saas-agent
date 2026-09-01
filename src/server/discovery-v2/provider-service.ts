@@ -16,8 +16,12 @@ import {
   recordCandidatePreclassificationModelCall,
 } from "./provider-repository";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
+import { runBudgetedTavilyCall } from "@/server/credits/budgeted-tavily-call";
+import { runBudgetedOpenRouterCall } from "@/server/credits/budgeted-provider-call";
+import { generateTextResult } from "@/lib/providers/openrouter";
 
 export async function executeAndPersistDiscoveryProvider(input: {
+  campaignRunId: string;
   provider?: CompanyDiscoveryProvider;
   providerId: string;
   providerVersion: string;
@@ -83,9 +87,35 @@ export async function executeAndPersistDiscoveryProvider(input: {
   }
   assertIntelligenceExternalCallsAllowed("provider");
   await input.assertConfigured?.();
-  const normalizedResponse = providerDiscoveryResponseSchema.parse(
-    await input.provider.search(request, input.executionPlan),
-  );
+  const providerResponse =
+    input.providerId === "web_search"
+      ? await runBudgetedTavilyCall({
+          workspaceId: request.workspaceId,
+          campaignRunId: input.campaignRunId,
+          operation: "company_research_web_search",
+          idempotencyKey: `company-research-search:${input.campaignRunId}:${requestHash}`,
+          estimatedProviderCredits: Math.max(
+            1,
+            Array.isArray(input.executionPlan?.queries)
+              ? input.executionPlan.queries.length
+              : 1,
+          ),
+          execute: () => input.provider!.search(request, input.executionPlan),
+          usage: (result) => {
+            const parsed = providerDiscoveryResponseSchema.parse(result);
+            return {
+              providerCredits:
+                parsed.usage.providerCredits ?? parsed.usage.calls,
+              providerRequestId:
+                parsed.usage.providerRequestIds?.length === 1
+                  ? parsed.usage.providerRequestIds[0]
+                  : undefined,
+              providerRequestIds: parsed.usage.providerRequestIds,
+            };
+          },
+        })
+      : await input.provider.search(request, input.executionPlan);
+  const normalizedResponse = providerDiscoveryResponseSchema.parse(providerResponse);
   if (
     normalizedResponse.classifications.some(({ disposition }) =>
       ["candidate", "needs_review"].includes(disposition),
@@ -93,9 +123,21 @@ export async function executeAndPersistDiscoveryProvider(input: {
   ) {
     assertIntelligenceExternalCallsAllowed("model");
   }
+  let preclassificationAttempt = 0;
   const refinement = await refinePlausibleCandidateClassifications({
     request,
     response: normalizedResponse,
+    generate: (messages, options) => {
+      preclassificationAttempt += 1;
+      return runBudgetedOpenRouterCall({
+        workspaceId: request.workspaceId,
+        campaignRunId: input.campaignRunId,
+        operation: "company_research_source_preclassification",
+        idempotencyKey: `company-research-preclassification:${input.campaignRunId}:${requestHash}:attempt-${preclassificationAttempt}`,
+        billable: preclassificationAttempt === 1,
+        execute: () => generateTextResult(messages, options),
+      });
+    },
     runtime: {
       recordAttempt: createIntelligenceAttemptRecorder({
         workspaceId: request.workspaceId,

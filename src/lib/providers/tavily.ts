@@ -11,6 +11,8 @@ type TavilySearchResult = {
 };
 
 type TavilyExtractResponse = {
+  request_id?: string;
+  usage?: { credits?: number };
   results?: Array<{ raw_content?: string; url: string }>;
 };
 
@@ -18,7 +20,19 @@ type TavilySearchResponse = {
   answer?: string;
   query?: string;
   results?: TavilySearchResult[];
+  request_id?: string;
+  usage?: { credits?: number };
 };
+
+export type TavilyUsage = {
+  provider: "tavily";
+  operation: "search" | "extract";
+  providerRequestId?: string;
+  providerUnits: number;
+  searchDepth: "basic";
+};
+
+export type TavilyResult<T> = { data: T; usage: TavilyUsage };
 
 export type SearchResult = {
   content: string;
@@ -37,6 +51,19 @@ export async function searchWeb(
     includeRawContent?: boolean;
   } = {},
 ): Promise<SearchResult[]> {
+  return (await searchWebResult(query, maxResults, options)).data;
+}
+
+export async function searchWebResult(
+  query: string,
+  maxResults = 8,
+  options: {
+    country?: string;
+    includeDomains?: string[];
+    excludeDomains?: string[];
+    includeRawContent?: boolean;
+  } = {},
+): Promise<TavilyResult<SearchResult[]>> {
   const { apiKey } = requireTavilyConfig();
   const response = await fetch("https://api.tavily.com/search", {
     body: JSON.stringify({
@@ -68,16 +95,41 @@ export async function searchWeb(
   }
 
   const payload = (await response.json()) as TavilySearchResponse;
-  return (payload.results ?? []).map((result) => ({
+  const data = (payload.results ?? []).map((result) => ({
     content: result.raw_content?.trim() || result.content || "",
     score: typeof result.score === "number" ? result.score : null,
     title: result.title ?? result.url,
     url: result.url,
   }));
+  return {
+    data,
+    usage: {
+      provider: "tavily",
+      operation: "search",
+      ...(payload.request_id ? { providerRequestId: payload.request_id } : {}),
+      providerUnits: payload.usage?.credits ?? 1,
+      searchDepth: "basic",
+    },
+  };
 }
 
 export async function extractWebPages(urls: string[]): Promise<SearchResult[]> {
-  if (!urls.length) return [];
+  return (await extractWebPagesResult(urls)).data;
+}
+
+export async function extractWebPagesResult(
+  urls: string[],
+): Promise<TavilyResult<SearchResult[]>> {
+  if (!urls.length)
+    return {
+      data: [],
+      usage: {
+        provider: "tavily",
+        operation: "extract",
+        providerUnits: 0,
+        searchDepth: "basic",
+      },
+    };
   const { apiKey } = requireTavilyConfig();
   const response = await fetch("https://api.tavily.com/extract", {
     body: JSON.stringify({ extract_depth: "basic", format: "text", urls }),
@@ -92,12 +144,22 @@ export async function extractWebPages(urls: string[]): Promise<SearchResult[]> {
     throw await tavilyHttpError(response, "extract");
   }
   const payload = (await response.json()) as TavilyExtractResponse;
-  return (payload.results ?? []).map((result) => ({
+  const data = (payload.results ?? []).map((result) => ({
     content: result.raw_content ?? "",
     score: null,
     title: result.url,
     url: result.url,
   }));
+  return {
+    data,
+    usage: {
+      provider: "tavily",
+      operation: "extract",
+      ...(payload.request_id ? { providerRequestId: payload.request_id } : {}),
+      providerUnits: payload.usage?.credits ?? urls.length,
+      searchDepth: "basic",
+    },
+  };
 }
 
 async function tavilyHttpError(response: Response, operation: "search" | "extract") {

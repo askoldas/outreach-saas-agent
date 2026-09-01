@@ -68,10 +68,9 @@ Natural-language input is never a direct database mutation. Additive language pr
 confirmed items by default. Explicit replacement is shown as a replacement preview and
 still requires confirmation.
 
-## Intelligence V2 rollout status
+## Intelligence runtime status
 
-The accepted Intelligence V2 direction is documented under `docs/V2/`. It replaces
-fixed generic discovery refinement and holistic model scoring only when the
-corresponding V2 workflow stages pass their rollout gates. Existing campaigns remain
-V1 and keep their current behavior; new V2 behavior is stage-flagged, workspace-scoped,
-version-frozen, and disabled by default.
+The accepted Intelligence V2 direction is documented under `docs/V2/`. It is the
+canonical runtime for new records and replaces fixed generic discovery refinement and
+holistic model scoring with version-frozen Company Research. Historical V1 campaigns
+remain readable with their original behavior and cannot be restarted through V2.

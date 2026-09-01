@@ -8,6 +8,7 @@ import {
 } from "@/lib/intelligence/runtime/task-registry";
 import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
+import { runBudgetedOpenRouterCall } from "@/server/credits/budgeted-provider-call";
 import {
   QUALIFICATION_CONFIDENCE_POLICY_VERSION,
   QUALIFICATION_FACTOR_PROMPT_VERSION,
@@ -369,17 +370,18 @@ async function executeQualificationAiTask<TRequest, TOutput>(input: {
       },
     }),
     transport: async (transportRequest) => {
-      const call = await generateTextResult(transportRequest.messages, {
-        role: "company_qualification",
-        maxCompletionTokens: transportRequest.maxCompletionTokens,
-        reasoningEffort:
-          transportRequest.reasoningClass === "standard"
-            ? "medium"
-            : transportRequest.reasoningClass,
-        taskName: input.definition.title,
-        ...(transportRequest.output.mode === "json_schema"
-          ? { jsonSchema: transportRequest.output }
-          : { jsonMode: true }),
+      const call = await runBudgetedOpenRouterCall({
+        workspaceId: input.member.workspaceId,
+        campaignRunId: input.member.campaignRunId,
+        operation: "company_research_qualification",
+        idempotencyKey: `company-qualification:${input.member.memberId}:${input.requestHash}`,
+        execute: () => generateTextResult(transportRequest.messages, {
+          role: "company_qualification",
+          maxCompletionTokens: transportRequest.maxCompletionTokens,
+          reasoningEffort: transportRequest.reasoningClass === "standard" ? "medium" : transportRequest.reasoningClass,
+          taskName: input.definition.title,
+          ...(transportRequest.output.mode === "json_schema" ? { jsonSchema: transportRequest.output } : { jsonMode: true }),
+        }),
       });
       return {
         output: call.data,

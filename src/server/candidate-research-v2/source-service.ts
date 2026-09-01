@@ -6,7 +6,9 @@ import {
 } from "../../lib/candidate-intelligence-v2/index.ts";
 import {
   extractWebPages,
+  extractWebPagesResult,
   searchWeb,
+  searchWebResult,
   type SearchResult,
 } from "../../lib/providers/tavily.ts";
 import { assertIntelligenceExternalCallsAllowed } from "../../lib/intelligence/external-call-controls.ts";
@@ -56,8 +58,10 @@ export async function collectCandidateResearchSources(
   member: CandidateResearchMemberContext,
   dependencies: SourceDependencies = {},
 ): Promise<{ sources: CandidateResearchSource[]; warnings: string[] }> {
-  const discoverPages = dependencies.discoverPages ?? searchWeb;
-  const extractPages = dependencies.extractPages ?? extractWebPages;
+  const discoverPages =
+    dependencies.discoverPages ?? budgetedPageDiscovery(member);
+  const extractPages =
+    dependencies.extractPages ?? budgetedPageExtraction(member);
   const persistSource = dependencies.persistSource ?? defaultPersistSource;
   const now = dependencies.now ?? (() => new Date().toISOString());
   const sources = new Map(
@@ -172,6 +176,56 @@ export async function collectCandidateResearchSources(
   }
 
   return orderedResult(sources, warnings);
+}
+
+function budgetedPageDiscovery(
+  member: CandidateResearchMemberContext,
+): typeof searchWeb {
+  return async (query, maxResults, options) => {
+    const { runBudgetedTavilyCall } = await import(
+      "../credits/budgeted-tavily-call.ts"
+    );
+    return runBudgetedTavilyCall({
+      workspaceId: member.workspaceId,
+      campaignRunId: member.campaignRunId,
+      operation: "company_research_first_party_page_discovery",
+      idempotencyKey: `candidate-source-discovery:${member.memberId}:${digest(query)}`,
+      estimatedProviderCredits: 1,
+      execute: () => searchWebResult(query, maxResults, options),
+      usage: ({ usage }) => ({
+        providerCredits: usage.providerUnits,
+        ...(usage.providerRequestId
+          ? { providerRequestId: usage.providerRequestId }
+          : {}),
+      }),
+    }).then(({ data }) => data);
+  };
+}
+
+function budgetedPageExtraction(
+  member: CandidateResearchMemberContext,
+): typeof extractWebPages {
+  return async (urls) => {
+    const { runBudgetedTavilyCall } = await import(
+      "../credits/budgeted-tavily-call.ts"
+    );
+    return runBudgetedTavilyCall({
+      workspaceId: member.workspaceId,
+      campaignRunId: member.campaignRunId,
+      operation: "company_research_first_party_page_extract",
+      idempotencyKey: `candidate-source-extract:${member.memberId}:${digest(
+        [...urls].sort().join("\n"),
+      )}`,
+      estimatedProviderCredits: Math.max(1, urls.length),
+      execute: () => extractWebPagesResult(urls),
+      usage: ({ usage }) => ({
+        providerCredits: usage.providerUnits,
+        ...(usage.providerRequestId
+          ? { providerRequestId: usage.providerRequestId }
+          : {}),
+      }),
+    }).then(({ data }) => data);
+  };
 }
 
 async function discoverSameDomainPages(input: {

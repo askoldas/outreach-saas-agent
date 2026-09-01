@@ -29,8 +29,9 @@ Set these in the Trigger.dev environment:
 - `TAVILY_API_KEY`
 
 The Supabase publishable key is not required by server-side Trigger tasks. Model,
-fallback, and timeout variables are optional overrides. `CAMPAIGN_AGENT_ENABLED` no
-longer exists.
+fallback, and timeout variables are optional overrides. Company Intelligence uses
+`OPENROUTER_PROFILE_REQUEST_TIMEOUT_MS` (240 seconds by default) independently from
+the general OpenRouter timeout. `CAMPAIGN_AGENT_ENABLED` no longer exists.
 
 The Next.js runtime uses its environment-specific `TRIGGER_SECRET_KEY`.
 `TRIGGER_ACCESS_TOKEN` is only a personal CLI/CI deployment credential.

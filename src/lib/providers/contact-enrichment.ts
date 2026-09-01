@@ -1,6 +1,6 @@
 import type { ContactRoute } from "../../types/domain.ts";
 import { extractContactRoutesFromEvidence } from "../discovery/contact-extractor.ts";
-import { searchWeb, type SearchResult } from "./tavily.ts";
+import type { SearchResult } from "./tavily.ts";
 
 export type EnrichedContactRoute = ContactRoute & {
   provenance: {
@@ -16,7 +16,7 @@ type ContactSearch = (query: string, maxResults?: number) => Promise<SearchResul
 
 export async function enrichCompanyContacts(
   input: { company: string; website: string },
-  search: ContactSearch = searchWeb,
+  search: ContactSearch,
 ): Promise<EnrichedContactRoute[]> {
   const query = buildContactEnrichmentQuery(input);
   const results = await search(query, 6);

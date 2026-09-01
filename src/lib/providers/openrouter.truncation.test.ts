@@ -78,6 +78,8 @@ test("OpenRouter retries a truncated completion once with a larger compact budge
     assert.match(retryMessages.at(-1)?.content ?? "", /completion limit/i);
     assert.equal(result.data, '{"answer":"complete"}');
     assert.equal(result.truncationRetryUsed, true);
+    assert.equal(result.providerReportedCost, 0.023);
+    assert.equal(result.providerReportedBillableCost, 0.003);
   } finally {
     globalThis.fetch = originalFetch;
     for (const key of environmentKeys) {

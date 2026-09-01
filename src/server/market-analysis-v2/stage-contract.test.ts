@@ -6,11 +6,30 @@ const stage = readFileSync("src/server/market-analysis-v2/stage-service.ts", "ut
 const workflow = readFileSync("src/server/workflow-v2/stage-service.ts", "utf8");
 const contracts = readFileSync("src/lib/workflow-v2/contracts.ts", "utf8");
 const strategyTask = readFileSync("src/trigger/compile-campaign-strategy-v2.ts", "utf8");
+const bootstrapTask = readFileSync(
+  "src/trigger/bootstrap-company-research-context-v2.ts",
+  "utf8",
+);
+const executionTask = readFileSync("src/trigger/execute-campaign-v2.ts", "utf8");
+const discoveryStage = readFileSync(
+  "src/server/discovery-v2/initial-discovery-stage.ts",
+  "utf8",
+);
 
-test("Market Analysis is a durable Campaign V2 stage before Discovery", () => {
-  assert.ok(contracts.indexOf('"market_analysis"') < contracts.indexOf('"discover"'));
-  assert.match(workflow, /input\.stage === "market_analysis"/);
-  assert.match(workflow, /executeMarketAnalysisStage/);
+test("market context bootstraps Company Research without a standalone stage", () => {
+  const activeStages = contracts.slice(
+    contracts.indexOf("export const campaignV2Stages"),
+    contracts.indexOf("export const historicalCampaignV2Stages"),
+  );
+  assert.doesNotMatch(activeStages, /"market_analysis"/);
+  assert.match(contracts, /historicalCampaignV2Stages = \["market_analysis"\]/);
+  assert.match(workflow, /executeHistoricalMarketAnalysisStage/);
+  assert.match(workflow, /input\.stage === "initialize"/);
+  assert.doesNotMatch(workflow, /executeCompanyResearchBootstrap/);
+  assert.match(bootstrapTask, /executeCompanyResearchBootstrap/);
+  assert.match(executionTask, /bootstrapCompanyResearchContextV2Task\.trigger/);
+  assert.doesNotMatch(executionTask, /bootstrapCompanyResearchContextV2Task\.triggerAndWait/);
+  assert.match(discoveryStage, /compileAndPersistStrategyDiscoveryPlan/);
 });
 
 test("stage persists canonical run artifacts and preserves the confirmed Strategy", () => {
@@ -22,6 +41,8 @@ test("stage persists canonical run artifacts and preserves the confirmed Strateg
   assert.match(stage, /compileAndPersistMarketResearchPlan/);
   assert.match(stage, /campaignRunId: input\.campaignRunId/);
   assert.match(stage, /createIntelligenceAttemptRecorder/);
+  assert.match(stage, /runBudgetedOpenRouterCall/);
+  assert.match(stage, /company_research\.market_overview_bootstrap/);
 });
 
 test("Strategy compilation no longer duplicates Market Analysis", () => {

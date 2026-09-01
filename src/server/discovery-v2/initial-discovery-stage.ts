@@ -10,7 +10,7 @@ import {
   type DiscoveryPlanV2,
   type ProviderDiscoveryRequest,
 } from "@/lib/discovery-v2";
-import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
+import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
 import type { StageResult } from "@/lib/workflow-v2";
 import type { Json } from "@/types/database.types";
 import {
@@ -27,6 +27,7 @@ import {
 } from "./coverage-repository";
 import {
   compileAndPersistDiscoveryPlanFromMarketResearch,
+  compileAndPersistStrategyDiscoveryPlan,
   loadMarketResearchPlanForDiscovery,
   parsePersistedFrozenDiscoveryPlan,
 } from "./plan-discovery";
@@ -74,24 +75,24 @@ export async function executeInitialDiscoveryStage(input: {
       campaignRunId: input.campaignRunId,
     });
     const maximumPlanProviderCalls =
-      DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET.maxProviderCalls;
-    if (!marketResearchPlan) {
-      throw new Error(
-        "Discovery requires the Campaign Run's completed Market Research Plan.",
-      );
-    }
-    const compiled = await compileAndPersistDiscoveryPlanFromMarketResearch({
+      DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS.maxProviderCalls;
+    const sharedPlanInput = {
       id: logicalPlanId,
       workspaceId: input.workspaceId,
       campaignRunId: input.campaignRunId,
       strategy: context.strategy,
-      researchPlan: marketResearchPlan,
       enabledProviderIds,
       versionNumber: 1,
       maximumProviderCalls: maximumPlanProviderCalls,
       ...(discoveryDeadline(context) ? { deadlineAt: discoveryDeadline(context) } : {}),
       compiledAt: context.campaignRunCreatedAt,
-    });
+    };
+    const compiled = marketResearchPlan
+      ? await compileAndPersistDiscoveryPlanFromMarketResearch({
+          ...sharedPlanInput,
+          researchPlan: marketResearchPlan,
+        })
+      : await compileAndPersistStrategyDiscoveryPlan(sharedPlanInput);
     plan = compiled.plan;
     planRecord = compiled.record;
   }
@@ -186,7 +187,7 @@ export async function executeInitialDiscoveryStage(input: {
   const registeredProviderById = new Map(
     registry.list().map((provider) => [provider.id, provider] as const),
   );
-  const outcomes = await mapWithConcurrency(executionRequests, 1, async (request) => {
+  const outcomes = await mapWithConcurrency(executionRequests, 2, async (request) => {
     const segmentRun = segmentRunByKey.get(request.segment.id);
     if (!segmentRun)
       throw new Error(
@@ -216,6 +217,7 @@ export async function executeInitialDiscoveryStage(input: {
     const frozenRequest = providerDiscoveryRequestSchema.parse(queryPlan.request_json);
     const queries = webDiscoveryQuerySchema.array().parse(queryPlan.queries_json);
     const result = await executeAndPersistDiscoveryProvider({
+      campaignRunId: input.campaignRunId,
       provider: registeredProviderById.get(providerId),
       providerId,
       providerVersion: frozenCapabilities.providerVersion,

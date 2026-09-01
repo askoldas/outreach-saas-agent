@@ -4,7 +4,9 @@ import { classifyWorkflowError, errorForTrigger } from "@/server/execution/error
 import { executeSemanticDiscoveryStage } from "@/server/discovery-v2/targeted-discovery-stage";
 import { executeEntityResolutionStage } from "@/server/entity-resolution-v2/stage-service";
 import { executeRankingStage } from "@/server/ranking-v2/stage-service";
-import { executeMarketAnalysisStage } from "@/server/market-analysis-v2/stage-service";
+import {
+  executeHistoricalMarketAnalysisStage,
+} from "@/server/market-analysis-v2/stage-service";
 import type { Json } from "@/types/database.types";
 import {
   claimWorkflowTask,
@@ -117,7 +119,8 @@ async function runStageAdapter(
       usageEventIds: [],
     };
   }
-  if (input.stage === "market_analysis") return executeMarketAnalysisStage(input);
+  if (input.stage === "market_analysis")
+    return executeHistoricalMarketAnalysisStage(input);
   if (input.stage === "discover") return executeSemanticDiscoveryStage(input);
   if (input.stage === "resolve_entities") return executeEntityResolutionStage(input);
   if (input.stage === "research_candidates") {

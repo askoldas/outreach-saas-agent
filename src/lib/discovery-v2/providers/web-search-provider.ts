@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { countryDisplayName } from "../../discovery/languages.ts";
-import { searchWeb, type SearchResult } from "../../providers/tavily.ts";
+import {
+  searchWebResult,
+  type SearchResult,
+  type TavilyResult,
+} from "../../providers/tavily.ts";
 import {
   providerDiscoveryRequestSchema,
   providerDiscoveryResponseSchema,
@@ -26,7 +30,7 @@ type WebSearchTransport = (
     includeDomains?: string[];
     includeRawContent?: boolean;
   },
-) => Promise<SearchResult[]>;
+) => Promise<SearchResult[] | TavilyResult<SearchResult[]>>;
 
 export class WebSearchProvider implements CompanyDiscoveryProvider {
   readonly id = "web_search";
@@ -36,7 +40,7 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
   readonly #executionId: () => string;
 
   constructor(
-    transport: WebSearchTransport = searchWeb,
+    transport: WebSearchTransport = searchWebResult,
     now: () => string = () => new Date().toISOString(),
     executionId: () => string = randomUUID,
   ) {
@@ -100,19 +104,21 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
     );
     const outcomes = await mapWithConcurrency(queries, 3, async (query) => {
       try {
+        const transported = await this.#transport(query.query, perQuery, {
+          ...(query.country
+            ? { country: countryDisplayName(query.country).toLowerCase() }
+            : {}),
+          ...(query.excludedDomains?.length
+            ? { excludeDomains: query.excludedDomains }
+            : {}),
+          ...(query.sourceFamily !== "company_website"
+            ? { includeRawContent: true }
+            : {}),
+        });
         return {
           query,
-          results: await this.#transport(query.query, perQuery, {
-            ...(query.country
-              ? { country: countryDisplayName(query.country).toLowerCase() }
-              : {}),
-            ...(query.excludedDomains?.length
-              ? { excludeDomains: query.excludedDomains }
-              : {}),
-            ...(query.sourceFamily !== "company_website"
-              ? { includeRawContent: true }
-              : {}),
-          }),
+          results: Array.isArray(transported) ? transported : transported.data,
+          usage: Array.isArray(transported) ? null : transported.usage,
         };
       } catch (error) {
         return {
@@ -158,6 +164,13 @@ export class WebSearchProvider implements CompanyDiscoveryProvider {
       usage: {
         calls: outcomes.length,
         recordsReturned: records.length,
+        providerCredits: outcomes.reduce(
+          (sum, outcome) => sum + (outcome.usage?.providerUnits ?? 1),
+          0,
+        ),
+        providerRequestIds: outcomes.flatMap((outcome) =>
+          outcome.usage?.providerRequestId ? [outcome.usage.providerRequestId] : [],
+        ),
         runtimeMs: Math.max(0, Date.now() - startedAt),
       },
       warnings:

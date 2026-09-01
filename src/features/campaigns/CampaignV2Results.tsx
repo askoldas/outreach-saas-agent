@@ -36,6 +36,7 @@ export function CampaignV2Results({
   const [view, setView] = useState<ResultView>("all");
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
+  const [additionalCredits, setAdditionalCredits] = useState(10);
   const [pending, startTransition] = useTransition();
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -109,6 +110,7 @@ export function CampaignV2Results({
         const result = await continueV2CampaignResearchAction({
           campaignExternalId: campaignId,
           campaignRunId: results.runId,
+          additionalCredits,
         });
         setMessage(result.message);
       } catch (error) {
@@ -156,6 +158,10 @@ export function CampaignV2Results({
               : ""}
             {results.researchOutcome.additionalOpportunityRemains ? (
               <span className={styles.actions}>
+                <label>
+                  Additional research credits
+                  <input type="number" min="0.001" step="0.001" value={additionalCredits} onChange={(event) => setAdditionalCredits(Number(event.target.value))} disabled={pending} />
+                </label>
                 <Button disabled={pending} onClick={continueResearch}>
                   {pending ? "Queuing research…" : "Continue research"}
                 </Button>

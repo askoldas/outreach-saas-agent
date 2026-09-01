@@ -11,6 +11,7 @@ type UpdateLeadReviewInput = {
   campaignId?: string;
   leadId: string;
   status: LeadStatus;
+  contactCreditCap?: number;
 };
 
 const reviewStatuses = new Set<LeadStatus>([
@@ -38,6 +39,7 @@ export async function updateLeadReviewAction(input: UpdateLeadReviewInput) {
       ? await enqueueLeadContactEnrichmentRun({
           leadId: input.leadId,
           workspaceId: currentWorkspace.id,
+          creditCap: input.contactCreditCap ?? 2,
         })
       : null;
   await createActivityEvent(currentWorkspace.id, {

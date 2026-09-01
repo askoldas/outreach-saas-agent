@@ -20,9 +20,12 @@ export interface AiCallResult<T> {
   fallbackReason?: string;
   inputTokens?: number;
   outputTokens?: number;
+  reasoningTokens?: number;
+  cachedTokens?: number;
   totalTokens?: number;
   providerRequestId?: string;
   providerReportedCost?: number;
+  providerReportedBillableCost?: number;
   providerCurrency?: "USD";
   latencyMs: number;
   truncationRetryUsed?: boolean;
@@ -57,6 +60,8 @@ type OpenRouterResponse = {
     prompt_tokens?: number;
     total_tokens?: number;
     cost?: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+    prompt_tokens_details?: { cached_tokens?: number };
   };
 };
 
@@ -179,6 +184,15 @@ async function generateTextResultAttempt(
       );
       return {
         ...retry,
+        ...(typeof payload.usage?.cost === "number" ||
+        typeof retry.providerReportedCost === "number"
+          ? {
+              providerReportedCost:
+                (payload.usage?.cost ?? 0) + (retry.providerReportedCost ?? 0),
+              providerReportedBillableCost:
+                retry.providerReportedBillableCost ?? retry.providerReportedCost ?? 0,
+            }
+          : {}),
         latencyMs: Date.now() - startedAt,
         truncationRetryUsed: true,
       };
@@ -221,9 +235,19 @@ async function generateTextResultAttempt(
     ...(typeof payload.usage?.total_tokens === "number"
       ? { totalTokens: payload.usage.total_tokens }
       : {}),
+    ...(typeof payload.usage?.completion_tokens_details?.reasoning_tokens === "number"
+      ? { reasoningTokens: payload.usage.completion_tokens_details.reasoning_tokens }
+      : {}),
+    ...(typeof payload.usage?.prompt_tokens_details?.cached_tokens === "number"
+      ? { cachedTokens: payload.usage.prompt_tokens_details.cached_tokens }
+      : {}),
     ...(payload.id ? { providerRequestId: payload.id } : {}),
     ...(typeof payload.usage?.cost === "number"
-      ? { providerReportedCost: payload.usage.cost, providerCurrency: "USD" as const }
+      ? {
+          providerReportedCost: payload.usage.cost,
+          providerReportedBillableCost: payload.usage.cost,
+          providerCurrency: "USD" as const,
+        }
       : {}),
     ...(truncationRetryUsed ? { truncationRetryUsed: true } : {}),
     latencyMs: Date.now() - startedAt,

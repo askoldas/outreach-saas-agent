@@ -78,7 +78,10 @@ export async function executeSemanticDiscoveryStage(input: {
     throw new Error("Semantic Discovery initial pass has no durable decision.");
   }
 
-  while (latestDecision.decision_json.decision === "continue") {
+  // One concrete search pass per Company Research cycle. Returning control here lets
+  // entity resolution, research, evaluation, and newly learned market signals change
+  // the next persisted search direction instead of completing a fixed query batch.
+  if (latestDecision.decision_json.decision === "continue") {
     latestDecision = await executeTargetedPass({
       context,
       discoveryRun,
@@ -224,7 +227,7 @@ async function executeTargetedPass(input: {
     ),
   );
 
-  const outcomes = await mapWithConcurrency(batches, 1, async (batch) => {
+  const outcomes = await mapWithConcurrency(batches, 2, async (batch) => {
     const durablePass = segmentRunById.get(batch.persistedSegment.id);
     if (!durablePass) {
       throw new Error(
@@ -271,6 +274,7 @@ async function executeTargetedPass(input: {
     const frozenRequest = providerDiscoveryRequestSchema.parse(queryPlan.request_json);
     const queries = webDiscoveryQuerySchema.array().parse(queryPlan.queries_json);
     const result = await executeAndPersistDiscoveryProvider({
+      campaignRunId: input.context.campaignRunId,
       provider: registeredProviderById.get(providerId),
       providerId,
       providerVersion: frozenCapabilities.providerVersion,
@@ -612,7 +616,10 @@ function finalStageResult(input: {
   }
   return {
     stage: "discover",
-    status: decisionKind === "stop" ? "completed" : "blocked",
+    // A persisted continuation decision is progress, not a workflow blocker.
+    // Resolution and evaluation must run before the adaptive controller decides
+    // whether the next cycle should search the remaining gaps.
+    status: decisionKind === "stop" ? "completed" : "partial",
     outputReferences: {
       memorySnapshotId: input.memorySnapshotId,
       discoveryPlanId: input.planRecord.id,

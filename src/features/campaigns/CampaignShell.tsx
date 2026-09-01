@@ -5,9 +5,8 @@ import styles from "./CampaignShell.module.css";
 
 type CampaignSection =
   | "overview"
-  | "market"
   | "strategy"
-  | "discovery"
+  | "research"
   | "companies"
   | "contacts"
   | "outreach";
@@ -24,9 +23,8 @@ export function CampaignShell({
   const base = `/campaigns/${campaign.id}`;
   const tabs = [
     { key: "overview", label: "Overview", href: base },
-    { key: "market", label: "Market Analysis", href: `${base}/market-analysis` },
     { key: "strategy", label: "Strategy", href: `${base}/strategy` },
-    { key: "discovery", label: "Discovery", href: `${base}/discovery` },
+    { key: "research", label: "Company Research", href: `${base}/research` },
     { key: "companies", label: "Companies", href: `${base}/leads` },
     { key: "contacts", label: "Contacts", href: `${base}/outreach?view=contacts` },
     { key: "outreach", label: "Outreach", href: `${base}/outreach?view=drafts` },

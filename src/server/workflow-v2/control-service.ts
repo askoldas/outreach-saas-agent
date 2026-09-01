@@ -1,6 +1,7 @@
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { cancelTriggerRuns, dispatchCampaignV2Resume } from "@/server/trigger/dispatch";
+import { authorizeAdditionalResearchCredits } from "@/server/credits/repository";
 
 type WorkflowCommand = "pause" | "resume" | "cancel";
 
@@ -8,6 +9,7 @@ export async function controlActiveCampaignWorkflowV2(input: {
   campaignExternalId: string;
   command: WorkflowCommand;
   workspaceId: string;
+  additionalCredits?: number;
 }) {
   const { supabase } = await createAuthenticatedDatabaseClient();
   const { data: campaign, error: campaignError } = await supabase
@@ -20,7 +22,7 @@ export async function controlActiveCampaignWorkflowV2(input: {
     throw new Error(`Could not resolve V2 Campaign control: ${campaignError.message}`);
   const { data: run, error: runError } = await supabase
     .from("campaign_runs")
-    .select("id,workflow_version")
+    .select("id,workflow_version,research_pause_reason")
     .eq("workspace_id", input.workspaceId)
     .eq("campaign_id", campaign.id)
     .eq("workflow_version", "v2")
@@ -31,6 +33,20 @@ export async function controlActiveCampaignWorkflowV2(input: {
   if (runError)
     throw new Error(`Could not load active V2 Campaign Run: ${runError.message}`);
   if (!run) return null;
+
+  if (
+    input.command === "resume" &&
+    run.research_pause_reason === "campaign_budget"
+  ) {
+    await authorizeAdditionalResearchCredits({
+      workspaceId: input.workspaceId,
+      campaignRunId: run.id,
+      additionalCredits: Math.min(
+        1_000_000,
+        Math.max(0.001, input.additionalCredits ?? 10),
+      ),
+    });
+  }
 
   const database = supabase as unknown as {
     rpc(

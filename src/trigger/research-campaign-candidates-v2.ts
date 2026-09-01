@@ -68,7 +68,7 @@ export async function executeCandidateResearchFanOut(input: {
     const failed = results.runs.filter((run) => !run.ok);
     if (failed.length) {
       throw new Error(
-        `${failed.length} V2 Candidate research child task(s) failed; completed candidate work remains cached.`,
+        `${failed.length} V2 Candidate research child task(s) failed; completed candidate work remains cached. ${failed.map((run) => errorMessage(run.error)).join(" | ")}`,
       );
     }
   }
@@ -76,4 +76,8 @@ export async function executeCandidateResearchFanOut(input: {
     batchId: batch.batchId,
     workspaceId: input.workspaceId,
   });
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }

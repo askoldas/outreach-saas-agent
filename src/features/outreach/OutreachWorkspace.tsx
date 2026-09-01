@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/Button";
 import { Card, CardHeader } from "@/components/ui/Card";
 import styles from "@/features/shared/Feature.module.css";
 import { RunProgressPanel } from "@/features/progress/RunProgressPanel";
+import { DEFAULT_CONTACT_ENRICHMENT_CREDIT_CAP } from "@/lib/credits/config";
 type Tab = "contacts" | "drafts" | "exports";
 export function OutreachWorkspace({
   recipients,
@@ -45,6 +46,9 @@ export function OutreachWorkspace({
   const [message, setMessage] = useState("");
   const [draftRows, setDraftRows] = useState(drafts);
   const [pending, startTransition] = useTransition();
+  const [contactCreditCap, setContactCreditCap] = useState(
+    DEFAULT_CONTACT_ENRICHMENT_CREDIT_CAP,
+  );
   async function download() {
     const csv =
       "company,recipient,route,subject,body\n" +
@@ -144,6 +148,7 @@ export function OutreachWorkspace({
         const result = await queueContactEnrichmentAction({
           campaignId,
           leadIds: recipients.map((item) => item.leadId),
+          creditCapPerCompany: contactCreditCap,
         });
         setMessage(result.message);
         router.refresh();
@@ -188,14 +193,18 @@ export function OutreachWorkspace({
           <CardHeader
             title="Recommended company channels"
             eyebrow="Persisted public routes; not named-person leads"
-            action={
-              <Button
-                disabled={pending || recipients.length === 0}
-                onClick={enrichApproved}
-              >
+            action={<div className={styles.filters}>
+              <label>
+                Maximum credits per company
+                <input type="number" min="0.001" step="0.001"
+                  value={contactCreditCap}
+                  onChange={(event) => setContactCreditCap(Number(event.target.value))}
+                  disabled={pending} />
+              </label>
+              <Button disabled={pending || recipients.length === 0} onClick={enrichApproved}>
                 Enrich selected
               </Button>
-            }
+            </div>}
           />
           <div className={styles.tableWrap}>
             <table className={styles.table}>

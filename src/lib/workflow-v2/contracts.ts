@@ -1,6 +1,5 @@
 export const campaignV2Stages = [
   "initialize",
-  "market_analysis",
   "discover",
   "resolve_entities",
   "research_candidates",
@@ -8,7 +7,13 @@ export const campaignV2Stages = [
   "rank_candidates",
 ] as const;
 
-export type CampaignV2Stage = (typeof campaignV2Stages)[number];
+// Historical in-flight runs may still deliver this task after a deployment. It is not
+// part of the active stage registry used to plan new Company Research runs.
+export const historicalCampaignV2Stages = ["market_analysis"] as const;
+
+export type CampaignV2Stage =
+  | (typeof campaignV2Stages)[number]
+  | (typeof historicalCampaignV2Stages)[number];
 
 export type WorkflowControlState =
   | "run"

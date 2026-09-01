@@ -10,6 +10,7 @@ import type { CampaignStatus, ResearchProgress } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
+import { DEFAULT_RESEARCH_CREDIT_CAP } from "@/lib/credits/config";
 
 export function CampaignControls({
   campaignId,
@@ -27,6 +28,7 @@ export function CampaignControls({
   const [currentStatus, setCurrentStatus] = useState(status);
   const [progress, setProgress] = useState<ResearchProgress | null>(null);
   const [progressError, setProgressError] = useState("");
+  const [researchCreditCap, setResearchCreditCap] = useState(DEFAULT_RESEARCH_CREDIT_CAP);
   const isWorking = isPending || isDiscovering;
   const displayStatus =
     progress?.status === "waiting_for_input" ? "needs input" : currentStatus;
@@ -118,6 +120,7 @@ export function CampaignControls({
         const result = await updateCampaignStatusAction({
           campaignId,
           status: nextStatus,
+          ...(nextStatus === "running" ? { additionalCredits: researchCreditCap } : {}),
         });
 
         setCurrentStatus(nextStatus);
@@ -151,10 +154,10 @@ export function CampaignControls({
     setCurrentStatus("running");
     setProgress(null);
     setProgressError("");
-    setMessage("Discovery queued. Waiting for the worker...");
+    setMessage("Company Research queued. Waiting for the worker...");
 
     try {
-      const result = await discoverCampaignLeadsAction(campaignId);
+      const result = await discoverCampaignLeadsAction({ campaignId, researchCreditCap });
       setMessage(result.message);
 
       try {
@@ -177,6 +180,12 @@ export function CampaignControls({
   return (
     <div className={styles.stack}>
       <div className={styles.filters}>
+        <label>
+          Research budget
+          <input type="number" min="0.001" step="0.001" value={researchCreditCap}
+            onChange={(event) => setResearchCreditCap(Number(event.target.value))}
+            disabled={isWorking} aria-label="Maximum research credits" />
+        </label>
         <Button
           disabled={
             isPending ||
@@ -186,9 +195,7 @@ export function CampaignControls({
           variant="primary"
           onClick={discoverLeads}
         >
-          {currentStatus === "planning"
-            ? "Start campaign research"
-            : "Start another research scan"}
+          {currentStatus === "planning" ? "Start Company Research" : "Continue Research"}
         </Button>
         <Button
           disabled={isPending || currentStatus !== "running"}
@@ -244,7 +251,7 @@ export function CampaignControls({
           </span>
           {progress?.currentIteration ? (
             <span className={styles.secondaryText}>
-              Discovery cycle {progress.currentIteration}
+              Research cycle {progress.currentIteration}
             </span>
           ) : null}
           <span className={styles.secondaryText}>

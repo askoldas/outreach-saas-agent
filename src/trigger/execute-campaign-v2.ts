@@ -16,10 +16,12 @@ import {
   finalizeCampaignResearchCycle,
   loadAdaptiveResearchSnapshot,
 } from "@/server/workflow-v2/repository";
-import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
+import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
 import { decideAdaptiveResearchNextAction } from "@/lib/adaptive-research-v2/controller";
 import type { Json } from "@/types/database.types";
+import { persistEvolvingMarketOverview } from "@/server/company-research/market-overview";
 import { runCampaignV2StageTask } from "./run-campaign-v2-stage";
+import { bootstrapCompanyResearchContextV2Task } from "./bootstrap-company-research-context-v2";
 
 export type ExecuteCampaignV2Payload = {
   campaignRunId: string;
@@ -31,6 +33,8 @@ export type ExecuteCampaignV2Payload = {
     | "expand_source_pages"
     | "stop_budget";
 };
+
+const MAX_ADAPTIVE_RESEARCH_CYCLES = 6;
 
 export const executeCampaignV2Task = task({
   id: "execute-campaign-v2",
@@ -66,7 +70,7 @@ export const executeCampaignV2Task = task({
       campaignRunId: payload.campaignRunId,
       workspaceId: payload.workspaceId,
       cycleNumber,
-      budget: DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+      budget: DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS,
     });
     const initialControl = await consumeWorkflowControl({
       workflowRunId,
@@ -94,6 +98,16 @@ export const executeCampaignV2Task = task({
     );
     const stages = cycleStages.filter((stage) => !completedStages.includes(stage));
 
+    if (cycleNumber === 1 && !payload.requestedAction) {
+      await bootstrapCompanyResearchContextV2Task.trigger(payload, {
+        idempotencyKey: `bootstrap-company-research-context-v2:${payload.campaignRunId}`,
+        tags: [
+          `workspace:${payload.workspaceId}`,
+          `campaign_run:${payload.campaignRunId}`,
+        ],
+      });
+    }
+
     for (const stage of stages) {
       const beforeStage = await consumeWorkflowControl({
         workflowRunId,
@@ -120,22 +134,45 @@ export const executeCampaignV2Task = task({
           ],
         },
       );
+      if (!child.ok && isResearchBudgetError(child.error)) {
+        await updateCampaignWorkflow({
+          errorSummary: {
+            code: "research_budget_paused",
+            message: errorMessage(child.error),
+          },
+          outputReference: {
+            pausedStage: stage,
+            reason: "research_budget",
+          },
+          progressSummary: await progress(payload, completedStages, stage),
+          status: "paused",
+          workflowRunId,
+          workspaceId: payload.workspaceId,
+        });
+        return { status: "paused_for_budget", stage, workflowRunId };
+      }
       if (!child.ok)
         throw new Error(
           `V2 Campaign child "${stage}" failed: ${errorMessage(child.error)}`,
         );
       if (child.output.status === "blocked") {
+        const budgetBlocked =
+          child.output.outputReferences.reason === "research_budget";
         await updateCampaignWorkflow({
           outputReference: {
             blockedStage: stage,
             stageOutput: child.output.outputReferences,
           } as unknown as Json,
           progressSummary: await progress(payload, completedStages, stage),
-          status: "completed_partial",
+          status: budgetBlocked ? "paused" : "completed_partial",
           workflowRunId,
           workspaceId: payload.workspaceId,
         });
-        return { status: "completed_partial", stage, workflowRunId };
+        return {
+          status: budgetBlocked ? "paused_for_budget" : "completed_partial",
+          stage,
+          workflowRunId,
+        };
       }
       completedStages.push(stage);
       const afterStage = await consumeWorkflowControl({
@@ -157,7 +194,7 @@ export const executeCampaignV2Task = task({
       startedAt: String(researchCycle.startedAt),
     });
     const adaptiveDecision = decideAdaptiveResearchNextAction({
-      budget: DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+      budget: DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS,
       ...adaptiveSnapshot,
       discoverySaturated:
         adaptiveSnapshot.remainingPlausibleCandidates === 0 &&
@@ -169,8 +206,66 @@ export const executeCampaignV2Task = task({
       usage: adaptiveSnapshot.usage,
       decision: adaptiveDecision,
     });
+    const marketOverview = await persistEvolvingMarketOverview({
+      workspaceId: payload.workspaceId,
+      campaignRunId: payload.campaignRunId,
+      researchCycleId: String(researchCycle.id),
+      cycleNumber,
+      decision: adaptiveDecision,
+    });
+    const continuationAction =
+      adaptiveDecision.action === "research_existing_pool" ||
+      adaptiveDecision.action === "discover_more" ||
+      adaptiveDecision.action === "expand_source_pages"
+        ? adaptiveDecision.action
+        : null;
+    if (
+      adaptiveDecision.additionalOpportunityRemains &&
+      continuationAction &&
+      cycleNumber < MAX_ADAPTIVE_RESEARCH_CYCLES
+    ) {
+      const nextCycle = cycleNumber + 1;
+      await updateCampaignWorkflow({
+        outputReference: {
+          ...outputReference,
+          adaptiveDecision,
+          marketOverview,
+        } as unknown as Json,
+        progressSummary: await progress(payload, completedStages),
+        status: "evaluating_candidates",
+        workflowRunId,
+        workspaceId: payload.workspaceId,
+      });
+      await executeCampaignV2Task.trigger(
+        {
+          campaignRunId: payload.campaignRunId,
+          workspaceId: payload.workspaceId,
+          cycleNumber: nextCycle,
+          requestedAction: continuationAction,
+        },
+        {
+          idempotencyKey: `execute-campaign-v2:${payload.campaignRunId}:adaptive-cycle-${nextCycle}`,
+          tags: [
+            `workspace:${payload.workspaceId}`,
+            `campaign_run:${payload.campaignRunId}`,
+            `research_cycle:${nextCycle}`,
+          ],
+        },
+      );
+      return {
+        ...outputReference,
+        adaptiveDecision,
+        nextCycle,
+        status: "continuing_research",
+        workflowRunId,
+      };
+    }
     await updateCampaignWorkflow({
-      outputReference: { ...outputReference, adaptiveDecision } as unknown as Json,
+      outputReference: {
+        ...outputReference,
+        adaptiveDecision,
+        marketOverview,
+      } as unknown as Json,
       progressSummary: await progress(payload, completedStages),
       status: "ready_for_review",
       workflowRunId,
@@ -209,4 +304,10 @@ async function progress(
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown V2 workflow failure";
+}
+
+function isResearchBudgetError(error: unknown) {
+  return /research credit authorization|workspace credit balance|research budget|actual usage exceeds/i.test(
+    errorMessage(error),
+  );
 }

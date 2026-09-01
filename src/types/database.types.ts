@@ -1957,6 +1957,9 @@ export type Database = {
           profile_snapshot_id: string
           progress_percentage: number
           provider_cost: number
+          research_credit_cap: number
+          research_credits_consumed: number
+          research_pause_reason: string | null
           started_at: string | null
           status: string
           strategy_version_id: string
@@ -1996,6 +1999,9 @@ export type Database = {
           profile_snapshot_id: string
           progress_percentage?: number
           provider_cost?: number
+          research_credit_cap?: number
+          research_credits_consumed?: number
+          research_pause_reason?: string | null
           started_at?: string | null
           status?: string
           strategy_version_id: string
@@ -2035,6 +2041,9 @@ export type Database = {
           profile_snapshot_id?: string
           progress_percentage?: number
           provider_cost?: number
+          research_credit_cap?: number
+          research_credits_consumed?: number
+          research_pause_reason?: string | null
           started_at?: string | null
           status?: string
           strategy_version_id?: string
@@ -12120,8 +12129,11 @@ export type Database = {
       }
       usage_ledger: {
         Row: {
+          actual_cost_usd: number
           amount: number
+          billable_cost_usd: number
           campaign_run_id: string | null
+          company_id: string | null
           created_at: string
           credits: number
           currency: string
@@ -12130,12 +12142,20 @@ export type Database = {
           idempotency_key: string
           metadata: Json
           operation: string
+          opptium_credits: number
+          model: string | null
+          provider: string | null
+          provider_request_id: string | null
           provider_execution_id: string | null
+          raw_provider_usage: Json
           workspace_id: string
         }
         Insert: {
+          actual_cost_usd?: number
           amount?: number
+          billable_cost_usd?: number
           campaign_run_id?: string | null
+          company_id?: string | null
           created_at?: string
           credits?: number
           currency?: string
@@ -12144,12 +12164,20 @@ export type Database = {
           idempotency_key: string
           metadata?: Json
           operation: string
+          opptium_credits?: number
+          model?: string | null
+          provider?: string | null
+          provider_request_id?: string | null
           provider_execution_id?: string | null
+          raw_provider_usage?: Json
           workspace_id: string
         }
         Update: {
+          actual_cost_usd?: number
           amount?: number
+          billable_cost_usd?: number
           campaign_run_id?: string | null
+          company_id?: string | null
           created_at?: string
           credits?: number
           currency?: string
@@ -12158,7 +12186,12 @@ export type Database = {
           idempotency_key?: string
           metadata?: Json
           operation?: string
+          opptium_credits?: number
+          model?: string | null
+          provider?: string | null
+          provider_request_id?: string | null
           provider_execution_id?: string | null
+          raw_provider_usage?: Json
           workspace_id?: string
         }
         Relationships: [

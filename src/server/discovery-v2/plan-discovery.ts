@@ -9,6 +9,7 @@ import {
 import { marketResearchPlanSchema } from "@/lib/intelligence/core";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import { loadProviderCapabilitySnapshots } from "@/server/core-intelligence-v2/repository";
+import { freezeEnabledDiscoveryProviderCapabilities } from "@/server/market-analysis-v2/provider-capabilities";
 import { z } from "zod";
 import {
   hashCanonical,
@@ -158,4 +159,49 @@ export async function compileAndPersistDiscoveryPlanFromMarketResearch(input: {
     campaignRunId: input.campaignRunId,
   });
   return { plan, record };
+}
+
+export async function compileAndPersistStrategyDiscoveryPlan(input: {
+  id: string;
+  workspaceId: string;
+  campaignRunId: string;
+  strategy: CampaignStrategyV2;
+  enabledProviderIds: string[];
+  versionNumber: number;
+  maximumProviderCalls: number;
+  maximumEstimatedCostMinor?: number;
+  deadlineAt?: string;
+  compiledAt: string;
+}) {
+  const snapshotIds = await freezeEnabledDiscoveryProviderCapabilities(
+    input.workspaceId,
+  );
+  const snapshots = await loadProviderCapabilitySnapshots({
+    workspaceId: input.workspaceId,
+    ids: snapshotIds,
+  });
+  const enabled = new Set(input.enabledProviderIds);
+  const providerCapabilities = snapshots
+    .map(({ capabilities }) => capabilities)
+    .filter(({ providerId }) => enabled.has(providerId));
+  if (!providerCapabilities.length) {
+    throw new Error("No enabled provider can execute Strategy-first discovery.");
+  }
+  const routes: SegmentProviderRouteV2[] = input.strategy.discoverySegments.map(
+    (segment) => ({
+      segmentId: segment.id,
+      providers: providerCapabilities.map(({ providerId }, index) => ({
+        providerId,
+        role: index === 0 ? "primary" : "supporting",
+        priority: index + 1,
+        reasons: ["Confirmed Campaign Strategy route"],
+        unsupportedConstraints: [],
+      })),
+    }),
+  );
+  return compileAndPersistDiscoveryPlan({
+    ...input,
+    routes,
+    providerCapabilities,
+  });
 }

@@ -4,8 +4,21 @@ import {
   type CampaignStrategyV2,
 } from "@/lib/intelligence/campaign-strategy-v2";
 import type { MarketAnalysis } from "@/lib/intelligence/core";
+import { evolvingMarketOverviewSchema, type EvolvingMarketOverview } from "@/lib/company-research/market-overview";
 
 export type CampaignWorkflowSummary = {
+  progressiveCompanies: Array<{
+    id: string;
+    name: string;
+    domain: string | null;
+    websiteUrl: string | null;
+    location: string;
+    state: string;
+    identityConfidence: number;
+    identityReviewState: string;
+    discoveredCountry: string | null;
+    updatedAt: string;
+  }>;
   selectedRunId: string | null;
   selectedRunIsLatest: boolean;
   runEvents: Array<{
@@ -69,6 +82,7 @@ export type CampaignWorkflowSummary = {
     errorMessage: string | null;
   } | null;
   marketAnalysis: MarketAnalysis | null;
+  marketOverview: EvolvingMarketOverview | null;
   v2Strategy: {
     summary: string;
     objective: string;
@@ -177,8 +191,10 @@ export async function getCampaignWorkflowSummary(
       runEvents: [],
       runHistory: [],
       candidateAudit: [],
+      progressiveCompanies: [],
       latestRun: null,
       marketAnalysis: null,
+      marketOverview: null,
       v2Strategy: await loadV2StrategySummary({
         supabase,
         workspaceId,
@@ -219,6 +235,7 @@ export async function getCampaignWorkflowSummary(
       : null;
 
   const [
+    { data: evolvingOverview, error: evolvingOverviewError },
     { data: analysis },
     { data: plan },
     { data: classifications },
@@ -226,6 +243,12 @@ export async function getCampaignWorkflowSummary(
     { data: candidates },
     { data: runEvents },
   ] = await Promise.all([
+    (supabase as unknown as {
+      rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+    }).rpc("get_latest_research_market_overview", {
+      target_workspace_id: workspaceId,
+      target_campaign_run_id: selectedRun.id,
+    }),
     supabase
       .from("market_analyses")
       .select("analysis")
@@ -276,6 +299,8 @@ export async function getCampaignWorkflowSummary(
       .order("created_at", { ascending: false })
       .limit(100),
   ]);
+  if (evolvingOverviewError)
+    throw new Error(`Could not load evolving Market Overview: ${evolvingOverviewError.message}`);
   const counts: Record<string, number> = {};
   for (const row of classifications ?? [])
     counts[row.status] = (counts[row.status] ?? 0) + 1;
@@ -297,9 +322,98 @@ export async function getCampaignWorkflowSummary(
     expected_yield: string | null;
     priority: number;
   }>;
+  const { data: progressiveCandidateRows, error: progressiveCandidateError } =
+    await supabase
+      .from("campaign_candidates")
+      .select(
+        "id,display_organization_id,state,discovered_country,updated_at",
+      )
+      .eq("workspace_id", workspaceId)
+      .eq("campaign_id", campaign.id)
+      .eq("campaign_strategy_version_id", selectedRun.strategy_version_id)
+      .order("updated_at", { ascending: false })
+      .limit(200);
+  if (progressiveCandidateError)
+    throw new Error(
+      `Could not load progressive Company Research results: ${progressiveCandidateError.message}`,
+    );
+  const progressiveOrganizationIds = [
+    ...new Set(
+      (progressiveCandidateRows ?? []).map(
+        ({ display_organization_id: organizationId }) => organizationId,
+      ),
+    ),
+  ];
+  const emptyUuid = "00000000-0000-0000-0000-000000000000";
+  const [progressiveOrganizationsResult, progressiveDomainsResult] = await Promise.all([
+    supabase
+      .from("companies")
+      .select(
+        "id,name,city,country,website_url,identity_confidence,identity_review_state,operating_status",
+      )
+      .eq("workspace_id", workspaceId)
+      .in(
+        "id",
+        progressiveOrganizationIds.length
+          ? progressiveOrganizationIds
+          : [emptyUuid],
+      ),
+    supabase
+      .from("company_domains")
+      .select("company_id,domain,is_primary")
+      .eq("workspace_id", workspaceId)
+      .in(
+        "company_id",
+        progressiveOrganizationIds.length
+          ? progressiveOrganizationIds
+          : [emptyUuid],
+      ),
+  ]);
+  if (progressiveOrganizationsResult.error || progressiveDomainsResult.error)
+    throw new Error(
+      `Could not load resolved Company Research identities: ${
+        progressiveOrganizationsResult.error?.message ??
+        progressiveDomainsResult.error?.message
+      }`,
+    );
+  const progressiveOrganizationById = new Map(
+    (progressiveOrganizationsResult.data ?? []).map((organization) => [
+      organization.id,
+      organization,
+    ]),
+  );
+  const progressiveDomainsByCompany = new Map<string, string>();
+  for (const domain of progressiveDomainsResult.data ?? []) {
+    if (domain.is_primary || !progressiveDomainsByCompany.has(domain.company_id)) {
+      progressiveDomainsByCompany.set(domain.company_id, domain.domain);
+    }
+  }
   return {
     selectedRunId: selectedRun.id,
     selectedRunIsLatest: selectedRun.id === run.id,
+    progressiveCompanies: (progressiveCandidateRows ?? []).flatMap((candidate) => {
+      const organization = progressiveOrganizationById.get(
+        candidate.display_organization_id,
+      );
+      if (!organization || organization.operating_status === "merged") return [];
+      return [
+        {
+          id: candidate.id,
+          name: organization.name,
+          domain:
+            progressiveDomainsByCompany.get(organization.id) ?? null,
+          websiteUrl: organization.website_url,
+          location:
+            [organization.city, organization.country].filter(Boolean).join(", ") ||
+            "Location not established",
+          state: candidate.state,
+          identityConfidence: numeric(organization.identity_confidence),
+          identityReviewState: organization.identity_review_state,
+          discoveredCountry: candidate.discovered_country,
+          updatedAt: candidate.updated_at,
+        },
+      ];
+    }),
     runEvents: (runEvents ?? []).map((event) => ({
       id: event.id,
       eventType: event.event_type,
@@ -372,6 +486,9 @@ export async function getCampaignWorkflowSummary(
       errorMessage: selectedRun.error_message,
     },
     marketAnalysis: (analysis?.analysis as MarketAnalysis | undefined) ?? null,
+    marketOverview: evolvingOverview
+      ? evolvingMarketOverviewSchema.parse(evolvingOverview)
+      : null,
     v2Strategy,
     v2Discovery,
     discoveryPaths: paths

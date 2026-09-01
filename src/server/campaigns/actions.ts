@@ -32,6 +32,7 @@ import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime
 type UpdateCampaignStatusInput = {
   campaignId: string;
   status: CampaignStatus;
+  additionalCredits?: number;
 };
 
 const controlStatuses = new Set<CampaignStatus>(["completed", "paused", "running"]);
@@ -84,14 +85,14 @@ export async function proposeCampaignBriefAction(input: {
   };
 }
 
-export async function discoverCampaignLeadsAction(campaignId: string) {
+export async function discoverCampaignLeadsAction(input: { campaignId: string; researchCreditCap: number }) {
   const { currentWorkspace } = await getWorkspaceContext();
 
   if (!currentWorkspace) {
     throw new Error("Authentication required");
   }
 
-  const campaign = await getCampaign(currentWorkspace.id, campaignId);
+  const campaign = await getCampaign(currentWorkspace.id, input.campaignId);
 
   if (!campaign) {
     throw new Error("Campaign not found.");
@@ -108,15 +109,16 @@ export async function discoverCampaignLeadsAction(campaignId: string) {
   const { runId } = await enqueueCampaignDiscoveryRun({
     campaignId: campaign.id,
     desiredLeadCount: campaign.desiredLeadCount,
+    researchCreditCap: Math.min(1_000_000, Math.max(0.001, input.researchCreditCap)),
     workspaceId: currentWorkspace.id,
   });
   await updateCampaignStatus(currentWorkspace.id, campaign.id, "running");
 
   await createActivityEvent(currentWorkspace.id, {
-    description: `Lead discovery run ${runId} was queued for ${campaign.name}.`,
+    description: `Company Research run ${runId} was queued for ${campaign.name}.`,
     entityExternalId: campaign.id,
     entityType: "campaign",
-    label: "Campaign discovery queued",
+    label: "Company Research queued",
   });
 
   revalidatePath("/dashboard");
@@ -150,6 +152,7 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
           ? "pause"
           : "resume",
     workspaceId: currentWorkspace.id,
+    additionalCredits: input.additionalCredits,
   });
   if (!v2Control) {
     throw new Error(

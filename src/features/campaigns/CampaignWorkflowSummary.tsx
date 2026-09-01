@@ -13,6 +13,7 @@ export function CampaignWorkflowSummary({
   const showProgress = view === "all" || view === "overview" || view === "discovery";
   if (
     !summary.marketAnalysis &&
+    !summary.marketOverview &&
     !summary.v2Strategy &&
     !summary.v2Discovery &&
     !summary.discoveryPaths.length &&
@@ -21,10 +22,19 @@ export function CampaignWorkflowSummary({
     return null;
   return (
     <section className={shared.stack}>
-      {showMarket && summary.marketAnalysis ? (
+      {showMarket && summary.marketOverview ? (
+        <details open>
+          <summary><strong>Market Overview</strong></summary>
+          <p>{summary.marketOverview.summary}</p>
+          <p><strong>State:</strong> {summary.marketOverview.saturationState.replaceAll("_", " ")} · research cycle {summary.marketOverview.cycleNumber}</p>
+          {summary.marketOverview.localTerminology.length ? <p><strong>Learned terminology:</strong> {summary.marketOverview.localTerminology.map(({ term, meaning }) => `${term} (${meaning})`).join(", ")}</p> : null}
+          {summary.marketOverview.observations.length ? <ul>{summary.marketOverview.observations.map((observation) => <li key={`${observation.cycleNumber}:${observation.statement}`}>{observation.statement}</li>)}</ul> : null}
+        </details>
+      ) : null}
+      {showMarket && !summary.marketOverview && summary.marketAnalysis ? (
         <details open>
           <summary>
-            <strong>Market Analysis</strong>
+            <strong>Market Overview</strong>
           </summary>
           <p>{summary.marketAnalysis.marketSummary}</p>
           <p>
@@ -85,7 +95,7 @@ export function CampaignWorkflowSummary({
       {showDiscovery && summary.v2Discovery ? (
         <details open>
           <summary>
-            <strong>Semantic discovery execution</strong>
+            <strong>Adaptive research activity</strong>
           </summary>
           <p>
             <strong>Status:</strong>{" "}
@@ -121,7 +131,7 @@ export function CampaignWorkflowSummary({
       {showDiscovery && summary.v2Discovery?.queries.length ? (
         <details>
           <summary>
-            <strong>Executed search plan ({summary.v2Discovery.queries.length})</strong>
+            <strong>Explored search directions ({summary.v2Discovery.queries.length})</strong>
           </summary>
           {summary.v2Discovery.queries.map((query) => (
             <div key={query.id}>
@@ -162,7 +172,7 @@ export function CampaignWorkflowSummary({
       {showProgress && summary.iterations.length ? (
         <details>
           <summary>
-            <strong>Discovery iterations ({summary.iterations.length})</strong>
+            <strong>Research iterations ({summary.iterations.length})</strong>
           </summary>
           {summary.iterations.map((iteration) => (
             <p key={iteration.iterationNumber}>

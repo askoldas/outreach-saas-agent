@@ -26,9 +26,9 @@ Campaign Strategy V2 review draft. The compiler produces relationship archetypes
 semantic discovery segments, scoped rules, evidence questions, qualification factors,
 coverage targets, and stopping policy without a V1 strategy.
 
-## Campaign workflow
+## Company Research workflow
 
-All new Campaign Runs use `execute-campaign-v2`:
+All new Campaign Runs use `execute-campaign-v2` as a durable Company Research runner:
 
 ```text
 initialize
@@ -40,10 +40,16 @@ initialize
   -> ready for review
 ```
 
-Each stage is checkpointed and idempotent. The parent checks durable pause, resume, and
-cancel commands before and after every child stage. Candidate research and qualification
-use bounded fan-out; ranking is deterministic and lane-first. Supabase remains the
-source of truth for progress and terminal state.
+Initialization only freezes the run identity. Market-context enrichment is dispatched
+as a separate idempotent task and never blocks semantic discovery. Discovery uses the
+run-tied Market Research Plan when it is already available, or freezes a Strategy-first
+provider plan otherwise. This is not a standalone Market Analysis stage or user
+approval gate.
+
+Concrete operations are checkpointed and idempotent. The runner checks durable pause,
+resume, cancellation, saturation, campaign authorization, and workspace balance around
+paid work. Candidate research and qualification use budget-safe bounded fan-out;
+ranking and persistence are deterministic. Supabase remains the source of truth.
 
 Multi-country discovery creates an explicit query context for every target country and
 derives the relevant local discovery languages from the frozen country codes, with
@@ -53,9 +59,18 @@ reliable evidence that an organization is legally based in or demonstrably opera
 the target market; qualification treats unresolved target-market presence as an
 eligibility gate.
 
-Campaign Market Analysis, Strategy, and Discovery pages read the immutable V2 strategy,
-discovery plan, segment passes, and frozen queries for the selected Campaign Run. They do
-not infer V2 status from empty V1 planning tables.
+The Company Research page combines the evolving Market Overview, explored directions,
+source provenance, progressive company states, and usage. Historical Market Analysis
+and Discovery URLs redirect there.
+
+## Credits and provider usage
+
+`usage_ledger` is the provider-neutral audit boundary. It records raw provider usage,
+actual USD cost, independently billable USD cost, and fractional Opptium credits.
+`workspace_credit_accounts`, Campaign Run authorization, and `budget_reservations` are
+enforced atomically by database functions. Authorization is a ceiling, not an upfront
+deduction; settlement returns unused reservations. Conversion lives in
+`OPPTIUM_COST_PER_CREDIT_USD`.
 
 Provider/model kill switches remain available. They stop external calls without
 changing workflow versions.

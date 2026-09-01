@@ -254,6 +254,8 @@ export const providerDiscoveryResponseSchema = z
       .object({
         calls: z.number().int().nonnegative(),
         recordsReturned: z.number().int().nonnegative(),
+        providerCredits: z.number().nonnegative().optional(),
+        providerRequestIds: z.array(z.string().min(1)).optional(),
         estimatedCostMinor: z.number().nonnegative().optional(),
         runtimeMs: z.number().int().nonnegative(),
       })

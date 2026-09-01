@@ -24,8 +24,8 @@ test("Discovery retries only timed-out persistence while retaining the provider 
 });
 
 test("Discovery segment persistence is serialized", () => {
-  assert.match(initialStage, /mapWithConcurrency\(executionRequests, 1/);
-  assert.match(targetedStage, /mapWithConcurrency\(batches, 1/);
+  assert.match(initialStage, /mapWithConcurrency\(executionRequests, 2/);
+  assert.match(targetedStage, /mapWithConcurrency\(batches, 2/);
 });
 
 test("duplicate identity branches have supporting indexes", () => {

@@ -9,13 +9,22 @@ const history = source("src/server/discovery-v2/discovery-history.ts");
 const repository = source("src/server/discovery-v2/coverage-repository.ts");
 const generator = source("src/lib/discovery-v2/providers/web-query-generator.ts");
 
-test("targeted discovery consumes durable continuation decisions until a stop boundary", () => {
+test("one targeted pass returns control to the adaptive Company Research cycle", () => {
   assert.match(stage, /loadLatestDiscoveryPassDecision/);
-  assert.match(stage, /while \(latestDecision\.decision_json\.decision === "continue"\)/);
+  assert.match(stage, /if \(latestDecision\.decision_json\.decision === "continue"\)/);
+  assert.doesNotMatch(stage, /while \(latestDecision\.decision_json\.decision === "continue"\)/);
   assert.match(stage, /selectedActionPlans/);
   assert.match(stage, /startTargetedDiscoveryPass/);
   assert.match(stage, /completeTargetedDiscoverySegmentPass/);
   assert.match(stage, /finalizeTargetedDiscoveryPass/);
+  assert.match(
+    stage,
+    /status: decisionKind === "stop" \? "completed" : "partial"/,
+  );
+  assert.doesNotMatch(
+    stage,
+    /status: decisionKind === "stop" \? "completed" : "blocked"/,
+  );
 });
 
 test("targeted discovery freezes history before a pass and recomputes cumulative coverage", () => {

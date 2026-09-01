@@ -10,6 +10,7 @@ const researchChild = source("src/trigger/research-campaign-candidates-v2.ts");
 const qualificationChild = source("src/trigger/qualify-campaign-candidates-v2.ts");
 const service = source("src/server/workflow-v2/stage-service.ts");
 const dispatch = source("src/server/trigger/dispatch.ts");
+const bootstrap = source("src/trigger/bootstrap-company-research-context-v2.ts");
 
 test("V2 parent resumes from checkpoints and waits for durable child stages", () => {
   assert.match(parent, /id: "execute-campaign-v2"/);
@@ -20,6 +21,13 @@ test("V2 parent resumes from checkpoints and waits for durable child stages", ()
   assert.match(parent, /consumeWorkflowControl/);
   assert.match(parent, /beforeStage/);
   assert.match(parent, /afterStage/);
+});
+
+test("Market Overview enrichment never blocks initial discovery", () => {
+  assert.match(parent, /bootstrapCompanyResearchContextV2Task\.trigger\(/);
+  assert.doesNotMatch(parent, /bootstrapCompanyResearchContextV2Task\.triggerAndWait/);
+  assert.match(bootstrap, /executeCompanyResearchBootstrap/);
+  assert.doesNotMatch(service, /executeCompanyResearchBootstrap/);
 });
 
 test("V2 stage execution claims and settles one logical task", () => {

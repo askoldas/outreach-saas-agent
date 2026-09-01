@@ -10,10 +10,13 @@ import { loadInitialDiscoveryContext } from "@/server/discovery-v2/stage-context
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 import { loadCampaignV2Run } from "@/server/workflow-v2/repository";
 import { freezeEnabledDiscoveryProviderCapabilities } from "./provider-capabilities";
+import { runBudgetedOpenRouterCall } from "@/server/credits/budgeted-provider-call";
+import { generateTextResult } from "@/lib/providers/openrouter";
 
-export async function executeMarketAnalysisStage(input: {
+export async function executeCompanyResearchBootstrap(input: {
   campaignRunId: string;
   workspaceId: string;
+  resultStage?: "initialize" | "market_analysis";
 }): Promise<StageResult> {
   const [context, campaignRun] = await Promise.all([
     loadInitialDiscoveryContext(input),
@@ -44,6 +47,7 @@ export async function executeMarketAnalysisStage(input: {
       marketResearchPlanVersionId: researchPlan.id,
       providerCapabilitySnapshotIds,
       cached: true,
+      resultStage: input.resultStage,
     });
   }
 
@@ -79,6 +83,7 @@ export async function executeMarketAnalysisStage(input: {
     strategy: context.strategy,
     target: target.artifact,
   };
+  let providerAttempt = 0;
   const analysis = await compileAndPersistMarketAnalysis({
     workspaceId: input.workspaceId,
     campaignId: context.campaignInternalId,
@@ -90,12 +95,23 @@ export async function executeMarketAnalysisStage(input: {
     campaignInput: context.strategy,
     allowedEvidenceIds: evidenceIds,
     runtime: {
+      generateTextResult: (messages, options) => {
+        const attempt = providerAttempt++;
+        return runBudgetedOpenRouterCall({
+          workspaceId: input.workspaceId,
+          campaignRunId: input.campaignRunId,
+          operation: "company_research.market_overview_bootstrap",
+          idempotencyKey: `market-overview-bootstrap:${input.campaignRunId}:attempt-${attempt}`,
+          billable: attempt === 0,
+          execute: () => generateTextResult(messages, options),
+        });
+      },
       recordAttempt: createIntelligenceAttemptRecorder({
         workspaceId: input.workspaceId,
         frozenInputHash: hashCanonical(frozenInput),
         metadata: {
           campaignRunId: input.campaignRunId,
-          stage: "market_analysis",
+          stage: "company_research_bootstrap",
           strategyVersionId: context.strategyVersionId,
         },
       }),
@@ -120,7 +136,15 @@ export async function executeMarketAnalysisStage(input: {
     marketResearchPlanVersionId: researchPlan.id,
     providerCapabilitySnapshotIds,
     cached: commercial.cached && target.cached && analysis.cached && researchPlan.cached,
+    resultStage: input.resultStage,
   });
+}
+
+export function executeHistoricalMarketAnalysisStage(input: {
+  campaignRunId: string;
+  workspaceId: string;
+}) {
+  return executeCompanyResearchBootstrap({ ...input, resultStage: "market_analysis" });
 }
 
 function completedResult(input: {
@@ -130,9 +154,10 @@ function completedResult(input: {
   marketResearchPlanVersionId: string;
   providerCapabilitySnapshotIds: string[];
   cached: boolean;
+  resultStage?: "initialize" | "market_analysis";
 }): StageResult {
   return {
-    stage: "market_analysis",
+    stage: input.resultStage ?? "initialize",
     status: "completed",
     outputReferences: {
       ...input,

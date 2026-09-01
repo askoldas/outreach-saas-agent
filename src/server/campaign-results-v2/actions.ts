@@ -4,9 +4,10 @@ import { revalidatePath } from "next/cache";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { dispatchCampaignV2Continuation } from "@/server/trigger/dispatch";
-import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
+import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
 import { reserveCampaignResearchContinuation } from "@/server/workflow-v2/repository";
 import { commercialRelationshipTypeSchema } from "@/lib/intelligence/core/commercial-intelligence";
+import { authorizeAdditionalResearchCredits } from "@/server/credits/repository";
 
 const decisions = new Set([
   "approved",
@@ -35,6 +36,7 @@ type RpcClient = {
 export async function continueV2CampaignResearchAction(input: {
   campaignExternalId: string;
   campaignRunId: string;
+  additionalCredits: number;
 }) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) throw new Error("Authentication required");
@@ -66,10 +68,19 @@ export async function continueV2CampaignResearchAction(input: {
       "Research can continue only when the current cycle is ready for review.",
     );
   }
+  const additionalCredits = Math.min(
+    1_000_000,
+    Math.max(0.001, input.additionalCredits),
+  );
+  await authorizeAdditionalResearchCredits({
+    workspaceId: currentWorkspace.id,
+    campaignRunId: run.id,
+    additionalCredits,
+  });
   const reservation = await reserveCampaignResearchContinuation({
     campaignRunId: run.id,
     workspaceId: currentWorkspace.id,
-    budget: DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+    budget: DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS,
   });
   await dispatchCampaignV2Continuation({
     campaignRunId: run.id,
@@ -80,7 +91,7 @@ export async function continueV2CampaignResearchAction(input: {
   revalidatePath(`/campaigns/${input.campaignExternalId}`);
   revalidatePath(`/campaigns/${input.campaignExternalId}/leads`);
   return {
-    message: `Research cycle ${reservation.cycleNumber} queued.`,
+    message: `Research cycle ${reservation.cycleNumber} queued with ${additionalCredits} additional credits authorized.`,
     nextCycleNumber: reservation.cycleNumber,
   };
 }

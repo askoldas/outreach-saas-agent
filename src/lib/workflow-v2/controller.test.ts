@@ -11,7 +11,7 @@ import {
 } from "./controller.ts";
 
 test("resume skips every completed durable checkpoint", () => {
-  assert.deepEqual(remainingCampaignStages(["initialize", "market_analysis", "discover"]), [
+  assert.deepEqual(remainingCampaignStages(["initialize", "discover"]), [
     "resolve_entities",
     "research_candidates",
     "qualify_candidates",
@@ -80,15 +80,15 @@ test("pause requires an explicit resume command", () => {
 test("progress uses named stages and explicit candidate failure counts", () => {
   assert.deepEqual(
     aggregateWorkflowProgress({
-      completedStages: ["initialize", "market_analysis", "discover"],
+      completedStages: ["initialize", "discover"],
       activeStage: "research_candidates",
       failedCandidateCount: 2,
       totalCandidateCount: 10,
     }),
     {
-      stagePercent: 43,
-      completedStageCount: 3,
-      totalStageCount: 7,
+      stagePercent: 33,
+      completedStageCount: 2,
+      totalStageCount: 6,
       activeStage: "research_candidates",
       failedCandidateCount: 2,
       totalCandidateCount: 10,

@@ -20,9 +20,9 @@ Only decisions that govern the current implementation are retained here. Migrati
 - Every successful Campaign Agent planning call is linked to its iteration execution
   through an `ai_requests` audit record before provider-backed discovery begins.
 - Ordered migrations are append-only. Applied migrations are not rewritten.
-- Intelligence V2 is introduced beside V1 through deployment flags, workspace rollout
-  settings, and immutable campaign/run workflow versions. V2 flags default to disabled;
-  historical V1 records are never silently reinterpreted through V2 logic.
+- Intelligence V2 is canonical for new records. Deployment flags remain emergency
+  controls, while immutable workflow versions keep historical V1 records read-only and
+  prevent them from being silently reinterpreted through V2 logic.
 - The new project starts from `supabase/baseline/`. Files under
   `supabase/migrations-legacy/` reconstruct only the locked legacy schema and must not
   be applied to the new project.
@@ -45,14 +45,13 @@ Only decisions that govern the current implementation are retained here. Migrati
 - Market adjustments are immutable Campaign Strategy revisions. Saving a revision
   atomically synchronizes the Campaign targeting fields and confirmed brief; active runs
   remain frozen and must be paused before a revision can be saved.
-- Market analysis means understanding where and how to search. Discovery collects raw
-  candidates. Classification cheaply removes obvious bad candidates. Evaluation deeply
-  judges fit with evidence. Only promising and policy-selected possible candidates may
-  be evaluated.
-- The current V1 discovery workflow remains bounded to five iterations, ten queries per
-  iteration, and fifty results per query. Intelligence V2 supersedes fixed iteration
-  count as the intelligence policy with typed coverage and marginal-yield stopping, but
-  retains deterministic hard execution ceilings. There is no unrestricted agent loop.
+- Market understanding is an evolving Market Overview inside Company Research. Search,
+  source inspection, entity extraction/resolution, research, and evaluation are one
+  adaptive process. A webpage is evidence only; only resolved real-world companies can
+  become visible results.
+- Company Research uses typed coverage and marginal-yield stopping with deterministic
+  hard execution ceilings. There is no unrestricted agent loop. Historical V1 runs
+  retain their stored results but are not executable.
 
 ## Providers and AI
 
@@ -76,12 +75,10 @@ Only decisions that govern the current implementation are retained here. Migrati
 
 ## Explicitly deferred
 
-- Paid-operation budget reservations, configurable monetary campaign ceilings, and
-  remaining-budget gates are deferred. Existing hard execution-volume ceilings remain
-  mandatory.
 - Paid enrichment vendors, deep crawling, document uploads, production billing, CRM integrations, and cross-tenant reuse of public research.
-- Contact enrichment remains an optional/deferred stage until an external contact data
-  provider is connected. Discovery and qualification must remain usable without it.
+- Contact enrichment is optional, begins only after company qualification and explicit
+  per-company credit authorization, and has accounting independent from Company
+  Research. Discovery and qualification remain usable without it.
 - Any sending or mailbox integration requires a new accepted decision plus compliance, suppression, consent, and audit design.
 
 ## Task-specific paid models

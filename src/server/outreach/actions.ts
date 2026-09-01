@@ -53,6 +53,7 @@ export async function createExportAction(input: {
 export async function queueContactEnrichmentAction(input: {
   campaignId: string;
   leadIds: string[];
+  creditCapPerCompany: number;
 }) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) throw new Error("Authentication required");
@@ -67,7 +68,11 @@ export async function queueContactEnrichmentAction(input: {
     )
       throw new Error("Only approved campaign leads can be enriched.");
     runs.push(
-      await enqueueLeadContactEnrichmentRun({ workspaceId: currentWorkspace.id, leadId }),
+      await enqueueLeadContactEnrichmentRun({
+        workspaceId: currentWorkspace.id,
+        leadId,
+        creditCap: input.creditCapPerCompany,
+      }),
     );
   }
   await recordUsageEvent(currentWorkspace.id, user.id, {

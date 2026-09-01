@@ -4,6 +4,7 @@ import {
   type MarketContextOutput,
 } from "@/lib/intelligence/campaign-strategy-v2";
 import { generateCampaignMarketContext } from "@/lib/intelligence/campaign-strategy-v2/market-strategy";
+import type { StrategyRuntime } from "@/lib/intelligence/campaign-strategy-v2/market-strategy";
 import {
   compileMarketAnalysis,
   type CampaignTargetModel,
@@ -18,7 +19,7 @@ import {
 } from "./repository";
 import type { IntelligenceAttemptRecord } from "@/lib/intelligence/runtime/execute-ai-task";
 
-type MarketAnalysisRuntime = {
+type MarketAnalysisRuntime = StrategyRuntime & {
   recordAttempt?: (attempt: IntelligenceAttemptRecord) => Promise<void>;
 };
 

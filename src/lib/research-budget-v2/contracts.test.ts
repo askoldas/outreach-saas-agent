@@ -3,11 +3,11 @@ import test from "node:test";
 import {
   campaignResearchBudgetSchema,
   campaignResearchUsageSchema,
-  DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET,
+  DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS,
 } from "./contracts.ts";
 
 test("test campaign research has one bounded default budget", () => {
-  assert.deepEqual(campaignResearchBudgetSchema.parse(DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET), {
+  assert.deepEqual(campaignResearchBudgetSchema.parse(DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS), {
     maxProviderCalls: 30,
     maxAiCostUsd: 2,
     maxAiTokens: 500_000,

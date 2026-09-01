@@ -35,11 +35,18 @@ test("contact execution persists only clean contacts, provenance, and usage", ()
     "campaign_contacts",
     "contact_enrichments",
     "provider_executions",
-    "usage_ledger",
   ])
     assert.match(service, new RegExp(`\\.from\\("${table}"\\)`));
   assert.doesNotMatch(
     service,
     /lead_contact_routes|lead_outreach_states|usage_events|\.from\("leads"\)/,
   );
+  assert.match(service, /settleContactEnrichmentCredits/);
+  assert.match(service, /searchWebResult/);
+});
+
+test("contact enrichment has explicit authorization separate from research credits", () => {
+  assert.match(research, /authorizeContactEnrichmentCredits/);
+  assert.match(research, /contactCreditAuthorizationId/);
+  assert.match(research, /creditCap/);
 });

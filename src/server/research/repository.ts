@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { authorizeContactEnrichmentCredits } from "@/server/credits/contact-enrichment-repository";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { ResearchProgress } from "@/types/domain";
@@ -31,6 +32,7 @@ async function createOperationalDatabaseClient() {
 export async function enqueueCampaignDiscoveryRun(input: {
   campaignId: string;
   desiredLeadCount: number;
+  researchCreditCap: number;
   workspaceId: string;
 }): Promise<{ runId: string }> {
   const { supabase } = await createAuthenticatedDatabaseClient();
@@ -41,6 +43,12 @@ export async function enqueueCampaignDiscoveryRun(input: {
   });
   if (error) throw new Error(`Could not create Campaign Run: ${error.message}`);
   const campaignRun = data as { id: string };
+  const { error: budgetError } = await createServiceRoleClient()
+    .from("campaign_runs")
+    .update({ research_credit_cap: input.researchCreditCap })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", campaignRun.id);
+  if (budgetError) throw new Error(`Could not authorize research budget: ${budgetError.message}`);
   await dispatchCampaignRun({
     campaignRunId: campaignRun.id,
     workspaceId: input.workspaceId,
@@ -51,6 +59,7 @@ export async function enqueueCampaignDiscoveryRun(input: {
 export async function enqueueLeadContactEnrichmentRun(input: {
   leadId: string;
   workspaceId: string;
+  creditCap: number;
 }): Promise<{ runId: string }> {
   const { supabase } = await createOperationalDatabaseClient();
   const { data: association, error: associationError } = await supabase
@@ -97,6 +106,16 @@ export async function enqueueLeadContactEnrichmentRun(input: {
   )
     return { runId: previous.id };
 
+  if (!campaignRun?.id)
+    throw new Error("Contact Enrichment requires a persisted Campaign Run.");
+  const authorization = await authorizeContactEnrichmentCredits({
+    workspaceId: input.workspaceId,
+    campaignRunId: campaignRun.id,
+    campaignCompanyId: input.leadId,
+    idempotencyKey,
+    maxCredits: Math.min(1_000, Math.max(0.001, input.creditCap)),
+  });
+
   const { data: enrichment, error: enrichmentError } = await supabase
     .from("contact_enrichments")
     .upsert(
@@ -130,6 +149,8 @@ export async function enqueueLeadContactEnrichmentRun(input: {
     metadata: {
       campaignCompanyId: input.leadId,
       contactEnrichmentId: enrichment.id,
+      contactCreditAuthorizationId: String(authorization.id),
+      contactCreditCap: Number(authorization.authorizedCredits),
     },
   };
   const executionQuery = previous

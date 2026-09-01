@@ -30,6 +30,7 @@ import { generateTextResult, type AiCallResult } from "@/lib/providers/openroute
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 import { ensureNativeCompanyProfileEvidence } from "./source-service";
+import { companyProfileRequestTimeoutMs } from "./timeout";
 
 export const profileV3StageIds = profileV3TaskDefinitions.map(
   (definition) => definition.taskId,
@@ -560,6 +561,7 @@ async function generateSingleValidatedProfileStageOutput(input: {
       const call = await generateTextResult(request.messages, {
         role: modelRole(input.taskId),
         maxCompletionTokens: request.maxCompletionTokens,
+        timeoutMs: companyProfileRequestTimeoutMs(),
         reasoningEffort:
           request.reasoningClass === "standard" ? "medium" : request.reasoningClass,
         taskName: input.taskId.replaceAll(".", " "),

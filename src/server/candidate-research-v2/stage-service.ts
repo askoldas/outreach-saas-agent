@@ -15,7 +15,7 @@ import {
   loadCampaignResearchContext,
 } from "./repository";
 import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
-import { DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET } from "@/lib/research-budget-v2/contracts";
+import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
 import { loadLatestResearchBlueprints } from "@/server/core-intelligence-v2/repository";
 import { loadMarketResearchPlanForDiscovery } from "@/server/discovery-v2/plan-discovery";
 
@@ -58,7 +58,7 @@ export async function prepareCandidateResearchStage(input: {
   });
   const plans = prioritizedPlans.slice(
     0,
-    DEFAULT_TEST_CAMPAIGN_RESEARCH_BUDGET.maxDeepResearchCandidates,
+    DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS.maxDeepResearchCandidates,
   );
   const inputHash = hashCanonical({
     campaignRunId: context.campaignRunId,

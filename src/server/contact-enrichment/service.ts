@@ -12,6 +12,11 @@ import {
   storeProviderResult,
 } from "@/server/execution/provider-result-cache";
 import type { ContactRoute } from "@/types/domain";
+import { searchWebResult } from "@/lib/providers/tavily";
+import { getCreditEconomics } from "@/lib/credits/config";
+import {
+  settleContactEnrichmentCredits,
+} from "@/server/credits/contact-enrichment-repository";
 
 export async function executeContactEnrichment(providerExecutionId: string) {
   const supabase = createServiceRoleClient();
@@ -26,6 +31,10 @@ export async function executeContactEnrichment(providerExecutionId: string) {
 
   const campaignCompanyId = stringValue(execution.metadata, "campaignCompanyId");
   const enrichmentId = stringValue(execution.metadata, "contactEnrichmentId");
+  const creditAuthorizationId = stringValue(
+    execution.metadata,
+    "contactCreditAuthorizationId",
+  );
   if (!campaignCompanyId || !enrichmentId)
     throw new Error("Contact execution is missing its clean entity references.");
   if (execution.status === "completed")
@@ -33,6 +42,10 @@ export async function executeContactEnrichment(providerExecutionId: string) {
       campaignCompanyId,
       routeCount: numberValue(execution.metadata, "routeCount"),
     };
+  if (!creditAuthorizationId)
+    throw new Error(
+      "Contact Enrichment requires explicit credit authorization before provider work.",
+    );
 
   const { data: association, error: associationError } = await supabase
     .from("campaign_companies")
@@ -99,12 +112,25 @@ export async function executeContactEnrichment(providerExecutionId: string) {
     let providerResult = await loadProviderResult<{
       providerRoutes: EnrichedContactRoute[];
       websiteRoutes: ContactRoute[];
+      tavilyUsage: { providerCredits: number; requestId?: string };
     }>(providerExecutionId, inputHash);
     if (!providerResult) {
+      let tavilyUsage: { providerCredits: number; requestId?: string } = {
+        providerCredits: 0,
+      };
       const [providerRoutes, websiteResult] = await Promise.all([
         enrichCompanyContacts({
           company: company.name,
           website: company.website_url,
+        }, async (query, maxResults) => {
+          const result = await searchWebResult(query, maxResults);
+          tavilyUsage = {
+            providerCredits: result.usage.providerUnits,
+            ...(result.usage.providerRequestId
+              ? { requestId: result.usage.providerRequestId }
+              : {}),
+          };
+          return result.data;
         }),
         discoverContactRoutes({
           content: sourceText,
@@ -116,9 +142,27 @@ export async function executeContactEnrichment(providerExecutionId: string) {
       providerResult = {
         providerRoutes,
         websiteRoutes: websiteResult.routes,
+        tavilyUsage,
       };
       await storeProviderResult(providerExecutionId, inputHash, providerResult);
     }
+    const providerCredits = providerResult.tavilyUsage?.providerCredits ?? 0;
+    const actualCostUsd =
+      providerCredits * getCreditEconomics().tavilyProviderCreditCostUsd;
+    await settleContactEnrichmentCredits({
+      workspaceId: execution.workspace_id,
+      authorizationId: creditAuthorizationId,
+      idempotencyKey: execution.idempotency_key,
+      ...(providerResult.tavilyUsage?.requestId
+        ? { providerRequestId: providerResult.tavilyUsage.requestId }
+        : {}),
+      rawUsage: {
+        provider: "tavily",
+        providerCredits,
+      },
+      actualCostUsd,
+      metadata: { campaignCompanyId },
+    });
     const routes = dedupeRoutes([
       ...evidenceRoutes,
       ...providerResult.websiteRoutes,
@@ -154,21 +198,6 @@ export async function executeContactEnrichment(providerExecutionId: string) {
     });
     if (execution.campaign_run_id)
       await syncCampaignRun(execution.workspace_id, execution.campaign_run_id);
-    const { error: usageError } = await supabase.from("usage_ledger").upsert(
-      {
-        workspace_id: execution.workspace_id,
-        campaign_run_id: execution.campaign_run_id,
-        provider_execution_id: execution.id,
-        operation: "contact_enrichment",
-        entry_type: "settlement",
-        idempotency_key: execution.idempotency_key,
-        credits: 0,
-        metadata: { campaignCompanyId, routeCount: routes.length },
-      },
-      { onConflict: "workspace_id,entry_type,idempotency_key" },
-    );
-    if (usageError)
-      throw new Error(`Could not record contact usage: ${usageError.message}`);
     return { campaignCompanyId, routeCount: routes.length };
   } catch (error) {
     throw error;

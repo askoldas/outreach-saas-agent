@@ -16,6 +16,7 @@ import { executeValidatedAiTask } from "@/lib/intelligence/runtime/execute-ai-ta
 import { IntelligenceTaskRegistry } from "@/lib/intelligence/runtime/task-registry";
 import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
+import { runBudgetedOpenRouterCall } from "@/server/credits/budgeted-provider-call";
 import type { Json } from "@/types/database.types";
 import {
   claimCandidateResearchMember,
@@ -137,17 +138,18 @@ export async function executeCandidateResearchMember(input: {
           },
         }),
         transport: async (transportRequest) => {
-          const call = await generateTextResult(transportRequest.messages, {
-            role: "website_extraction",
-            maxCompletionTokens: transportRequest.maxCompletionTokens,
-            reasoningEffort:
-              transportRequest.reasoningClass === "standard"
-                ? "medium"
-                : transportRequest.reasoningClass,
-            taskName: "V2 candidate evidence extraction",
-            ...(transportRequest.output.mode === "json_schema"
-              ? { jsonSchema: transportRequest.output }
-              : { jsonMode: true }),
+          const call = await runBudgetedOpenRouterCall({
+            workspaceId: input.workspaceId,
+            campaignRunId: member.campaignRunId,
+            operation: "company_research_evidence_extraction",
+            idempotencyKey: `company-research:${member.memberId}:${extractionRequestHash}`,
+            execute: () => generateTextResult(transportRequest.messages, {
+              role: "website_extraction",
+              maxCompletionTokens: transportRequest.maxCompletionTokens,
+              reasoningEffort: transportRequest.reasoningClass === "standard" ? "medium" : transportRequest.reasoningClass,
+              taskName: "Company Research evidence extraction",
+              ...(transportRequest.output.mode === "json_schema" ? { jsonSchema: transportRequest.output } : { jsonMode: true }),
+            }),
           });
           return {
             output: call.data,

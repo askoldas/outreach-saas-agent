@@ -45,3 +45,9 @@ test("building Strategy drafts refresh until compilation settles", () => {
   assert.match(progress, /router\.refresh\(\)/);
   assert.match(progress, /setInterval/);
 });
+
+test("late Strategy stages stop successfully after the draft is confirmed", () => {
+  assert.match(stageService, /CampaignStrategyDraftSupersededError/);
+  assert.match(stageService, /reason: "strategy_draft_superseded"/);
+  assert.match(task, /isSuperseded\(advisory\.output\.output\)/);
+});

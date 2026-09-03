@@ -10,6 +10,7 @@ import { intelligenceResultCacheKey } from "@/lib/intelligence/runtime/cache-key
 import type { AiCallResult } from "@/lib/providers/openrouter";
 import type { Json } from "@/types/database.types";
 import {
+  CampaignStrategyDraftSupersededError,
   recordCampaignStrategyModelCalls,
   persistCampaignStrategyV2Compilation,
 } from "./repository";
@@ -39,7 +40,23 @@ export type CampaignStrategyStagePayload = {
 };
 
 export async function executeCampaignStrategyStage(input: CampaignStrategyStagePayload) {
-  const prepared = await prepareCampaignStrategyV2Compilation(input);
+  let prepared: Awaited<ReturnType<typeof prepareCampaignStrategyV2Compilation>>;
+  try {
+    prepared = await prepareCampaignStrategyV2Compilation(input);
+  } catch (error) {
+    if (error instanceof CampaignStrategyDraftSupersededError) {
+      return {
+        output: {
+          strategyDraftId: input.strategyDraftId,
+          skipped: true,
+          reason: "strategy_draft_superseded",
+        } as Json,
+        cached: true,
+        stageRunId: null,
+      };
+    }
+    throw error;
+  }
   const contract = stageContract(input.stageId);
   const dependencyInput =
     input.stageId === "compilation" ? { advisoryDelta: input.advisoryDelta } : null;

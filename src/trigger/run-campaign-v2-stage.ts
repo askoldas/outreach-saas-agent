@@ -15,6 +15,8 @@ export type RunCampaignV2StagePayload = {
 export const runCampaignV2StageTask = task({
   id: "run-campaign-v2-stage",
   retry: {
+    // Paid-call budget denial is converted to a successful domain checkpoint by
+    // executeCampaignV2Stage. Genuine transient failures still retry here.
     maxAttempts: 3,
     minTimeoutInMs: 5_000,
     maxTimeoutInMs: 30_000,
@@ -26,7 +28,11 @@ export const runCampaignV2StageTask = task({
       { ...payload, triggerRunId: ctx.run.id },
       {
         qualifyCandidates: () => executeQualificationFanOut(payload),
-        researchCandidates: () => executeCandidateResearchFanOut(payload),
+        researchCandidates: () =>
+          executeCandidateResearchFanOut({
+            ...payload,
+            stageExecutionId: ctx.run.id,
+          }),
       },
     ),
 });

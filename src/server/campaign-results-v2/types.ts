@@ -84,6 +84,12 @@ export type CampaignResultCandidate = {
 };
 
 export type CampaignV2Results = {
+  outcome: {
+    requestedCompanyCount: number;
+    deliveredCompanyCount: number;
+    state: string;
+    completionReason: string | null;
+  };
   funnel: {
     sourceRecords: number;
     organizationReferences: number;

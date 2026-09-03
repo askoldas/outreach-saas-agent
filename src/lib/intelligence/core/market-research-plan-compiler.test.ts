@@ -53,6 +53,14 @@ test("research planning is deterministic across artifact identity and time", () 
   assert.equal(first.version.contentHash, second.version.contentHash);
 });
 
+test("route rationales remain within the persisted contract at maximum archetype length", () => {
+  const longAnalysis = analysis();
+  longAnalysis.targetArchetypes[0]!.rationale = "x".repeat(800);
+  const plan = compile(true, longAnalysis);
+  assert.equal(plan.discoveryRoutes[0]?.rationale.length, 800);
+  assert.match(plan.discoveryRoutes[0]?.rationale ?? "", /…$/);
+});
+
 function compile(
   userConfirmed = true,
   market = analysis(),

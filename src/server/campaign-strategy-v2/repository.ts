@@ -13,6 +13,13 @@ import {
 import { intelligenceRuleSchema } from "@/lib/intelligence/contracts/rules";
 import type { AiCallResult } from "@/lib/providers/openrouter";
 
+export class CampaignStrategyDraftSupersededError extends Error {
+  constructor() {
+    super("The Campaign Strategy draft was superseded or already confirmed.");
+    this.name = "CampaignStrategyDraftSupersededError";
+  }
+}
+
 export type CampaignStrategyEnrichmentStatus = {
   state: "baseline_ready" | "running" | "partially_enriched" | "enriched" | "failed";
   applied: number;
@@ -312,7 +319,7 @@ export async function getCampaignStrategyV2RecoveryData(input: {
     );
   }
   if (campaign.current_strategy_draft_id !== input.strategyDraftId) {
-    throw new Error("The recoverable Campaign Strategy draft is no longer current.");
+    throw new CampaignStrategyDraftSupersededError();
   }
   const { data, error } = await supabase
     .from("campaign_strategy_drafts")

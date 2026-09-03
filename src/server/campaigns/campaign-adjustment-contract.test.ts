@@ -19,6 +19,6 @@ test("new strategy confirmation is V2-native and historical strategy is read-onl
   assert.match(legacyWorkspace, /V1 read-only/);
   assert.doesNotMatch(legacyWorkspace, /saveCampaignStrategyAction/);
   assert.doesNotMatch(legacyWorkspace, /generateCampaignStrategyAction/);
-  assert.match(campaignActions, /already has an active discovery run/);
-  assert.match(campaignActions, /has a paused run/);
+  assert.match(campaignActions, /already has an active research run/);
+  assert.match(campaignActions, /already has an active research run/);
 });

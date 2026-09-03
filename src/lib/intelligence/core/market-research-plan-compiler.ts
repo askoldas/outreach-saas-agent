@@ -117,7 +117,10 @@ function buildRoutes(analysis: MarketAnalysis, capabilities: FrozenProviderCapab
         ),
         role: archetype.priority === "priority" ? "primary" : "supporting",
         priority: routePriority(archetype.priority, routes.length),
-        rationale: `${sourceFamily.replaceAll("_", " ")} coverage for ${archetype.rationale}`,
+        rationale: boundedText(
+          `${sourceFamily.replaceAll("_", " ")} coverage for ${archetype.rationale}`,
+          800,
+        ),
         languages: routeLanguages(analysis, compatible),
         vocabulary: uniqueSorted(
           analysis.localTerminology
@@ -237,6 +240,11 @@ function expectedCoverage(
 ) {
   if (priority === "exploratory") return "low" as const;
   return providerCount > 1 ? ("high" as const) : ("medium" as const);
+}
+
+function boundedText(value: string, maximum: number) {
+  if (value.length <= maximum) return value;
+  return `${value.slice(0, Math.max(1, maximum - 1)).trimEnd()}…`;
 }
 
 function uniqueSorted<T extends string>(values: T[]): T[] {

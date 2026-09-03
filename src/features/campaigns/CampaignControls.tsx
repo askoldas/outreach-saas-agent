@@ -10,16 +10,18 @@ import type { CampaignStatus, ResearchProgress } from "@/types/domain";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import styles from "@/features/shared/Feature.module.css";
-import { DEFAULT_RESEARCH_CREDIT_CAP } from "@/lib/credits/config";
+import { quoteCompanyResearch } from "@/lib/company-research/outcome-pricing";
 
 export function CampaignControls({
   campaignId,
   initialLeadCount,
   status,
+  targetCompanyCount,
 }: Readonly<{
   campaignId: string;
   initialLeadCount: number;
   status: CampaignStatus;
+  targetCompanyCount: number;
 }>) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -28,7 +30,7 @@ export function CampaignControls({
   const [currentStatus, setCurrentStatus] = useState(status);
   const [progress, setProgress] = useState<ResearchProgress | null>(null);
   const [progressError, setProgressError] = useState("");
-  const [researchCreditCap, setResearchCreditCap] = useState(DEFAULT_RESEARCH_CREDIT_CAP);
+  const quote = quoteCompanyResearch({ requestedCompanyCount: targetCompanyCount });
   const isWorking = isPending || isDiscovering;
   const displayStatus =
     progress?.status === "waiting_for_input" ? "needs input" : currentStatus;
@@ -120,7 +122,6 @@ export function CampaignControls({
         const result = await updateCampaignStatusAction({
           campaignId,
           status: nextStatus,
-          ...(nextStatus === "running" ? { additionalCredits: researchCreditCap } : {}),
         });
 
         setCurrentStatus(nextStatus);
@@ -157,7 +158,7 @@ export function CampaignControls({
     setMessage("Company Research queued. Waiting for the worker...");
 
     try {
-      const result = await discoverCampaignLeadsAction({ campaignId, researchCreditCap });
+      const result = await discoverCampaignLeadsAction({ campaignId });
       setMessage(result.message);
 
       try {
@@ -180,22 +181,16 @@ export function CampaignControls({
   return (
     <div className={styles.stack}>
       <div className={styles.filters}>
-        <label>
-          Research budget
-          <input type="number" min="0.001" step="0.001" value={researchCreditCap}
-            onChange={(event) => setResearchCreditCap(Number(event.target.value))}
-            disabled={isWorking} aria-label="Maximum research credits" />
-        </label>
+        <span>
+          Find up to <strong>{targetCompanyCount}</strong> qualified companies · estimated
+          price {quote.authorizedCredits} credits
+        </span>
         <Button
-          disabled={
-            isPending ||
-            isDiscovering ||
-            (currentStatus !== "planning" && currentStatus !== "completed")
-          }
+          disabled={isPending || isDiscovering || currentStatus !== "planning"}
           variant="primary"
           onClick={discoverLeads}
         >
-          {currentStatus === "planning" ? "Start Company Research" : "Continue Research"}
+          Start Company Research
         </Button>
         <Button
           disabled={isPending || currentStatus !== "running"}
@@ -227,21 +222,9 @@ export function CampaignControls({
       {isDiscovering || progress ? (
         <div className={styles.stack}>
           <ProgressRow
-            label="Run progress"
-            value={progress?.progress ?? 0}
-            total={100}
-            pending={isDiscovering}
-          />
-          <ProgressRow
-            label="Tasks completed"
-            value={progress?.completedTasks ?? 0}
-            total={progress?.totalTasks ?? 1}
-            pending={isDiscovering}
-          />
-          <ProgressRow
-            label="Tasks failed"
-            value={progress?.failedTasks ?? 0}
-            total={progress?.totalTasks ?? 1}
+            label="Confirmed companies"
+            value={progress?.companiesQualified ?? initialLeadCount}
+            total={targetCompanyCount}
             pending={isDiscovering}
           />
           <span className={styles.secondaryText}>
@@ -259,7 +242,8 @@ export function CampaignControls({
             {progress?.candidatesUnique ?? 0} unique organizations ·{" "}
             {progress?.candidatesClassified ?? 0} plausible candidates ·{" "}
             {progress?.companiesEvaluated ?? 0} deeply researched ·{" "}
-            {progress?.companiesQualified ?? initialLeadCount} review-ready
+            {progress?.companiesQualified ?? initialLeadCount} / {targetCompanyCount}{" "}
+            confirmed
           </span>
         </div>
       ) : null}

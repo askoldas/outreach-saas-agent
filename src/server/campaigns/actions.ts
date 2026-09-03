@@ -19,7 +19,10 @@ import {
   parseConfirmedCampaignBrief,
   parseCampaignBriefProposal,
 } from "@/lib/campaign-workflow/contracts";
-import { LEGACY_CAMPAIGN_VOLUME_PROJECTION } from "@/lib/research-budget-v2/contracts";
+import {
+  normalizeRequestedCompanyCount,
+  quoteCompanyResearch,
+} from "@/lib/company-research/outcome-pricing";
 import { deriveDiscoveryLanguages } from "@/lib/discovery/languages";
 import { createInitialCampaignStrategyV2 } from "@/server/campaign-strategy-v2/service";
 import { dispatchCampaignStrategyV2Compilation } from "@/server/trigger/dispatch";
@@ -32,7 +35,6 @@ import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime
 type UpdateCampaignStatusInput = {
   campaignId: string;
   status: CampaignStatus;
-  additionalCredits?: number;
 };
 
 const controlStatuses = new Set<CampaignStatus>(["completed", "paused", "running"]);
@@ -85,7 +87,7 @@ export async function proposeCampaignBriefAction(input: {
   };
 }
 
-export async function discoverCampaignLeadsAction(input: { campaignId: string; researchCreditCap: number }) {
+export async function discoverCampaignLeadsAction(input: { campaignId: string }) {
   const { currentWorkspace } = await getWorkspaceContext();
 
   if (!currentWorkspace) {
@@ -97,19 +99,21 @@ export async function discoverCampaignLeadsAction(input: { campaignId: string; r
   if (!campaign) {
     throw new Error("Campaign not found.");
   }
-  if (campaign.status === "running") {
-    throw new Error("This campaign already has an active discovery run.");
-  }
-  if (campaign.status === "paused") {
+  if (campaign.status !== "planning") {
     throw new Error(
-      "This campaign has a paused run. Continue it or stop it before starting another run.",
+      campaign.status === "completed"
+        ? "Increase the company target from Company Research to continue the existing run."
+        : "This campaign already has an active research run.",
     );
   }
 
+  const quote = quoteCompanyResearch({
+    requestedCompanyCount: campaign.desiredLeadCount,
+  });
   const { runId } = await enqueueCampaignDiscoveryRun({
     campaignId: campaign.id,
     desiredLeadCount: campaign.desiredLeadCount,
-    researchCreditCap: Math.min(1_000_000, Math.max(0.001, input.researchCreditCap)),
+    quote,
     workspaceId: currentWorkspace.id,
   });
   await updateCampaignStatus(currentWorkspace.id, campaign.id, "running");
@@ -127,7 +131,7 @@ export async function discoverCampaignLeadsAction(input: { campaignId: string; r
   revalidatePath(`/campaigns/${campaign.id}`);
 
   return {
-    message: `Discovery queued in Campaign Run ${runId}.`,
+    message: `Finding up to ${campaign.desiredLeadCount} qualified companies (maximum authorization ${quote.authorizedCredits} credits).`,
     runId,
   };
 }
@@ -152,7 +156,6 @@ export async function updateCampaignStatusAction(input: UpdateCampaignStatusInpu
           ? "pause"
           : "resume",
     workspaceId: currentWorkspace.id,
-    additionalCredits: input.additionalCredits,
   });
   if (!v2Control) {
     throw new Error(
@@ -188,6 +191,9 @@ export async function createCampaignAction(formData: FormData) {
   }
 
   const name = getString(formData, "name");
+  const requestedCompanyCount = normalizeRequestedCompanyCount(
+    Number(getString(formData, "requestedCompanyCount")),
+  );
   const profile = await getPublishedCampaignPlanningProfile(currentWorkspace.id);
   if (!profile) {
     redirect("/company-profile?error=company-intelligence-required");
@@ -291,7 +297,7 @@ export async function createCampaignAction(formData: FormData) {
   }
 
   const campaign = await createCampaign(currentWorkspace.id, {
-    desiredLeadCount: LEGACY_CAMPAIGN_VOLUME_PROJECTION,
+    desiredLeadCount: requestedCompanyCount,
     exclusions: Array.from(
       new Set(confirmedTargetSegments.flatMap((segment) => segment.exclusions)),
     ),

@@ -4,7 +4,10 @@ import {
   type CampaignStrategyV2,
 } from "@/lib/intelligence/campaign-strategy-v2";
 import type { MarketAnalysis } from "@/lib/intelligence/core";
-import { evolvingMarketOverviewSchema, type EvolvingMarketOverview } from "@/lib/company-research/market-overview";
+import {
+  evolvingMarketOverviewSchema,
+  type EvolvingMarketOverview,
+} from "@/lib/company-research/market-overview";
 
 export type CampaignWorkflowSummary = {
   progressiveCompanies: Array<{
@@ -80,6 +83,12 @@ export type CampaignWorkflowSummary = {
     currency: string;
     errorCode: string | null;
     errorMessage: string | null;
+    requestedCompanyCount: number;
+    deliveredCompanyCount: number;
+    outcomeState: string;
+    completionReason: string | null;
+    quotedResearchCredits: number | null;
+    outcomeSettlement: Record<string, unknown> | null;
   } | null;
   marketAnalysis: MarketAnalysis | null;
   marketOverview: EvolvingMarketOverview | null;
@@ -176,7 +185,7 @@ export async function getCampaignWorkflowSummary(
   const { data: runs, error: runError } = await supabase
     .from("campaign_runs")
     .select(
-      "id,status,current_phase,current_iteration,progress_percentage,candidates_discovered,candidates_classified,companies_evaluated,companies_qualified,llm_cost,provider_cost,total_cost,currency,error_code,error_message,created_at,completed_at,cancelled_at,strategy_version_id,workflow_version",
+      "id,status,current_phase,current_iteration,progress_percentage,candidates_discovered,candidates_classified,companies_evaluated,companies_qualified,llm_cost,provider_cost,total_cost,currency,error_code,error_message,created_at,completed_at,cancelled_at,strategy_version_id,workflow_version,requested_company_count,delivered_company_count,outcome_state,completion_reason,quoted_research_credits,outcome_settlement_json",
     )
     .eq("workspace_id", workspaceId)
     .eq("campaign_id", campaign.id)
@@ -243,9 +252,14 @@ export async function getCampaignWorkflowSummary(
     { data: candidates },
     { data: runEvents },
   ] = await Promise.all([
-    (supabase as unknown as {
-      rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message: string } | null }>;
-    }).rpc("get_latest_research_market_overview", {
+    (
+      supabase as unknown as {
+        rpc(
+          name: string,
+          args: Record<string, unknown>,
+        ): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+      }
+    ).rpc("get_latest_research_market_overview", {
       target_workspace_id: workspaceId,
       target_campaign_run_id: selectedRun.id,
     }),
@@ -300,7 +314,9 @@ export async function getCampaignWorkflowSummary(
       .limit(100),
   ]);
   if (evolvingOverviewError)
-    throw new Error(`Could not load evolving Market Overview: ${evolvingOverviewError.message}`);
+    throw new Error(
+      `Could not load evolving Market Overview: ${evolvingOverviewError.message}`,
+    );
   const counts: Record<string, number> = {};
   for (const row of classifications ?? [])
     counts[row.status] = (counts[row.status] ?? 0) + 1;
@@ -325,9 +341,7 @@ export async function getCampaignWorkflowSummary(
   const { data: progressiveCandidateRows, error: progressiveCandidateError } =
     await supabase
       .from("campaign_candidates")
-      .select(
-        "id,display_organization_id,state,discovered_country,updated_at",
-      )
+      .select("id,display_organization_id,state,discovered_country,updated_at")
       .eq("workspace_id", workspaceId)
       .eq("campaign_id", campaign.id)
       .eq("campaign_strategy_version_id", selectedRun.strategy_version_id)
@@ -337,6 +351,36 @@ export async function getCampaignWorkflowSummary(
     throw new Error(
       `Could not load progressive Company Research results: ${progressiveCandidateError.message}`,
     );
+  const { data: progressiveQualificationBatches, error: progressiveBatchError } =
+    await supabase
+      .from("candidate_qualification_batches_v2")
+      .select("id")
+      .eq("workspace_id", workspaceId)
+      .eq("campaign_run_id", selectedRun.id);
+  if (progressiveBatchError)
+    throw new Error(
+      `Could not load progressive qualification batches: ${progressiveBatchError.message}`,
+    );
+  const progressiveBatchIds = (progressiveQualificationBatches ?? []).map(({ id }) => id);
+  const progressiveMembersResult = progressiveBatchIds.length
+    ? await supabase
+        .from("candidate_qualification_batch_members_v2")
+        .select("campaign_candidate_id,status,output_reference_json")
+        .eq("workspace_id", workspaceId)
+        .in("candidate_qualification_batch_id", progressiveBatchIds)
+    : { data: [], error: null };
+  if (progressiveMembersResult.error)
+    throw new Error(
+      `Could not load progressive qualification outcomes: ${progressiveMembersResult.error.message}`,
+    );
+  const progressiveOutcomeByCandidate = new Map<string, string>();
+  for (const member of progressiveMembersResult.data ?? []) {
+    if (member.status !== "completed") continue;
+    const output = objectValue(member.output_reference_json);
+    if (typeof output.lane === "string") {
+      progressiveOutcomeByCandidate.set(member.campaign_candidate_id, output.lane);
+    }
+  }
   const progressiveOrganizationIds = [
     ...new Set(
       (progressiveCandidateRows ?? []).map(
@@ -354,9 +398,7 @@ export async function getCampaignWorkflowSummary(
       .eq("workspace_id", workspaceId)
       .in(
         "id",
-        progressiveOrganizationIds.length
-          ? progressiveOrganizationIds
-          : [emptyUuid],
+        progressiveOrganizationIds.length ? progressiveOrganizationIds : [emptyUuid],
       ),
     supabase
       .from("company_domains")
@@ -364,9 +406,7 @@ export async function getCampaignWorkflowSummary(
       .eq("workspace_id", workspaceId)
       .in(
         "company_id",
-        progressiveOrganizationIds.length
-          ? progressiveOrganizationIds
-          : [emptyUuid],
+        progressiveOrganizationIds.length ? progressiveOrganizationIds : [emptyUuid],
       ),
   ]);
   if (progressiveOrganizationsResult.error || progressiveDomainsResult.error)
@@ -400,13 +440,12 @@ export async function getCampaignWorkflowSummary(
         {
           id: candidate.id,
           name: organization.name,
-          domain:
-            progressiveDomainsByCompany.get(organization.id) ?? null,
+          domain: progressiveDomainsByCompany.get(organization.id) ?? null,
           websiteUrl: organization.website_url,
           location:
             [organization.city, organization.country].filter(Boolean).join(", ") ||
             "Location not established",
-          state: candidate.state,
+          state: progressiveOutcomeByCandidate.get(candidate.id) ?? candidate.state,
           identityConfidence: numeric(organization.identity_confidence),
           identityReviewState: organization.identity_review_state,
           discoveredCountry: candidate.discovered_country,
@@ -484,6 +523,12 @@ export async function getCampaignWorkflowSummary(
       currency: selectedRun.currency,
       errorCode: selectedRun.error_code,
       errorMessage: selectedRun.error_message,
+      requestedCompanyCount: selectedRun.requested_company_count,
+      deliveredCompanyCount: selectedRun.delivered_company_count,
+      outcomeState: selectedRun.outcome_state,
+      completionReason: selectedRun.completion_reason,
+      quotedResearchCredits: selectedRun.quoted_research_credits,
+      outcomeSettlement: objectOrNull(selectedRun.outcome_settlement_json),
     },
     marketAnalysis: (analysis?.analysis as MarketAnalysis | undefined) ?? null,
     marketOverview: evolvingOverview
@@ -736,6 +781,11 @@ function objectValue(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function objectOrNull(value: unknown): Record<string, unknown> | null {
+  const parsed = objectValue(value);
+  return Object.keys(parsed).length ? parsed : null;
 }
 
 function nullableObjectValue(value: unknown): Record<string, unknown> | null {

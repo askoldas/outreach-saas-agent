@@ -105,6 +105,19 @@ export async function finalizeCampaignResearchCycle(input: {
   });
 }
 
+export async function recordResearchBudgetPause(input: {
+  campaignRunId: string;
+  reason: "campaign_budget" | "workspace_balance";
+  workspaceId: string;
+}) {
+  const { error } = await createServiceRoleClient()
+    .from("campaign_runs")
+    .update({ research_pause_reason: input.reason })
+    .eq("workspace_id", input.workspaceId)
+    .eq("id", input.campaignRunId);
+  if (error) throw new Error(`Could not persist Research checkpoint: ${error.message}`);
+}
+
 export async function loadAdaptiveResearchSnapshot(input: {
   campaignRunId: string;
   workspaceId: string;
@@ -113,6 +126,11 @@ export async function loadAdaptiveResearchSnapshot(input: {
 }) {
   const supabase = createServiceRoleClient();
   const run = await loadCampaignV2Run(input);
+  const runMetadata = objectValue(run.metadata);
+  const requestedCompanyCount = Math.max(
+    1,
+    Number(runMetadata.desiredCompanyCount ?? 25),
+  );
   const [
     providers,
     discoveryProviders,
@@ -325,7 +343,15 @@ export async function loadAdaptiveResearchSnapshot(input: {
     actionableDiscoveryGaps: actionableDiscoveryGaps ?? 0,
     consecutiveLowYieldWaves,
     unexpandedSourcePages: expansions.data?.length ?? 0,
+    requestedCompanyCount,
+    qualifiedCompanyCount: Number(run.companies_qualified ?? 0),
   };
+}
+
+function objectValue(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 async function countStrongUnresearchedCandidates(input: {
@@ -464,7 +490,7 @@ export async function loadCampaignV2Run(input: {
   const { data, error } = await supabase
     .from("campaign_runs")
     .select(
-      "id,campaign_id,profile_snapshot_id,strategy_version_id,workflow_version,status",
+      "id,campaign_id,profile_snapshot_id,strategy_version_id,workflow_version,status,metadata,companies_qualified",
     )
     .eq("workspace_id", input.workspaceId)
     .eq("id", input.campaignRunId)

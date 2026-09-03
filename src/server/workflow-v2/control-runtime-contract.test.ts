@@ -59,7 +59,7 @@ test("campaign controls route V2 runs through commands and checkpointed resume",
   assert.match(controls, /dispatchCampaignV2Resume/);
   assert.match(controls, /cancelTriggerRuns/);
   assert.match(dispatch, /execute-campaign-v2-resume/);
-  assert.match(controls, /research_pause_reason === "campaign_budget"/);
-  assert.match(controls, /authorizeAdditionalResearchCredits/);
-  assert.match(actions, /additionalCredits: input\.additionalCredits/);
+  assert.doesNotMatch(controls, /authorizeAdditionalResearchCredits/);
+  assert.doesNotMatch(actions, /additionalCredits/);
+  assert.match(controls, /dispatchCampaignV2Resume/);
 });

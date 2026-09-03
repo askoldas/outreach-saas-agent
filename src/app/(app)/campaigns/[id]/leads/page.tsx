@@ -34,6 +34,7 @@ export default async function LeadsPage({
       <CampaignControls
         campaignId={campaign.id}
         initialLeadCount={leads.length}
+        targetCompanyCount={campaign.desiredLeadCount}
         status={campaign.status}
       />
       {openQuestion ? (

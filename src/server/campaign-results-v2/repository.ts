@@ -40,7 +40,9 @@ export async function getCampaignV2Results(
 
   let runQuery = supabase
     .from("campaign_runs")
-    .select("id,status,strategy_version_id,workflow_version")
+    .select(
+      "id,status,strategy_version_id,workflow_version,requested_company_count,delivered_company_count,outcome_state,completion_reason",
+    )
     .eq("workspace_id", workspaceId)
     .eq("campaign_id", campaign.id)
     .eq("workflow_version", "v2");
@@ -150,6 +152,7 @@ export async function getCampaignV2Results(
   const evaluationIds = entries.map((entry) => entry.candidate_evaluation_version_id);
   if (!candidateIds.length) {
     return {
+      outcome: outcomeFromRun(run),
       funnel,
       researchOutcome,
       appliedMemorySnapshotId: discoveryPlan?.memory_snapshot_id ?? null,
@@ -630,6 +633,7 @@ export async function getCampaignV2Results(
   for (const candidate of candidates) laneCounts[candidate.lane] += 1;
 
   return {
+    outcome: outcomeFromRun(run),
     funnel,
     researchOutcome,
     appliedMemorySnapshotId: discoveryPlan?.memory_snapshot_id ?? null,
@@ -766,6 +770,20 @@ async function loadResearchFunnel(input: {
             decisionJson.additionalOpportunityRemains === true,
         }
       : null,
+  };
+}
+
+function outcomeFromRun(run: {
+  requested_company_count: number;
+  delivered_company_count: number;
+  outcome_state: string;
+  completion_reason: string | null;
+}) {
+  return {
+    requestedCompanyCount: run.requested_company_count,
+    deliveredCompanyCount: run.delivered_company_count,
+    state: run.outcome_state,
+    completionReason: run.completion_reason,
   };
 }
 

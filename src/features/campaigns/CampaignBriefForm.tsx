@@ -37,6 +37,11 @@ import {
 } from "@/features/guided/SuggestionCards";
 import type { GuidedDraft } from "@/server/guided/repository";
 import styles from "./CampaignGuided.module.css";
+import {
+  COMPANY_QUANTITY_OPTIONS,
+  DEFAULT_REQUESTED_COMPANY_COUNT,
+  quoteCompanyResearch,
+} from "@/lib/company-research/outcome-pricing";
 
 const regions = [
   { label: "DACH", codes: ["DE", "AT", "CH"] },
@@ -113,9 +118,18 @@ export function CampaignBriefForm({
   const [exclusions, setExclusions] = useState("");
   const [roles, setRoles] = useState("");
   const [proposalError, setProposalError] = useState("");
+  const [requestedCompanyCount, setRequestedCompanyCount] = useState(
+    DEFAULT_REQUESTED_COMPANY_COUNT,
+  );
   const [pending, startTransition] = useTransition();
 
   const geographyLabel = regionLabel || countryCodes.join(", ");
+  const researchQuote = quoteCompanyResearch({
+    requestedCompanyCount,
+    countryCount: countryCodes.length,
+    targetSignalCount: split(companyTypes).length + split(industries).length,
+    broadMarket: countryCodes.includes("WORLDWIDE"),
+  });
   const editableTargetSegments = useMemo(() => {
     if (!proposal) return [];
     return proposal.targetSegments.map((segment, index) => {
@@ -308,8 +322,7 @@ export function CampaignBriefForm({
     setSelectedTargetSegmentIds(
       next.targetSegments
         .filter(
-          (segment) =>
-            segment.status !== "rejected" && segment.discoverability !== "low",
+          (segment) => segment.status !== "rejected" && segment.discoverability !== "low",
         )
         .map((segment) => segment.id),
     );
@@ -334,7 +347,9 @@ export function CampaignBriefForm({
   }
 
   function toggleTargetSegment(segmentId: string) {
-    const segment = editableTargetSegments.find((candidate) => candidate.id === segmentId);
+    const segment = editableTargetSegments.find(
+      (candidate) => candidate.id === segmentId,
+    );
     const selected = selectedTargetSegmentIds.includes(segmentId);
     if (!selected && segment?.discoverability === "low") {
       setProposalError(
@@ -713,9 +728,60 @@ export function CampaignBriefForm({
               <strong>{split(exclusions).join(", ") || "None"}</strong>
             </p>
           </div>
+          <div className={shared.stack}>
+            <strong>Desired company quantity</strong>
+            <p>
+              Choose how many genuinely qualified companies Opptium should find.
+              Recommended: {researchQuote.recommendedCompanyCount}.
+            </p>
+            <div className={styles.options}>
+              {COMPANY_QUANTITY_OPTIONS.map((quantity) => (
+                <button
+                  type="button"
+                  className={styles.option}
+                  data-selected={requestedCompanyCount === quantity}
+                  aria-pressed={requestedCompanyCount === quantity}
+                  key={quantity}
+                  onClick={() => setRequestedCompanyCount(quantity)}
+                >
+                  <GuidedOptionCard
+                    description={
+                      quantity === researchQuote.recommendedCompanyCount
+                        ? "Recommended for this target"
+                        : "Qualified companies"
+                    }
+                    recommended={quantity === researchQuote.recommendedCompanyCount}
+                  >
+                    {quantity}
+                  </GuidedOptionCard>
+                </button>
+              ))}
+            </div>
+            <label className={form.field}>
+              <span>Custom quantity</span>
+              <input
+                className={form.input}
+                type="number"
+                min="1"
+                max="500"
+                value={requestedCompanyCount}
+                onChange={(event) => setRequestedCompanyCount(Number(event.target.value))}
+              />
+            </label>
+            <p>
+              Estimated maximum credit cost:{" "}
+              <strong>{researchQuote.authorizedCredits} credits</strong>. Unused
+              authorization is released.
+            </p>
+          </div>
           {targetClientIssue ? <p className={styles.error}>{targetClientIssue}</p> : null}
           <form action={createCampaignAction}>
             <input type="hidden" name="name" value={name} />
+            <input
+              type="hidden"
+              name="requestedCompanyCount"
+              value={researchQuote.requestedCompanyCount}
+            />
             <input type="hidden" name="geography" value={geographyLabel} />
             <input type="hidden" name="selectedOfferingId" value={selectedOfferingId} />
             <input type="hidden" name="campaignObjective" value={campaignObjective} />

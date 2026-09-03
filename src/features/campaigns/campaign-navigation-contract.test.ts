@@ -9,17 +9,27 @@ test("campaign navigation exposes the locked product flow", async () => {
     read("./CampaignShell.tsx"),
     read("./CampaignShell.module.css"),
   ]);
-  for (const label of ["Overview", "Strategy", "Company Research", "Companies", "Contacts", "Outreach"]) {
+  for (const label of [
+    "Overview",
+    "Strategy",
+    "Company Research",
+    "Companies",
+    "Contacts",
+    "Outreach",
+  ]) {
     assert.match(shell, new RegExp(`label: "${label}"`));
   }
   assert.doesNotMatch(shell, /label: "Market Analysis"|label: "Discovery"/);
   assert.match(styles, /overflow-x:\s*auto/);
 });
 
-test("running campaigns retain budget, pause, continue, and stop controls", async () => {
+test("running campaigns expose outcome, pause, continue, and stop controls", async () => {
   const controls = await read("./CampaignControls.tsx");
-  assert.match(controls, /Maximum research credits/);
-  assert.match(controls, /Continue Research/);
+  assert.match(controls, /targetCompanyCount/);
+  assert.match(controls, /confirmed/);
+  assert.doesNotMatch(controls, /Maximum research credits/);
+  assert.doesNotMatch(controls, /Continue Research/);
+  assert.match(controls, /Start Company Research/);
   assert.match(controls, /Stop campaign/);
   assert.match(controls, /currentStatus !== "running"/);
 });
@@ -35,6 +45,7 @@ test("Company Research combines market, discovery, provenance, and usage", async
   assert.doesNotMatch(overview, /redirect\(/);
   assert.match(research, /active="research"/);
   assert.match(research, /CampaignWorkflowSummary/);
+  assert.match(overview, /ProgressiveCompanyResults/);
   assert.match(research, /ProgressiveCompanyResults/);
   assert.match(research, /ResearchLiveRefresh/);
   assert.doesNotMatch(research, /CampaignCandidateAudit/);

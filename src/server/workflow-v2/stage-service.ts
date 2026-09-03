@@ -4,15 +4,15 @@ import { classifyWorkflowError, errorForTrigger } from "@/server/execution/error
 import { executeSemanticDiscoveryStage } from "@/server/discovery-v2/targeted-discovery-stage";
 import { executeEntityResolutionStage } from "@/server/entity-resolution-v2/stage-service";
 import { executeRankingStage } from "@/server/ranking-v2/stage-service";
-import {
-  executeHistoricalMarketAnalysisStage,
-} from "@/server/market-analysis-v2/stage-service";
+import { executeHistoricalMarketAnalysisStage } from "@/server/market-analysis-v2/stage-service";
 import type { Json } from "@/types/database.types";
+import { loadCompanyResearchOutcomeProgress } from "@/server/company-research/outcome-progress";
 import {
   claimWorkflowTask,
   completeWorkflowTask,
   failWorkflowTaskAttempt,
   loadCampaignV2Run,
+  recordResearchBudgetPause,
   saveWorkflowCheckpoint,
 } from "./repository";
 
@@ -58,16 +58,61 @@ export async function executeCampaignV2Stage(
   }
 
   try {
+    const outcome = await loadCompanyResearchOutcomeProgress(input);
+    if (outcome.targetReached) {
+      const result: StageResult = {
+        stage: input.stage,
+        status: "completed",
+        outputReferences: { reason: "target_reached", ...outcome },
+        progressDelta: {},
+        usageEventIds: [],
+      };
+      await completeWorkflowTask({
+        outputReference: result as unknown as Json,
+        status: result.status,
+        taskRunId: taskRun.id,
+        workspaceId: input.workspaceId,
+      });
+      await checkpointStage(input, taskRun.id, result);
+      return { ...result, cached: false, taskRunId: taskRun.id };
+    }
     const result = await runStageAdapter(input, adapters);
     await completeWorkflowTask({
       outputReference: result as unknown as Json,
-      status: result.status,
+      status: workflowTaskCompletionStatus(result),
       taskRunId: taskRun.id,
       workspaceId: input.workspaceId,
     });
     if (result.status !== "blocked") await checkpointStage(input, taskRun.id, result);
     return { ...result, cached: false, taskRunId: taskRun.id };
   } catch (error) {
+    const budgetPauseReason = researchBudgetPauseReason(error);
+    if (budgetPauseReason) {
+      await recordResearchBudgetPause({
+        campaignRunId: input.campaignRunId,
+        reason: budgetPauseReason,
+        workspaceId: input.workspaceId,
+      });
+      const result: StageResult = {
+        stage: input.stage,
+        status: "blocked",
+        outputReferences: {
+          reason: "research_budget",
+          pauseReason: budgetPauseReason,
+          message:
+            error instanceof Error ? error.message : "Research budget unavailable.",
+        },
+        progressDelta: {},
+        usageEventIds: [],
+      };
+      await completeWorkflowTask({
+        outputReference: result as unknown as Json,
+        status: workflowTaskCompletionStatus(result),
+        taskRunId: taskRun.id,
+        workspaceId: input.workspaceId,
+      });
+      return { ...result, cached: false, taskRunId: taskRun.id };
+    }
     const classified = classifyWorkflowError(error);
     await failWorkflowTaskAttempt({
       errorCode: classified.category,
@@ -81,6 +126,29 @@ export async function executeCampaignV2Stage(
     });
     throw errorForTrigger(error);
   }
+}
+
+function workflowTaskCompletionStatus(result: StageResult) {
+  return result.status === "blocked" &&
+    result.outputReferences.reason === "research_budget" &&
+    result.outputReferences.pauseReason === "campaign_budget"
+    ? ("partial" as const)
+    : result.status;
+}
+
+function researchBudgetPauseReason(
+  error: unknown,
+): "campaign_budget" | "workspace_balance" | null {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/workspace credit balance|workspace balance/i.test(message))
+    return "workspace_balance";
+  if (
+    /research credit authorization|campaign research credit|research budget|actual usage exceeds campaign/i.test(
+      message,
+    )
+  )
+    return "campaign_budget";
+  return null;
 }
 
 async function checkpointStage(

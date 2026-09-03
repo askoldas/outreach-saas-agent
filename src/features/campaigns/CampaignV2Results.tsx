@@ -4,7 +4,6 @@ import { useMemo, useState, useTransition } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import {
-  continueV2CampaignResearchAction,
   proposeV2CandidateCorrectionAction,
   reviewV2CandidateAction,
 } from "@/server/campaign-results-v2/actions";
@@ -14,6 +13,8 @@ import {
   type ResultLane,
 } from "@/server/campaign-results-v2/types";
 import styles from "./CampaignV2Results.module.css";
+import { companyResearchOutcomeCopy } from "@/lib/company-research/outcome-copy";
+import { companyResearchCompletionReasonSchema } from "@/lib/company-research/outcome";
 
 const laneLabels: Record<ResultLane, string> = {
   conditional: "Conditional",
@@ -36,8 +37,15 @@ export function CampaignV2Results({
   const [view, setView] = useState<ResultView>("all");
   const [query, setQuery] = useState("");
   const [message, setMessage] = useState("");
-  const [additionalCredits, setAdditionalCredits] = useState(10);
   const [pending, startTransition] = useTransition();
+  const outcomeCopy = companyResearchOutcomeCopy({
+    completionReason: companyResearchCompletionReasonSchema
+      .nullable()
+      .catch(null)
+      .parse(results.outcome.completionReason),
+    deliveredCompanyCount: results.outcome.deliveredCompanyCount,
+    requestedCompanyCount: results.outcome.requestedCompanyCount,
+  });
   const visible = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return results.candidates.filter(
@@ -104,27 +112,18 @@ export function CampaignV2Results({
     });
   }
 
-  function continueResearch() {
-    startTransition(async () => {
-      try {
-        const result = await continueV2CampaignResearchAction({
-          campaignExternalId: campaignId,
-          campaignRunId: results.runId,
-          additionalCredits,
-        });
-        setMessage(result.message);
-      } catch (error) {
-        setMessage(
-          error instanceof Error ? error.message : "Could not continue research.",
-        );
-      }
-    });
-  }
-
   return (
     <section className={styles.workspace} aria-labelledby="v2-results-heading">
       <div>
-        <h2 id="v2-results-heading">Campaign results</h2>
+        <h2 id="v2-results-heading">{outcomeCopy.title}</h2>
+        <p>
+          <strong>
+            {results.outcome.deliveredCompanyCount} /{" "}
+            {results.outcome.requestedCompanyCount} confirmed
+          </strong>
+        </p>
+        <p>{outcomeCopy.description}</p>
+        {outcomeCopy.suggestion ? <p>{outcomeCopy.suggestion}</p> : null}
         <p className={styles.muted}>
           Canonical V2 ranking for Run {results.runId.slice(0, 8)} · {results.runStatus}
         </p>
@@ -156,17 +155,9 @@ export function CampaignV2Results({
             {results.researchOutcome.additionalOpportunityRemains
               ? " Additional market opportunity remains for a future research cycle."
               : ""}
-            {results.researchOutcome.additionalOpportunityRemains ? (
-              <span className={styles.actions}>
-                <label>
-                  Additional research credits
-                  <input type="number" min="0.001" step="0.001" value={additionalCredits} onChange={(event) => setAdditionalCredits(Number(event.target.value))} disabled={pending} />
-                </label>
-                <Button disabled={pending} onClick={continueResearch}>
-                  {pending ? "Queuing research…" : "Continue research"}
-                </Button>
-              </span>
-            ) : null}
+            {results.researchOutcome.additionalOpportunityRemains
+              ? " Broaden the target or increase the requested company quantity to continue with the same saved research knowledge."
+              : ""}
           </p>
         ) : null}
       </section>

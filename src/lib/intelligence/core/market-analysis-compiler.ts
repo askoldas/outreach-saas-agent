@@ -52,7 +52,7 @@ export function compileMarketAnalysis(input: {
       .map(({ id, priority, whyItCanBuyOrUse }) => ({
         archetypeId: id,
         priority,
-        rationale: whyItCanBuyOrUse,
+        rationale: boundedText(whyItCanBuyOrUse, 800),
       })),
     marketStructure,
     localTerminology: input.marketContext.localTerminology.map((term) => ({
@@ -102,6 +102,12 @@ export function compileMarketAnalysis(input: {
       ...input.provenance,
     },
   });
+}
+
+function boundedText(value: string, maximum: number) {
+  if (value.length <= maximum) return value;
+  const shortened = value.slice(0, Math.max(1, maximum - 1)).trimEnd();
+  return `${shortened}…`;
 }
 
 export function assertMarketAnalysisReadyForResearchPlan(input: {

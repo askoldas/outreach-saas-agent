@@ -17,6 +17,7 @@ import type { Campaign } from "@/types/domain";
 import type { Json } from "@/types/database.types";
 import { deriveCampaignDiscoveryLanguagePolicy } from "@/lib/discovery/languages";
 import {
+  CampaignStrategyDraftSupersededError,
   createCampaignStrategyV2Draft,
   getCampaignStrategyV2RecoveryData,
   getPublishedCampaignPlanningProfile,
@@ -269,6 +270,9 @@ export async function prepareCampaignStrategyV2Compilation(input: {
   strategyDraftId: string;
 }) {
   const recovery = await getCampaignStrategyV2RecoveryData(input);
+  if (recovery.state === "confirmed") {
+    throw new CampaignStrategyDraftSupersededError();
+  }
   if (
     !["building", "needs_input", "failed", "ready_for_review"].includes(recovery.state)
   ) {

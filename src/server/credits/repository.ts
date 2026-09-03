@@ -2,6 +2,12 @@ import { createServiceRoleClient } from "@/lib/supabase/service";
 import { researchBudgetStateSchema, type ProviderUsage } from "@/lib/credits/contracts";
 import { costUsdToCredits } from "@/lib/credits/config";
 import type { Json } from "@/types/database.types";
+import {
+  companyResearchQuoteSchema,
+  companyResearchSettlementSchema,
+  type CompanyResearchQuote,
+} from "@/lib/company-research/outcome-pricing";
+import type { CompanyResearchCompletionReason } from "@/lib/company-research/outcome";
 
 type RpcResult = { data: unknown; error: { message: string } | null };
 
@@ -31,7 +37,10 @@ export async function reserveResearchCredits(input: {
 export class ResearchBudgetPausedError extends Error {
   readonly code = "research_budget_paused";
   readonly retryable = false;
-  constructor(message: string, readonly reason: string) {
+  constructor(
+    message: string,
+    readonly reason: string,
+  ) {
     super(message);
     this.name = "ResearchBudgetPausedError";
   }
@@ -94,16 +103,57 @@ export async function releaseResearchCredits(input: {
   });
 }
 
-export async function authorizeAdditionalResearchCredits(input: {
+export async function authorizeCompanyResearchOutcome(input: {
   workspaceId: string;
   campaignRunId: string;
-  additionalCredits: number;
+  quote: CompanyResearchQuote;
 }) {
-  return rpc("authorize_additional_research_credits", {
+  const quote = companyResearchQuoteSchema.parse(input.quote);
+  return rpc("authorize_company_research_outcome", {
     target_workspace_id: input.workspaceId,
     target_campaign_run_id: input.campaignRunId,
-    target_additional_credits: input.additionalCredits,
+    target_quote: quote as unknown as Json,
   });
+}
+
+export async function finalizeCompanyResearchOutcome(input: {
+  workspaceId: string;
+  campaignRunId: string;
+  completionReason: CompanyResearchCompletionReason;
+}) {
+  const result = await rpc("finalize_company_research_outcome_v2", {
+    target_workspace_id: input.workspaceId,
+    target_campaign_run_id: input.campaignRunId,
+    target_completion_reason: input.completionReason,
+  });
+  const { idempotent, ...settlement } = result;
+  return {
+    ...companyResearchSettlementSchema.parse(settlement),
+    idempotent: idempotent === true,
+  };
+}
+
+export async function increaseCompanyResearchTarget(input: {
+  workspaceId: string;
+  campaignRunId: string;
+  quote: CompanyResearchQuote;
+}) {
+  const quote = companyResearchQuoteSchema.parse(input.quote);
+  const result = await rpc("increase_company_research_target", {
+    target_workspace_id: input.workspaceId,
+    target_campaign_run_id: input.campaignRunId,
+    target_quote: quote as unknown as Json,
+  });
+  return {
+    campaignRunId: String(result.campaignRunId),
+    requestedCompanyCount: Number(result.requestedCompanyCount),
+    incrementalAuthorizedCredits: Number(result.incrementalAuthorizedCredits),
+    cycleNumber: Number(result.cycleNumber),
+    requestedAction: String(result.requestedAction) as
+      | "research_existing_pool"
+      | "discover_more",
+    idempotent: result.idempotent === true,
+  };
 }
 
 async function rpc(name: string, args: Record<string, unknown>) {

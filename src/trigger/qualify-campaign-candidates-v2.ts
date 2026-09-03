@@ -5,6 +5,10 @@ import {
   finalizeQualificationStage,
   prepareQualificationStage,
 } from "@/server/qualification-v2/stage-service";
+import { loadCompanyResearchOutcomeProgress } from "@/server/company-research/outcome-progress";
+import { partitionResearchWaves } from "@/lib/candidate-intelligence-v2/research-waves";
+
+export const DEFAULT_QUALIFICATION_WAVE_SIZE = 4;
 
 export type QualifyCampaignCandidateV2Payload = {
   campaignRunId: string;
@@ -51,39 +55,54 @@ export async function executeQualificationFanOut(input: {
   workspaceId: string;
   cycleNumber?: number;
 }) {
+  const initialOutcome = await loadCompanyResearchOutcomeProgress(input);
+  if (initialOutcome.targetReached) return targetReachedResult(initialOutcome);
   const batch = await prepareQualificationStage(input);
   let budgetFailure: string | null = null;
   if (batch.pendingMemberIds.length) {
-    const requests = batch.pendingMemberIds.map((memberId) => ({
-      payload: {
-        campaignRunId: input.campaignRunId,
-        memberId,
-        workspaceId: input.workspaceId,
-      },
-      options: {
-        idempotencyKey: `candidate-qualification:${batch.batchId}:${memberId}`,
-        tags: [
-          `workspace:${input.workspaceId}`,
-          `campaign_run:${input.campaignRunId}`,
-          `candidate_qualification_batch:${batch.batchId}`,
-          `candidate_qualification_member:${memberId}`,
-        ],
-      },
-    }));
-    const results = await qualifyCampaignCandidateV2Task.batchTriggerAndWait(requests);
-    for (const [index, run] of results.runs.entries()) {
-      if (run.ok) continue;
-      if (isResearchBudgetError(run.error)) {
-        budgetFailure = errorMessage(run.error);
+    const waves = partitionResearchWaves(
+      batch.pendingMemberIds,
+      DEFAULT_QUALIFICATION_WAVE_SIZE,
+    );
+    for (const [waveIndex, memberIds] of waves.entries()) {
+      const outcome = await loadCompanyResearchOutcomeProgress(input);
+      if (outcome.targetReached) return targetReachedResult(outcome, batch.batchId);
+      const requests = memberIds.map((memberId) => ({
+        payload: {
+          campaignRunId: input.campaignRunId,
+          memberId,
+          workspaceId: input.workspaceId,
+        },
+        options: {
+          idempotencyKey: `candidate-qualification:${batch.batchId}:wave-${waveIndex + 1}:${memberId}`,
+          tags: [
+            `workspace:${input.workspaceId}`,
+            `campaign_run:${input.campaignRunId}`,
+            `candidate_qualification_batch:${batch.batchId}`,
+            `candidate_qualification_member:${memberId}`,
+            `candidate_qualification_wave:${waveIndex + 1}`,
+          ],
+        },
+      }));
+      const results = await qualifyCampaignCandidateV2Task.batchTriggerAndWait(requests);
+      for (const [index, run] of results.runs.entries()) {
+        if (run.ok) continue;
+        if (isResearchBudgetError(run.error)) {
+          budgetFailure = errorMessage(run.error);
+        }
+        const memberId = memberIds[index];
+        if (!memberId) continue;
+        await blockQualificationMember({
+          memberId,
+          workspaceId: input.workspaceId,
+          errorCode: errorCode(run.error),
+          errorMessage: errorMessage(run.error),
+        });
       }
-      const memberId = batch.pendingMemberIds[index];
-      if (!memberId) continue;
-      await blockQualificationMember({
-        memberId,
-        workspaceId: input.workspaceId,
-        errorCode: errorCode(run.error),
-        errorMessage: errorMessage(run.error),
-      });
+      const outcomeAfterWave = await loadCompanyResearchOutcomeProgress(input);
+      if (outcomeAfterWave.targetReached) {
+        return targetReachedResult(outcomeAfterWave, batch.batchId);
+      }
     }
   }
   const result = await finalizeQualificationStage({
@@ -101,6 +120,24 @@ export async function executeQualificationFanOut(input: {
         },
       }
     : result;
+}
+
+function targetReachedResult(
+  outcome: { requestedCompanyCount: number; deliveredCompanyCount: number },
+  batchId?: string,
+) {
+  return {
+    stage: "qualify_candidates" as const,
+    status: "completed" as const,
+    outputReferences: {
+      reason: "target_reached",
+      ...outcome,
+      ...(batchId ? { batchId } : {}),
+      unscheduledMembersRemainResumable: true,
+    },
+    progressDelta: { candidatesQualified: outcome.deliveredCompanyCount },
+    usageEventIds: [],
+  };
 }
 
 function errorMessage(error: unknown) {

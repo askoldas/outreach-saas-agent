@@ -60,6 +60,14 @@ test("results expose canonical queues and independent qualification measures", (
   assert.match(results, /Not enough data/);
 });
 
+test("results lead with the persisted outcome instead of internal spend", () => {
+  assert.match(repository, /requested_company_count/);
+  assert.match(repository, /delivered_company_count/);
+  assert.match(repository, /completion_reason/);
+  assert.match(results, /outcomeCopy\.title/);
+  assert.match(results, /results\.outcome\.deliveredCompanyCount/);
+});
+
 test("results default to every evaluated company and expose each outcome", () => {
   assert.match(results, /useState<ResultView>\("all"\)/);
   assert.match(results, /All evaluated \(\{results\.candidates\.length\}\)/);
@@ -185,10 +193,7 @@ test("results show correction proposals by dimension without rewriting frozen as
   assert.match(repository, /source_relationship_assessment_version_id/);
   assert.match(results, /proposal\.dimension === dimension\.type/);
   assert.match(results, /correction proposal/);
-  assert.match(
-    results,
-    /This proposal does not change the frozen\s+assessment\./,
-  );
+  assert.match(results, /This proposal does not change the frozen\s+assessment\./);
   assert.doesNotMatch(
     repository,
     /relationshipDimensions\s*=\s*relationshipCorrectionProposals/,

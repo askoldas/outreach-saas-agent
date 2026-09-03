@@ -1,6 +1,8 @@
 import { Card } from "@/components/ui/Card";
 import type { CampaignWorkflowSummary } from "@/server/campaigns/workflow-repository";
 import shared from "@/features/shared/Feature.module.css";
+import { companyResearchOutcomeCopy } from "@/lib/company-research/outcome-copy";
+import { companyResearchCompletionReasonSchema } from "@/lib/company-research/outcome";
 
 export function CampaignRunOverview({
   run,
@@ -9,26 +11,39 @@ export function CampaignRunOverview({
 }) {
   if (!run) return null;
   const nextAction = getNextAction(run.status, run.phase);
+  const completionReason = companyResearchCompletionReasonSchema
+    .nullable()
+    .catch(null)
+    .parse(run.completionReason);
+  const outcomeCopy = companyResearchOutcomeCopy({
+    completionReason,
+    deliveredCompanyCount: run.deliveredCompanyCount,
+    requestedCompanyCount: run.requestedCompanyCount,
+  });
   return (
     <section className={shared.stack} aria-label="Latest campaign run">
+      <Card className={shared.cardBody}>
+        <strong>{outcomeCopy.title}</strong>
+        <p>{outcomeCopy.description}</p>
+        {outcomeCopy.suggestion ? <p>{outcomeCopy.suggestion}</p> : null}
+      </Card>
       <div className={shared.metricGrid}>
         <Card className={shared.metric}>
-          <p>Run stage</p>
-          <h2>{stageLabel(run.phase)}</h2>
-          <span>{run.progress}% complete</span>
+          <p>Confirmed companies</p>
+          <h2>
+            {run.deliveredCompanyCount} / {run.requestedCompanyCount}
+          </h2>
+          <span>{stageLabel(run.phase)}</span>
         </Card>
         <Card className={shared.metric}>
-          <p>Research cycle</p>
-          <h2>{run.iteration || "—"}</h2>
-          <span>Continues while productive work and research budget remain</span>
+          <p>Progress</p>
+          <h2>{run.progress}%</h2>
+          <span>Strong matches appear progressively</span>
         </Card>
         <Card className={shared.metric}>
-          <p>Run cost</p>
-          <h2>{formatMoney(run.totalCost, run.currency)}</h2>
-          <span>
-            AI {formatMoney(run.llmCost, run.currency)} · Providers{" "}
-            {formatMoney(run.providerCost, run.currency)}
-          </span>
+          <p>Quoted price</p>
+          <h2>{formatCredits(run.quotedResearchCredits)}</h2>
+          <span>Maximum authorization for the requested outcome</span>
         </Card>
         <Card className={shared.metric}>
           <p>Next action</p>
@@ -108,10 +123,7 @@ function getNextAction(status: string, phase: string) {
   };
 }
 
-function formatMoney(value: number, currency: string) {
-  return new Intl.NumberFormat("en", {
-    style: "currency",
-    currency,
-    maximumFractionDigits: 4,
-  }).format(value);
+function formatCredits(value: number | null) {
+  if (value === null) return "—";
+  return `${new Intl.NumberFormat("en", { maximumFractionDigits: 1 }).format(value)} credits`;
 }

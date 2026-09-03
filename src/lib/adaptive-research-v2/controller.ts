@@ -33,11 +33,14 @@ export function decideAdaptiveResearchNextAction(input: {
   unexpandedSourcePages: number;
   consecutiveLowYieldWaves: number;
   discoverySaturated: boolean;
+  requestedCompanyCount?: number;
+  qualifiedCompanyCount?: number;
   controlState?: "run" | "paused" | "cancelled";
 }) {
   const researched = input.usage.deepResearchCandidates;
   const ratio = (value: number) => (researched === 0 ? 0 : value / researched);
   const reviewReady = input.lanes.recommended + input.lanes.conditional;
+  const qualifiedCompanyCount = input.qualifiedCompanyCount ?? reviewReady;
   const budgetExhausted =
     input.usage.providerCalls >= input.budget.maxProviderCalls ||
     input.usage.aiCostUsd >= input.budget.maxAiCostUsd ||
@@ -52,7 +55,16 @@ export function decideAdaptiveResearchNextAction(input: {
   let action: ReturnType<typeof adaptiveResearchDecisionSchema.parse>["action"];
   let reasonCode: string;
   let rationale: string;
-  if (input.controlState === "cancelled") {
+  if (
+    input.requestedCompanyCount !== undefined &&
+    qualifiedCompanyCount >= input.requestedCompanyCount
+  ) {
+    [action, reasonCode, rationale] = [
+      "stop_target_reached",
+      "qualified_company_target_reached",
+      `The requested ${input.requestedCompanyCount} qualified companies have been delivered.`,
+    ];
+  } else if (input.controlState === "cancelled") {
     [action, reasonCode, rationale] = [
       "cancel",
       "user_cancelled",

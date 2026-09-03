@@ -66,6 +66,26 @@ test("Market Analysis is deterministic and uses confirmed Strategy as its approv
   );
 });
 
+test("Market Analysis deterministically bounds verbose frozen archetype rationale", () => {
+  const frozenTarget = target();
+  frozenTarget.archetypes[0]!.whyItCanBuyOrUse = "x".repeat(1_200);
+  const analysis = compileMarketAnalysis({
+    artifactId: "analysis-bounded",
+    target: frozenTarget,
+    marketContext: marketContext(),
+    allowedEvidenceIds: [],
+    provenance: {
+      promptVersion: "market-context/v1",
+      modelRole: "campaign_strategy_reasoning",
+      provider: "openrouter",
+      model: "provider/model-version",
+    },
+    createdAt: "2026-08-24T00:00:00.000Z",
+  });
+  assert.equal(analysis.targetArchetypes[0]?.rationale.length, 800);
+  assert.match(analysis.targetArchetypes[0]?.rationale ?? "", /…$/);
+});
+
 function compile(
   context: unknown = marketContext(),
   artifactId = "analysis-1",

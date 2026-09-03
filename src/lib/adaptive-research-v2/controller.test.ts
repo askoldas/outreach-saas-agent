@@ -41,6 +41,18 @@ test("strong existing candidates take precedence over more discovery", () => {
   assert.equal(decision.yield.reviewReadyYield, 8 / 12);
 });
 
+test("qualified outcome stops exploration before another paid action", () => {
+  const decision = decideAdaptiveResearchNextAction({
+    ...base,
+    requestedCompanyCount: 25,
+    qualifiedCompanyCount: 25,
+    strongUnresearchedCandidates: 30,
+    actionableDiscoveryGaps: 4,
+  });
+  assert.equal(decision.action, "stop_target_reached");
+  assert.equal(decision.reasonCode, "qualified_company_target_reached");
+});
+
 test("budget is a ceiling and preserves remaining opportunity", () => {
   const decision = decideAdaptiveResearchNextAction({
     ...base,

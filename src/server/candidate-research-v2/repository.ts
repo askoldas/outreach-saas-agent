@@ -504,6 +504,20 @@ export async function completeCandidateResearchMember(input: {
   );
 }
 
+export async function blockCandidateResearchMember(input: {
+  memberId: string;
+  workspaceId: string;
+  errorCode: string;
+  errorMessage: string;
+}) {
+  await rpc("block_candidate_research_member_v2", {
+    target_workspace_id: input.workspaceId,
+    target_member_id: input.memberId,
+    target_error_code: input.errorCode,
+    target_error_message: input.errorMessage,
+  });
+}
+
 export async function finalizeCandidateResearchBatch(input: {
   batchId: string;
   workspaceId: string;

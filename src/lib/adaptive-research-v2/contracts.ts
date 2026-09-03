@@ -8,6 +8,7 @@ export const adaptiveResearchActionSchema = z.enum([
   "research_existing_pool",
   "discover_more",
   "expand_source_pages",
+  "stop_target_reached",
   "stop_budget",
   "stop_saturation",
   "stop_low_yield",

@@ -43,6 +43,9 @@ export const compileCampaignStrategyV2Task = task({
         `Campaign advisory-delta stage failed: ${errorMessage(advisory.error)}`,
       );
     }
+    if (isSuperseded(advisory.output.output)) {
+      return { ...payload, skipped: true, reason: "strategy_draft_superseded" };
+    }
     const compilation = await runCampaignStrategyV2StageTask.triggerAndWait(
       {
         ...payload,
@@ -63,6 +66,15 @@ export const compileCampaignStrategyV2Task = task({
     };
   },
 });
+
+function isSuperseded(value: unknown) {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      "reason" in value &&
+      value.reason === "strategy_draft_superseded",
+  );
+}
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Unknown Strategy stage failure.";

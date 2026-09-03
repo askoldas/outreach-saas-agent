@@ -5,6 +5,7 @@ import { CampaignRunHistory } from "@/features/campaigns/CampaignRunHistory";
 import { CampaignRunTimeline } from "@/features/campaigns/CampaignRunTimeline";
 import { CampaignShell } from "@/features/campaigns/CampaignShell";
 import { CampaignWorkflowSummary } from "@/features/campaigns/CampaignWorkflowSummary";
+import { ProgressiveCompanyResults } from "@/features/campaigns/ProgressiveCompanyResults";
 import shared from "@/features/shared/Feature.module.css";
 import { getCampaignWorkflowSummary } from "@/server/campaigns/workflow-repository";
 import { loadCampaignPage } from "@/server/campaigns/page-data";
@@ -41,6 +42,7 @@ export default async function CampaignPage({
       <CampaignControls
         campaignId={campaign.id}
         initialLeadCount={leads.length}
+        targetCompanyCount={campaign.desiredLeadCount}
         status={campaign.status}
       />
       <CampaignRunOverview run={workflow.latestRun} />
@@ -62,6 +64,7 @@ export default async function CampaignPage({
         ) : null}
       </section>
       <CampaignWorkflowSummary summary={workflow} view="overview" />
+      <ProgressiveCompanyResults companies={workflow.progressiveCompanies} />
       <CampaignRunTimeline events={workflow.runEvents} />
       <CampaignRunHistory campaignId={campaign.id} runs={workflow.runHistory} />
     </CampaignShell>

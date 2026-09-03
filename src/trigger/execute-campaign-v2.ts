@@ -22,6 +22,13 @@ import type { Json } from "@/types/database.types";
 import { persistEvolvingMarketOverview } from "@/server/company-research/market-overview";
 import { runCampaignV2StageTask } from "./run-campaign-v2-stage";
 import { bootstrapCompanyResearchContextV2Task } from "./bootstrap-company-research-context-v2";
+import { loadCompanyResearchOutcomeProgress } from "@/server/company-research/outcome-progress";
+import { finalizeCompanyResearchOutcome } from "@/server/credits/repository";
+import {
+  completionReasonForAdaptiveAction,
+  completionReasonForWorkflowError,
+} from "@/lib/company-research/terminal-reason";
+import type { CompanyResearchCompletionReason } from "@/lib/company-research/outcome";
 
 export type ExecuteCampaignV2Payload = {
   campaignRunId: string;
@@ -51,9 +58,19 @@ export const executeCampaignV2Task = task({
       inputReference: payload as unknown as Json,
       workspaceId: payload.workspaceId,
     });
+    const completionReason = completionReasonForWorkflowError(error);
+    const outcome = await settleTerminalOutcome(payload, completionReason);
     await updateCampaignWorkflow({
       errorSummary: { message: errorMessage(error) },
-      status: "failed",
+      outputReference: outcome
+        ? ({ completionReason, outcome } as unknown as Json)
+        : undefined,
+      status:
+        completionReason === "technical_failure"
+          ? "failed"
+          : completionReason === "user_stopped"
+            ? "cancelled"
+            : "completed_partial",
       workflowRunId: String(workflow.id),
       workspaceId: payload.workspaceId,
     });
@@ -77,6 +94,8 @@ export const executeCampaignV2Task = task({
       workspaceId: payload.workspaceId,
     });
     if (initialControl.state !== "run") {
+      if (initialControl.state === "cancelled")
+        await settleTerminalOutcome(payload, "user_stopped");
       return { status: initialControl.state, workflowRunId };
     }
     await updateCampaignWorkflow({
@@ -85,6 +104,17 @@ export const executeCampaignV2Task = task({
       workflowRunId,
       workspaceId: payload.workspaceId,
     });
+
+    const initialOutcome = await settleReachedOutcome(payload);
+    if (initialOutcome) {
+      await updateCampaignWorkflow({
+        outputReference: { outcome: initialOutcome } as unknown as Json,
+        status: "ready_for_review",
+        workflowRunId,
+        workspaceId: payload.workspaceId,
+      });
+      return { status: "ready_for_review", workflowRunId, outcome: initialOutcome };
+    }
 
     const checkpointKeys = await loadCompletedCheckpointKeys({
       workflowRunId,
@@ -114,7 +144,25 @@ export const executeCampaignV2Task = task({
         workspaceId: payload.workspaceId,
       });
       if (beforeStage.state !== "run") {
+        if (beforeStage.state === "cancelled")
+          await settleTerminalOutcome(payload, "user_stopped");
         return { status: beforeStage.state, stage, workflowRunId };
+      }
+      const reachedBeforeStage = await settleReachedOutcome(payload);
+      if (reachedBeforeStage) {
+        await updateCampaignWorkflow({
+          outputReference: { outcome: reachedBeforeStage } as unknown as Json,
+          progressSummary: await progress(payload, completedStages),
+          status: "ready_for_review",
+          workflowRunId,
+          workspaceId: payload.workspaceId,
+        });
+        return {
+          status: "ready_for_review",
+          stage,
+          workflowRunId,
+          outcome: reachedBeforeStage,
+        };
       }
       await updateCampaignWorkflow({
         progressSummary: await progress(payload, completedStages, stage),
@@ -125,7 +173,10 @@ export const executeCampaignV2Task = task({
       const child = await runCampaignV2StageTask.triggerAndWait(
         { ...payload, cycleNumber, stage, workflowRunId },
         {
-          idempotencyKey: `campaign-v2:${workflowRunId}:cycle-${cycleNumber}:${stage}`,
+          // A budget-blocked durable task is intentionally claimable again after
+          // authorization. Scope Trigger deduplication to this parent execution;
+          // the database task idempotency key still prevents duplicate writes.
+          idempotencyKey: `campaign-v2:${workflowRunId}:cycle-${cycleNumber}:${stage}:parent-${ctx.run.id}`,
           tags: [
             `workspace:${payload.workspaceId}`,
             `campaign_run:${payload.campaignRunId}`,
@@ -135,51 +186,86 @@ export const executeCampaignV2Task = task({
         },
       );
       if (!child.ok && isResearchBudgetError(child.error)) {
+        const outcome = await settleTerminalOutcome(payload, "internal_cost_guard");
         await updateCampaignWorkflow({
           errorSummary: {
-            code: "research_budget_paused",
-            message: errorMessage(child.error),
+            code: "internal_cost_guard",
+            message:
+              "Research stopped safely and retained every strong company found so far.",
           },
           outputReference: {
-            pausedStage: stage,
-            reason: "research_budget",
+            stoppedStage: stage,
+            reason: "internal_cost_guard",
+            outcome,
           },
           progressSummary: await progress(payload, completedStages, stage),
-          status: "paused",
+          status: "completed_partial",
           workflowRunId,
           workspaceId: payload.workspaceId,
         });
-        return { status: "paused_for_budget", stage, workflowRunId };
+        return { status: "completed_partial", stage, workflowRunId, outcome };
       }
       if (!child.ok)
         throw new Error(
           `V2 Campaign child "${stage}" failed: ${errorMessage(child.error)}`,
         );
       if (child.output.status === "blocked") {
-        const budgetBlocked =
-          child.output.outputReferences.reason === "research_budget";
+        const budgetBlocked = child.output.outputReferences.reason === "research_budget";
+        const outcome = budgetBlocked
+          ? await settleTerminalOutcome(payload, "internal_cost_guard")
+          : null;
         await updateCampaignWorkflow({
+          errorSummary: budgetBlocked
+            ? {
+                code: "internal_cost_guard",
+                message:
+                  "Research stopped safely and retained every strong company found so far.",
+              }
+            : null,
           outputReference: {
             blockedStage: stage,
             stageOutput: child.output.outputReferences,
+            ...(outcome ? { outcome } : {}),
           } as unknown as Json,
           progressSummary: await progress(payload, completedStages, stage),
-          status: budgetBlocked ? "paused" : "completed_partial",
+          status: "completed_partial",
           workflowRunId,
           workspaceId: payload.workspaceId,
         });
         return {
-          status: budgetBlocked ? "paused_for_budget" : "completed_partial",
+          status: "completed_partial",
           stage,
           workflowRunId,
+          ...(outcome ? { outcome } : {}),
         };
       }
       completedStages.push(stage);
+      const reachedAfterStage = await settleReachedOutcome(payload);
+      if (reachedAfterStage) {
+        await updateCampaignWorkflow({
+          outputReference: {
+            completedStages,
+            outcome: reachedAfterStage,
+          } as unknown as Json,
+          progressSummary: await progress(payload, completedStages),
+          status: "ready_for_review",
+          workflowRunId,
+          workspaceId: payload.workspaceId,
+        });
+        return {
+          status: "ready_for_review",
+          stage,
+          workflowRunId,
+          outcome: reachedAfterStage,
+        };
+      }
       const afterStage = await consumeWorkflowControl({
         workflowRunId,
         workspaceId: payload.workspaceId,
       });
       if (afterStage.state !== "run") {
+        if (afterStage.state === "cancelled")
+          await settleTerminalOutcome(payload, "user_stopped");
         return { status: afterStage.state, stage, workflowRunId };
       }
     }
@@ -260,21 +346,35 @@ export const executeCampaignV2Task = task({
         workflowRunId,
       };
     }
+    const completionReason = continuationAction
+      ? "internal_cost_guard"
+      : completionReasonForAdaptiveAction(adaptiveDecision.action);
+    const outcome = completionReason
+      ? await settleTerminalOutcome(payload, completionReason)
+      : null;
     await updateCampaignWorkflow({
       outputReference: {
         ...outputReference,
         adaptiveDecision,
         marketOverview,
+        ...(outcome ? { outcome } : {}),
       } as unknown as Json,
       progressSummary: await progress(payload, completedStages),
-      status: "ready_for_review",
+      status:
+        completionReason && completionReason !== "target_reached"
+          ? "completed_partial"
+          : "ready_for_review",
       workflowRunId,
       workspaceId: payload.workspaceId,
     });
     return {
       ...outputReference,
       adaptiveDecision,
-      status: "ready_for_review",
+      outcome,
+      status:
+        completionReason && completionReason !== "target_reached"
+          ? "completed_partial"
+          : "ready_for_review",
       workflowRunId,
     };
   },
@@ -310,4 +410,31 @@ function isResearchBudgetError(error: unknown) {
   return /research credit authorization|workspace credit balance|research budget|actual usage exceeds/i.test(
     errorMessage(error),
   );
+}
+
+async function settleReachedOutcome(payload: ExecuteCampaignV2Payload) {
+  const progress = await loadCompanyResearchOutcomeProgress(payload);
+  if (!progress.targetReached) return null;
+  if (progress.settled) return progress;
+  const settlement = await finalizeCompanyResearchOutcome({
+    workspaceId: payload.workspaceId,
+    campaignRunId: payload.campaignRunId,
+    completionReason: "target_reached",
+  });
+  return { ...progress, settlement };
+}
+
+async function settleTerminalOutcome(
+  payload: ExecuteCampaignV2Payload,
+  completionReason: CompanyResearchCompletionReason,
+) {
+  const progress = await loadCompanyResearchOutcomeProgress(payload);
+  if (!progress.authorized) return null;
+  if (progress.settled) return progress;
+  const settlement = await finalizeCompanyResearchOutcome({
+    workspaceId: payload.workspaceId,
+    campaignRunId: payload.campaignRunId,
+    completionReason,
+  });
+  return { ...progress, settlement };
 }

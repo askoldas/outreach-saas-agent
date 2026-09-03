@@ -52,6 +52,37 @@ Only decisions that govern the current implementation are retained here. Migrati
 - Company Research uses typed coverage and marginal-yield stopping with deterministic
   hard execution ceilings. There is no unrestricted agent loop. Historical V1 runs
   retain their stored results but are not executable.
+- Company Research is sold and controlled by a requested qualified-company outcome.
+  Product credits are quoted as a maximum authorization; provider cost and hard runtime
+  guards remain internal economics. Rejections, duplicates, and unresolved references
+  never count toward the outcome, and qualification is never weakened to fill it.
+- `requestedCompanyCount` is the canonical application term. The existing
+  `campaigns.target_volume` column is its persistence projection until an ordered
+  migration deliberately replaces it. Strategy candidate coverage is an internal pool
+  objective and cannot override the requested qualified-company outcome.
+- Recommended and conditional lanes count as delivered qualified companies. Both have
+  passed identity, exclusion, relationship, evidence, and minimum-fit gates; conditional
+  results retain their limiting condition in the UI. Counting always deduplicates by
+  canonical company ID. Requires-research, rejected, excluded, invalid, duplicate, and
+  unresolved candidates do not count.
+- Company Research terminal reasons are `target_reached`, `market_exhausted`,
+  `user_stopped`, `internal_cost_guard`, `provider_failure`, and `technical_failure`.
+  Only a genuine technical failure maps to failed; exhaustion, provider degradation,
+  and internal guards preserve a usable partial completion.
+- Outcome settlement policy V1 charges no more than accrued work or the quote. System-
+  ended partial outcomes are additionally bounded by delivered outcome value with a 20%
+  fixed-work floor and 80% delivered-ratio component. A user stop pays accrued work up
+  to the quote. Genuine technical failure has a zero product charge. Migration
+  `20260902000400` implements Run-level persistence and atomic reconciliation.
+  Provider settlement rows remain immutable economic history; outcome refunds append a
+  ledger adjustment and restore workspace credits without rewriting provider cost.
+- Additional Company Research results increase the target on the same durable Run.
+  Ordinary resume never adds an arbitrary credit increment, and a completed campaign
+  cannot create a replacement Run that repeats prior research. Manual pause/resume and
+  workspace funding remain separate controls.
+- Discovery-channel economics are derived from candidate-to-source provenance and
+  deduplicated company identities. Shared provider-call cost is reported at Run level
+  unless a future ledger contract supplies reliable source-level allocation.
 
 ## Providers and AI
 

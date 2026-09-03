@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createAuthenticatedDatabaseClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/server/workspaces/repository";
 import { dispatchCampaignV2Continuation } from "@/server/trigger/dispatch";
-import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
-import { reserveCampaignResearchContinuation } from "@/server/workflow-v2/repository";
 import { commercialRelationshipTypeSchema } from "@/lib/intelligence/core/commercial-intelligence";
-import { authorizeAdditionalResearchCredits } from "@/server/credits/repository";
+import { increaseCompanyResearchTarget } from "@/server/credits/repository";
+import {
+  companyResearchQuoteSchema,
+  quoteCompanyResearch,
+} from "@/lib/company-research/outcome-pricing";
 
 const decisions = new Set([
   "approved",
@@ -36,7 +38,7 @@ type RpcClient = {
 export async function continueV2CampaignResearchAction(input: {
   campaignExternalId: string;
   campaignRunId: string;
-  additionalCredits: number;
+  requestedCompanyCount: number;
 }) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) throw new Error("Authentication required");
@@ -50,49 +52,42 @@ export async function continueV2CampaignResearchAction(input: {
   if (campaignError || !campaign) throw new Error("Campaign not found.");
   const { data: run, error: runError } = await supabase
     .from("campaign_runs")
-    .select("id")
+    .select("id,requested_company_count,outcome_quote_json,outcome_settled_at")
     .eq("workspace_id", currentWorkspace.id)
     .eq("campaign_id", campaign.id)
     .eq("id", input.campaignRunId)
     .eq("workflow_version", "v2")
     .maybeSingle();
   if (runError || !run) throw new Error("V2 Campaign Run not found.");
-  const { data: workflow, error: workflowError } = await supabase
-    .from("campaign_workflow_runs_v2")
-    .select("status")
-    .eq("workspace_id", currentWorkspace.id)
-    .eq("campaign_run_id", run.id)
-    .maybeSingle();
-  if (workflowError || workflow?.status !== "ready_for_review") {
-    throw new Error(
-      "Research can continue only when the current cycle is ready for review.",
-    );
-  }
-  const additionalCredits = Math.min(
-    1_000_000,
-    Math.max(0.001, input.additionalCredits),
-  );
-  await authorizeAdditionalResearchCredits({
-    workspaceId: currentWorkspace.id,
-    campaignRunId: run.id,
-    additionalCredits,
+  if (
+    !run.outcome_settled_at &&
+    input.requestedCompanyCount !== run.requested_company_count
+  )
+    throw new Error("Wait for the current Company Research outcome to finish.");
+  if (input.requestedCompanyCount < run.requested_company_count)
+    throw new Error("Choose a company target greater than the current target.");
+  const previousQuote = companyResearchQuoteSchema.parse(run.outcome_quote_json);
+  const quote = quoteCompanyResearch({
+    requestedCompanyCount: input.requestedCompanyCount,
+    complexity: previousQuote.complexity,
   });
-  const reservation = await reserveCampaignResearchContinuation({
-    campaignRunId: run.id,
+  const revision = await increaseCompanyResearchTarget({
     workspaceId: currentWorkspace.id,
-    budget: DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS,
+    campaignRunId: run.id,
+    quote,
   });
   await dispatchCampaignV2Continuation({
     campaignRunId: run.id,
-    cycleNumber: reservation.cycleNumber,
-    requestedAction: reservation.requestedAction,
+    cycleNumber: revision.cycleNumber,
+    requestedAction: revision.requestedAction,
     workspaceId: currentWorkspace.id,
   });
   revalidatePath(`/campaigns/${input.campaignExternalId}`);
   revalidatePath(`/campaigns/${input.campaignExternalId}/leads`);
+  revalidatePath(`/campaigns/${input.campaignExternalId}/research`);
   return {
-    message: `Research cycle ${reservation.cycleNumber} queued with ${additionalCredits} additional credits authorized.`,
-    nextCycleNumber: reservation.cycleNumber,
+    message: `Finding up to ${revision.requestedCompanyCount} companies using the saved research. Incremental price: ${revision.incrementalAuthorizedCredits} credits.`,
+    nextCycleNumber: revision.cycleNumber,
   };
 }
 

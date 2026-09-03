@@ -7,6 +7,8 @@ import {
   dispatchCampaignRun,
   dispatchProviderExecution,
 } from "@/server/trigger/dispatch";
+import { authorizeCompanyResearchOutcome } from "@/server/credits/repository";
+import type { CompanyResearchQuote } from "@/lib/company-research/outcome-pricing";
 
 type CampaignRunRow = {
   candidates_classified: number;
@@ -32,7 +34,7 @@ async function createOperationalDatabaseClient() {
 export async function enqueueCampaignDiscoveryRun(input: {
   campaignId: string;
   desiredLeadCount: number;
-  researchCreditCap: number;
+  quote: CompanyResearchQuote;
   workspaceId: string;
 }): Promise<{ runId: string }> {
   const { supabase } = await createAuthenticatedDatabaseClient();
@@ -43,12 +45,11 @@ export async function enqueueCampaignDiscoveryRun(input: {
   });
   if (error) throw new Error(`Could not create Campaign Run: ${error.message}`);
   const campaignRun = data as { id: string };
-  const { error: budgetError } = await createServiceRoleClient()
-    .from("campaign_runs")
-    .update({ research_credit_cap: input.researchCreditCap })
-    .eq("workspace_id", input.workspaceId)
-    .eq("id", campaignRun.id);
-  if (budgetError) throw new Error(`Could not authorize research budget: ${budgetError.message}`);
+  await authorizeCompanyResearchOutcome({
+    workspaceId: input.workspaceId,
+    campaignRunId: campaignRun.id,
+    quote: input.quote,
+  });
   await dispatchCampaignRun({
     campaignRunId: campaignRun.id,
     workspaceId: input.workspaceId,
@@ -373,10 +374,7 @@ export async function getCampaignResearchProgress(input: {
   const projectedProgress = liveResearch
     ? Math.max(
         runRow.progress_percentage,
-        Math.min(
-          66,
-          50 + Math.round((liveResearch.completed / liveResearch.total) * 17),
-        ),
+        Math.min(66, 50 + Math.round((liveResearch.completed / liveResearch.total) * 17)),
       )
     : runRow.progress_percentage;
   const completedTasks = Math.max(0, Math.min(100, projectedProgress));
@@ -418,7 +416,9 @@ async function loadLiveCandidateResearchProgress(input: {
     .eq("campaign_run_id", input.campaignRunId)
     .maybeSingle();
   if (batchError)
-    throw new Error(`Could not load live Candidate Research batch: ${batchError.message}`);
+    throw new Error(
+      `Could not load live Candidate Research batch: ${batchError.message}`,
+    );
   if (!batch) return null;
   const { data: members, error: memberError } = await input.supabase
     .from("candidate_research_batch_members_v2")
@@ -499,7 +499,9 @@ async function getNativeCompanyProfileProgress(
   const completedStageCount = latestStages.filter(
     ({ status }) => status === "completed",
   ).length;
-  const failedStageCount = latestStages.filter(({ status }) => status === "failed").length;
+  const failedStageCount = latestStages.filter(
+    ({ status }) => status === "failed",
+  ).length;
   const failedTask = [...latestStages]
     .reverse()
     .find(({ status }) => status === "failed");

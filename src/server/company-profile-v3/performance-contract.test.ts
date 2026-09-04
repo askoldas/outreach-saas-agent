@@ -17,7 +17,8 @@ test("profile crawl is selective, bounded, cached by content and version, and fo
   assert.match(migration, /unique\(workspace_id,url,content_hash,extractor_version\)/);
 });
 
-test("buyer logic uses one bounded cross-offering synthesis call", () => {
+test("active Company Intelligence uses one whole-company synthesis call", () => {
   assert.doesNotMatch(stage, /buyerLogicShardContexts|shards\.map/);
+  assert.match(stage, /profileV3StageIds = \["profile\.whole_company_analysis"\]/);
   assert.match(stage, /return generateSingleValidatedProfileStageOutput\(input\)/);
 });

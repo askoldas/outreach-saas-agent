@@ -26,15 +26,17 @@ test("V2 campaign creation is geography-first and captures an explicit objective
   assert.match(form, /NativeOfferingSuggestionCard/);
 });
 
-test("target generation happens only after objective and one offering are selected", () => {
+test("campaign creation reuses Company Intelligence targets after objective and offering selection", () => {
   const geographyStep = form.indexOf("Where do you want to find companies");
   const objectiveStep = form.indexOf(
     "Choose the commercial objective and primary offering",
   );
-  const generation = form.lastIndexOf("Generate target organizations");
-  assert.ok(geographyStep < objectiveStep && objectiveStep < generation);
-  assert.match(form, /objective: campaignObjective/);
-  assert.match(form, /selectedOfferingKey: selectedOfferingId/);
+  const reuse = form.lastIndexOf("Use Company Intelligence targets");
+  assert.ok(geographyStep < objectiveStep && objectiveStep < reuse);
+  assert.match(form, /useCompanyIntelligenceTargets/);
+  assert.match(form, /offering\.archetypes/);
+  assert.doesNotMatch(form, /proposeCampaignBriefAction/);
+  assert.doesNotMatch(form, /Generate target organizations/);
   assert.match(form, /setProposal\(null\)/);
 });
 
@@ -42,14 +44,14 @@ test("incompatible generated relationships cannot reach Strategy creation", () =
   assert.match(proposalTask, /isObjectiveRelationshipCompatible/);
   assert.match(proposalTask, /Generate the target organizations again/);
   assert.match(form, /incompatibleSelectedRelationship/);
-  assert.match(form, /Generate target organizations again/);
+  assert.match(form, /Select a compatible Company Intelligence target/);
 });
 
 test("low-discoverability targets require refinement before confirmation", () => {
   assert.match(form, /assessCampaignTargetDiscoverability/);
   assert.match(form, /segment\.discoverability !== "low"/);
   assert.match(form, /Some targets need refinement/);
-  assert.match(form, /Generate another suggestion/);
+  assert.match(form, /organization type and useful discovery signals below/);
   assert.match(form, /disabled=\{segment\.discoverability === "low"\}/);
   assert.match(targetCards, /Refine target before including/);
   assert.match(targetCards, /discoverability/);

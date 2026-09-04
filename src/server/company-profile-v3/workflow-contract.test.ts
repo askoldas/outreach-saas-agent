@@ -14,7 +14,7 @@ const sourceService = readFileSync(
 );
 const repository = readFileSync("src/server/company-profile-v3/repository.ts", "utf8");
 
-test("V3 profile orchestration uses one retryable Trigger run with durable sequential stages", () => {
+test("V3 profile orchestration uses one retryable Trigger run with one whole-company stage", () => {
   assert.match(parent, /id: "create-company-intelligence-v3"/);
   assert.match(parent, /profileV3StageIds/);
   assert.match(parent, /executeProfileV3Stage/);
@@ -24,6 +24,7 @@ test("V3 profile orchestration uses one retryable Trigger run with durable seque
   assert.match(parent, /onFailure/);
   assert.match(parent, /failProfileV3Draft/);
   assert.match(parent, /linkProfileV3TriggerRun/);
+  assert.match(service, /profileV3StageIds = \["profile\.whole_company_analysis"\]/);
 });
 
 test("stage execution freezes versions, reuses completed outputs, and audits AI", () => {
@@ -49,7 +50,11 @@ test("stage execution freezes versions, reuses completed outputs, and audits AI"
   assert.match(service, /compile_company_profile_v3_draft/);
 });
 
-test("every profile stage enforces its complete ordered dependency chain", () => {
+test("whole-company analysis has no predecessor chain", () => {
+  assert.deepEqual(profileV3StageDependencies["profile.whole_company_analysis"], []);
+});
+
+test("legacy profile stages retain dependency validation for resumable old drafts", () => {
   assert.deepEqual(profileV3StageDependencies["profile.consistency_audit"], [
     "profile.fact_extraction",
     "profile.commercial_synthesis",

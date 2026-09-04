@@ -1,6 +1,7 @@
 export type ProfileV3DraftState = "ready_for_review" | "needs_input";
 
 export const profileV3StageDependencies: Record<string, readonly string[]> = {
+  "profile.whole_company_analysis": [],
   "profile.fact_extraction": [],
   "profile.commercial_synthesis": ["profile.fact_extraction"],
   "profile.offering_decomposition": [

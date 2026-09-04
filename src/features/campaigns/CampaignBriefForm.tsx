@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState } from "react";
 import {
   createCampaignAction,
-  proposeCampaignBriefAction,
 } from "@/server/campaigns/actions";
 import type {
   CampaignBriefProposal,
@@ -83,8 +82,6 @@ const regions = [
   { label: "Worldwide", codes: ["WORLDWIDE"] },
 ] as const;
 
-type ProposalResult = Awaited<ReturnType<typeof proposeCampaignBriefAction>>;
-
 export function CampaignBriefForm({
   error,
   profile,
@@ -97,7 +94,6 @@ export function CampaignBriefForm({
   const [countryInput, setCountryInput] = useState("");
   const [regionLabel, setRegionLabel] = useState("");
   const [countryCodes, setCountryCodes] = useState<string[]>([]);
-  const [result, setResult] = useState<ProposalResult | null>(null);
   const [proposal, setProposal] = useState<CampaignBriefProposal | null>(null);
   const [selectedOfferingId, setSelectedOfferingId] = useState(
     profile.offerings[0]?.stableKey ?? "",
@@ -121,7 +117,6 @@ export function CampaignBriefForm({
   const [requestedCompanyCount, setRequestedCompanyCount] = useState(
     DEFAULT_REQUESTED_COMPANY_COUNT,
   );
-  const [pending, startTransition] = useTransition();
 
   const geographyLabel = regionLabel || countryCodes.join(", ");
   const researchQuote = quoteCompanyResearch({
@@ -188,7 +183,7 @@ export function CampaignBriefForm({
         : selectedLowDiscoverabilityTarget
           ? `“${selectedLowDiscoverabilityTarget.name}” is too broad or lacks enough searchable signals. Refine the target before continuing.`
           : incompatibleSelectedRelationship
-            ? `The selected ${incompatibleSelectedRelationship.replaceAll("_", " ")} target is incompatible with the ${campaignObjective.replaceAll("_", " ")} objective. Generate target organizations again.`
+            ? `The selected ${incompatibleSelectedRelationship.replaceAll("_", " ")} target is incompatible with the ${campaignObjective.replaceAll("_", " ")} objective. Select a compatible Company Intelligence target.`
             : proposal?.ambiguity?.requiresClarification && !clarificationAnswer.trim()
               ? "Answer the clarification above to continue."
               : "";
@@ -249,7 +244,6 @@ export function CampaignBriefForm({
     setRegionLabel(label);
     setCountryCodes([...codes]);
     setCountryInput("");
-    setResult(null);
     setProposal(null);
   }
 
@@ -257,37 +251,10 @@ export function CampaignBriefForm({
     const codes = split(countryInput).map((item) => item.toUpperCase());
     setRegionLabel(codes.join(", "));
     setCountryCodes(codes);
-    setResult(null);
     setProposal(null);
   }
 
-  function generateProposal() {
-    startTransition(async () => {
-      setProposalError("");
-      try {
-        const next = await proposeCampaignBriefAction({
-          countryCodes,
-          regionLabel,
-          objective: campaignObjective,
-          selectedOfferingKey: selectedOfferingId,
-        });
-        setResult(next);
-        applyProposal(next.proposal);
-        setName(
-          `${next.proposal.offering.title} — ${regionLabel || countryCodes.join(", ")}`,
-        );
-        setStep(3);
-      } catch (cause) {
-        setProposalError(
-          cause instanceof Error
-            ? cause.message
-            : "Could not prepare the campaign brief.",
-        );
-      }
-    });
-  }
-
-  function startWithProfileDefaults() {
+  function useCompanyIntelligenceTargets() {
     const offerings = profile.offerings;
     const selected = offerings.find(
       (offering) => offering.stableKey === selectedOfferingId,
@@ -310,7 +277,6 @@ export function CampaignBriefForm({
       promptVersion: "campaign-brief-proposal-v4-objective-first",
       inputHash: "server-verified-on-confirmation",
     };
-    setResult(null);
     applyProposal(next);
     setName(`${next.offering.title} — ${geographyLabel}`);
     setStep(3);
@@ -342,7 +308,6 @@ export function CampaignBriefForm({
 
   function selectOffering(offeringId: string) {
     setSelectedOfferingId(offeringId);
-    setResult(null);
     setProposal(null);
   }
 
@@ -446,7 +411,7 @@ export function CampaignBriefForm({
             <Button
               type="button"
               variant="primary"
-              disabled={pending || !countryCodes.length}
+              disabled={!countryCodes.length}
               onClick={() => setStep(2)}
             >
               Continue
@@ -471,7 +436,6 @@ export function CampaignBriefForm({
               value={campaignObjective}
               onChange={(event) => {
                 setCampaignObjective(event.target.value);
-                setResult(null);
                 setProposal(null);
               }}
             >
@@ -518,18 +482,10 @@ export function CampaignBriefForm({
             <Button
               type="button"
               variant="ghost"
-              disabled={pending || !selectedOfferingId}
-              onClick={startWithProfileDefaults}
+              disabled={!selectedOfferingId}
+              onClick={useCompanyIntelligenceTargets}
             >
-              Adapt Company Profile targets
-            </Button>
-            <Button
-              type="button"
-              variant="primary"
-              disabled={pending || !selectedOfferingId}
-              onClick={generateProposal}
-            >
-              Generate target organizations
+              Use Company Intelligence targets
             </Button>
           </div>
         </section>
@@ -549,17 +505,8 @@ export function CampaignBriefForm({
               <strong>Some targets need refinement</strong>
               <p>
                 Low-discoverability targets are not selected automatically. Add a concrete
-                organization type and useful discovery signals below, or generate another
-                suggestion.
+                organization type and useful discovery signals below.
               </p>
-              <Button
-                type="button"
-                variant="ghost"
-                disabled={pending}
-                onClick={generateProposal}
-              >
-                Generate another suggestion
-              </Button>
             </div>
           ) : null}
           <div className={styles.options}>
@@ -831,22 +778,22 @@ export function CampaignBriefForm({
             <input
               type="hidden"
               name="proposalPromptVersion"
-              value={result?.promptVersion ?? "company-profile-defaults-v1"}
+              value="company-profile-targets-v2"
             />
             <input
               type="hidden"
               name="proposalRequestedModel"
-              value={result?.requestedModel ?? ""}
+              value=""
             />
             <input
               type="hidden"
               name="proposalActualModel"
-              value={result?.actualModel ?? ""}
+              value=""
             />
             <input
               type="hidden"
               name="proposalFallbackUsed"
-              value={String(result?.fallbackUsed ?? false)}
+              value="false"
             />
             <div className={styles.navigation}>
               <Button type="button" variant="ghost" onClick={() => setStep(3)}>

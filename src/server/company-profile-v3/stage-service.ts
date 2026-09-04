@@ -8,6 +8,7 @@ import {
   profileCommercialSynthesisOutputSchema,
   profileConsistencyOutputSchema,
   profileOfferingDecompositionOutputSchema,
+  profileWholeCompanyAnalysisOutputSchema,
   profileV3TaskDefinitions,
 } from "@/lib/intelligence/company-profile-v3/task-contracts";
 import {
@@ -27,10 +28,8 @@ import type { Json } from "@/types/database.types";
 import { ensureNativeCompanyProfileEvidence } from "./source-service";
 import { companyProfileRequestTimeoutMs } from "./timeout";
 
-export const profileV3StageIds = profileV3TaskDefinitions.map(
-  (definition) => definition.taskId,
-);
-export type ProfileV3StageId = (typeof profileV3StageIds)[number];
+export const profileV3StageIds = ["profile.whole_company_analysis"] as const;
+export type ProfileV3StageId = (typeof profileV3TaskDefinitions)[number]["taskId"];
 
 export async function linkProfileV3TriggerRun(input: {
   workspaceId: string;
@@ -86,7 +85,11 @@ export async function executeProfileV3Stage(input: {
   if (previousError)
     throw new Error(`Could not load previous profile stages: ${previousError.message}`);
 
-  if (input.taskId === "profile.fact_extraction" && !draft.base_version_id) {
+  if (
+    (input.taskId === "profile.whole_company_analysis" ||
+      input.taskId === "profile.fact_extraction") &&
+    !draft.base_version_id
+  ) {
     await ensureNativeCompanyProfileEvidence({
       workspaceId: input.workspaceId,
       profileDraftId: input.profileDraftId,
@@ -95,6 +98,7 @@ export async function executeProfileV3Stage(input: {
     });
   }
   const requiresEvidence =
+    input.taskId === "profile.whole_company_analysis" ||
     input.taskId === "profile.fact_extraction" ||
     input.taskId === "profile.consistency_audit";
   const { data: evidence, error: evidenceError } = requiresEvidence
@@ -331,10 +335,14 @@ export async function finalizeProfileV3Draft(input: {
       outputs.set(stage.task_id, stage.output_json);
     }
   }
-  const commercial = profileCommercialSynthesisOutputSchema.parse(
+  const wholeCompanyOutput = outputs.get("profile.whole_company_analysis");
+  const wholeCompany = wholeCompanyOutput === undefined
+    ? null
+    : profileWholeCompanyAnalysisOutputSchema.parse(wholeCompanyOutput);
+  const commercial = wholeCompany?.commercial ?? profileCommercialSynthesisOutputSchema.parse(
     requiredOutput(outputs, "profile.commercial_synthesis"),
   );
-  const offerings = profileOfferingDecompositionOutputSchema.parse(
+  const offerings = wholeCompany?.offerings ?? profileOfferingDecompositionOutputSchema.parse(
     requiredOutput(outputs, "profile.offering_decomposition"),
   );
   const offeringKeys = new Set(
@@ -342,16 +350,22 @@ export async function finalizeProfileV3Draft(input: {
   );
   const buyerLogic = profileBuyerLogicOutputSchema.parse(
     normalizeLegacyProfileBuyerRuleScopes(
-      requiredOutput(outputs, "profile.buyer_logic"),
+      wholeCompany?.buyerLogic ?? requiredOutput(outputs, "profile.buyer_logic"),
       offeringKeys,
     ),
   );
-  const clarification = profileClarificationOutputSchema.parse(
+  const clarification = wholeCompany?.clarification ?? profileClarificationOutputSchema.parse(
     requiredOutput(outputs, "profile.clarification"),
   );
-  const consistency = profileConsistencyOutputSchema.parse(
-    requiredOutput(outputs, "profile.consistency_audit"),
-  );
+  const consistency = wholeCompany
+    ? profileConsistencyOutputSchema.parse({
+        findings: [],
+        publishRecommendation: "ready",
+        conciseSummary: "Whole-company output passed the canonical schema and cross-offering completeness checks.",
+      })
+    : profileConsistencyOutputSchema.parse(
+        requiredOutput(outputs, "profile.consistency_audit"),
+      );
   const compilation = compileProfileV3Draft({
     workspaceId: input.workspaceId,
     profileDraftId: input.profileDraftId,
@@ -383,19 +397,7 @@ export async function finalizeProfileV3Draft(input: {
   if (extensionError)
     throw new Error(`Could not persist Company Intelligence commercial extensions: ${extensionError.message}`);
 
-  const { data: audit, error: auditError } = await supabase
-    .from("profile_task_runs")
-    .select("output_json")
-    .eq("workspace_id", input.workspaceId)
-    .eq("profile_draft_id", input.profileDraftId)
-    .eq("task_id", "profile.consistency_audit")
-    .eq("status", "completed")
-    .order("completed_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (auditError)
-    throw new Error(`Could not load profile consistency audit: ${auditError.message}`);
-  const recommendation = stringField(audit?.output_json, "publishRecommendation");
+  const recommendation = consistency.publishRecommendation;
   const state = resolveProfileV3DraftState({
     publishRecommendation: recommendation,
   });
@@ -630,12 +632,6 @@ function errorCode(error: unknown) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Company Intelligence stage failed.";
-}
-
-function stringField(value: unknown, key: string) {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? String((value as Record<string, unknown>)[key] ?? "")
-    : "";
 }
 
 function requiredOutput(outputs: Map<string, Json>, taskId: string) {

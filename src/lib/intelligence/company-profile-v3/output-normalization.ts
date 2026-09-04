@@ -4,6 +4,12 @@ export function normalizeProfileStageProviderOutput(taskId: string, raw: string)
   const parsed = parseCompleteJsonObject(raw);
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return raw;
   const output = structuredClone(parsed) as Record<string, unknown>;
+  if (taskId === "profile.whole_company_analysis") {
+    const buyerLogic = objectValue(output.buyerLogic);
+    normalizeBuyerLogic(buyerLogic);
+    output.buyerLogic = buyerLogic;
+    return JSON.stringify(output);
+  }
   if (taskId === "profile.buyer_logic") {
     normalizeBuyerLogic(output);
     return JSON.stringify(output);

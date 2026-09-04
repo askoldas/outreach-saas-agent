@@ -9,7 +9,7 @@ import {
   profileV3TaskDefinitions,
 } from "./task-contracts.ts";
 
-test("all V3 profile model stages register as independent versioned tasks", () => {
+test("whole-company analysis registers alongside legacy-readable contracts", () => {
   const tasks = new IntelligenceTaskRegistry();
   const schemas = new IntelligenceSchemaRegistry();
   for (const definition of profileV3TaskDefinitions) {
@@ -24,6 +24,7 @@ test("all V3 profile model stages register as independent versioned tasks", () =
   assert.deepEqual(
     profileV3TaskDefinitions.map((definition) => definition.taskId),
     [
+      "profile.whole_company_analysis",
       "profile.fact_extraction",
       "profile.commercial_synthesis",
       "profile.offering_decomposition",

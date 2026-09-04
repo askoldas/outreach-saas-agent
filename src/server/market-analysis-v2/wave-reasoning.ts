@@ -36,11 +36,7 @@ export async function reasonAboutWaveOne(input: {
       maxCompletionTokens: 1_500,
       reasoningEffort: "minimal",
       taskName: "market Wave-1 reasoning",
-      jsonSchema: {
-        name: "market_wave_one_summary",
-        schema: z.toJSONSchema(marketResearchWaveSummarySchema) as Record<string, unknown>,
-        strict: true,
-      },
+      jsonMode: true,
     }),
   });
   const parsed = parseCompleteJsonObject(call.data);

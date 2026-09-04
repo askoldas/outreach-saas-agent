@@ -329,10 +329,16 @@ function readErrorMessage(rawBody: string) {
   if (!rawBody) return "";
   try {
     const value = JSON.parse(rawBody) as {
-      error?: { message?: string };
+      error?: { message?: string; metadata?: { raw?: string; provider_name?: string } };
       message?: string;
     };
-    return value.error?.message ?? value.message ?? "";
+    const base = value.error?.message ?? value.message ?? "";
+    const upstream = value.error?.metadata?.raw?.trim();
+    const provider = value.error?.metadata?.provider_name?.trim();
+    return [base, provider ? `Provider: ${provider}.` : "", upstream]
+      .filter(Boolean)
+      .join(" ")
+      .slice(0, 1_500);
   } catch {
     return rawBody.slice(0, 500);
   }

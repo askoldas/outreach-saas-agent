@@ -51,6 +51,7 @@ export const discoveryCoverageCellSchema = discoveryCoverageMetricsSchema
     uniqueYieldPerCall: z.number().nonnegative(),
     plausibleYieldPerCall: z.number().nonnegative(),
     sourceDiversityCount: z.number().int().nonnegative(),
+    targetUniqueCandidates: z.number().int().positive().optional(),
     confidence: z.number().min(0).max(1),
     status: z.enum([
       "not_started",
@@ -168,6 +169,9 @@ export function calculateDiscoveryCoverage(
     uniqueYieldPerCall,
     plausibleYieldPerCall,
     sourceDiversityCount,
+    ...(metrics.targetUniqueCandidates === undefined
+      ? {}
+      : { targetUniqueCandidates: metrics.targetUniqueCandidates }),
     languagesAttempted: [...new Set(metrics.languagesAttempted)].sort(),
     confidence,
     status,

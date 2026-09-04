@@ -40,11 +40,19 @@ initialize
   -> ready for review
 ```
 
-Initialization only freezes the run identity. Market-context enrichment is dispatched
-as a separate idempotent task and never blocks semantic discovery. Discovery uses the
-run-tied Market Research Plan when it is already available, or freezes a Strategy-first
-provider plan otherwise. This is not a standalone Market Analysis stage or user
-approval gate.
+Initialization freezes the run identity and then waits for the idempotent market
+opportunity bootstrap before semantic discovery. The bootstrap compiles commercial
+intelligence, initial opportunity hypotheses, a run-scoped Market Opportunity Map,
+provider capability snapshot, and Market Research Plan. The map can retain, downgrade,
+or reject initial hypotheses and add market-research lanes without changing the frozen
+commercial objective. Discovery therefore consumes the run-tied plan and
+cannot race ahead with a Strategy-only fallback. This execution guidance is not a
+second user approval gate.
+
+Before the map is synthesized, bounded external market reconnaissance retrieves a
+run-scoped evidence corpus through the metered Tavily boundary. This corpus is persisted
+separately from candidate-discovery provider records, cached by frozen Target Model
+content, and passed to the model as untrusted evidence with explicit evidence IDs.
 
 Concrete operations are checkpointed and idempotent. The runner checks durable pause,
 resume, cancellation, saturation, campaign authorization, and workspace balance around

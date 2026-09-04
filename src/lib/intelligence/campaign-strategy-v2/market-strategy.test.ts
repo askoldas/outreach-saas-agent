@@ -26,6 +26,21 @@ test("unsupported market statements remain hypotheses", () => {
   assert.equal(normalized.procurementPatterns[0]?.epistemicStatus, "hypothesis");
 });
 
+test("unsupported priority opportunity lanes are downgraded before validation", () => {
+  const normalized = normalizeUntrustedMarketClaims({
+    opportunityLanes: [
+      {
+        laneKey: "event-venues",
+        label: "Event venues",
+        disposition: "priority",
+        evidenceIds: [],
+      },
+    ],
+  }) as { opportunityLanes: Array<{ disposition: string }> };
+
+  assert.equal(normalized.opportunityLanes[0]?.disposition, "exploratory");
+});
+
 test("advisory delta accepts only bounded allowlisted operations", () => {
   const parsed = campaignStrategyAdvisoryDeltaOutputSchema.parse({
     summary: "A narrow terminology refinement.",
@@ -56,12 +71,14 @@ test("advisory delta rejects replacement policies, arbitrary operations, and uns
     },
     {
       summary: "Excessive adjustment",
-      operations: [{
-        operation: "adjust_factor_weight",
-        factorKey: "offering-need",
-        delta: 50,
-        rationale: "Replace the deterministic policy.",
-      }],
+      operations: [
+        {
+          operation: "adjust_factor_weight",
+          factorKey: "offering-need",
+          delta: 50,
+          rationale: "Replace the deterministic policy.",
+        },
+      ],
       omittedObservationCount: 0,
     },
     {
@@ -75,7 +92,10 @@ test("advisory delta rejects replacement policies, arbitrary operations, and uns
       omittedObservationCount: 0,
     },
   ]) {
-    assert.equal(campaignStrategyAdvisoryDeltaOutputSchema.safeParse(candidate).success, false);
+    assert.equal(
+      campaignStrategyAdvisoryDeltaOutputSchema.safeParse(candidate).success,
+      false,
+    );
   }
 });
 
@@ -83,13 +103,15 @@ test("invalid evidenced market context cannot enter the advisory stage", () => {
   const result = campaignMarketContextOutputSchema.safeParse({
     summary: "Synthetic market context.",
     marketBreadth: "medium",
-    marketStructures: [{
-      structureKey: "channel",
-      label: "Channel structure",
-      relevance: "Distributors dominate.",
-      epistemicStatus: "evidence_backed_inference",
-      evidenceIds: [],
-    }],
+    marketStructures: [
+      {
+        structureKey: "channel",
+        label: "Channel structure",
+        relevance: "Distributors dominate.",
+        epistemicStatus: "evidence_backed_inference",
+        evidenceIds: [],
+      },
+    ],
     localTerminology: [],
     procurementPatterns: [],
     likelySourceTypes: [],
@@ -104,14 +126,17 @@ test("market structures accept and require rationales consistently with shared c
   const base = {
     summary: "Synthetic market context.",
     marketBreadth: "medium" as const,
-    marketStructures: [{
-      structureKey: "channel",
-      label: "Channel structure",
-      relevance: "Distributors dominate the route to market.",
-      epistemicStatus: "evidence_backed_inference" as const,
-      evidenceIds: ["evidence-1"],
-      conciseRationale: "The cited source identifies distributors as the primary channel.",
-    }],
+    marketStructures: [
+      {
+        structureKey: "channel",
+        label: "Channel structure",
+        relevance: "Distributors dominate the route to market.",
+        epistemicStatus: "evidence_backed_inference" as const,
+        evidenceIds: ["evidence-1"],
+        conciseRationale:
+          "The cited source identifies distributors as the primary channel.",
+      },
+    ],
     localTerminology: [],
     procurementPatterns: [],
     likelySourceTypes: [],
@@ -123,19 +148,24 @@ test("market structures accept and require rationales consistently with shared c
   assert.equal(campaignMarketContextOutputSchema.safeParse(base).success, true);
   const { conciseRationale, ...withoutRationale } = base.marketStructures[0]!;
   assert.equal(typeof conciseRationale, "string");
-  assert.equal(campaignMarketContextOutputSchema.safeParse({
-    ...base,
-    marketStructures: [withoutRationale],
-  }).success, false);
+  assert.equal(
+    campaignMarketContextOutputSchema.safeParse({
+      ...base,
+      marketStructures: [withoutRationale],
+    }).success,
+    false,
+  );
 });
 
 test("market normalization derives a rationale from structure relevance", () => {
   const normalized = normalizeUntrustedMarketClaims({
-    marketStructures: [{
-      relevance: "Distributor evidence supports this channel inference.",
-      epistemicStatus: "evidence_backed_inference",
-      evidenceIds: ["evidence-1"],
-    }],
+    marketStructures: [
+      {
+        relevance: "Distributor evidence supports this channel inference.",
+        epistemicStatus: "evidence_backed_inference",
+        evidenceIds: ["evidence-1"],
+      },
+    ],
   }) as { marketStructures: Array<{ conciseRationale?: string }> };
   assert.equal(
     normalized.marketStructures[0]?.conciseRationale,
@@ -167,8 +197,5 @@ test("model context budgets are deterministic and report omitted input", () => {
   assert.deepEqual(first, second);
   assert.equal(first.budget.omittedArrayItems, 8);
   assert.equal(first.budget.truncatedTextCharacters, 300);
-  assert.equal(
-    ((first.input as { oversized: string[] }).oversized).length,
-    12,
-  );
+  assert.equal((first.input as { oversized: string[] }).oversized.length, 12);
 });

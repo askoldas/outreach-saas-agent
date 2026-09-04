@@ -50,6 +50,14 @@ test("rank snapshots retain overall and within-lane positions", () => {
   );
 });
 
+test("opportunity timing breaks equal fit and potential before confidence", () => {
+  const ranked = rankCandidates([
+    candidate({ campaignCandidateId: "easy", freshness: 0, confidence: 99 }),
+    candidate({ campaignCandidateId: "expanding", freshness: 85, confidence: 70 }),
+  ]);
+  assert.equal(ranked[0]?.campaignCandidateId, "expanding");
+});
+
 test("deterministic checks block impossible recommendations", () => {
   const anomalies = detectConsistencyAnomalies(
     [

@@ -19,6 +19,7 @@ import {
   calculateConfidence,
   calculateFit,
   calculatePotential,
+  calculateOpportunityTiming,
   compileHardExclusions,
   suppressFitWhenEvidenceIsInsufficient,
   decideEligibility,
@@ -78,6 +79,11 @@ export async function executeQualificationMember(input: {
   const exclusions = compileExclusions(member);
   const fit = calculateFit(factors, factorResult.evaluations);
   const potential = calculatePotential(factors, factorResult.evaluations);
+  const opportunityTiming = calculateOpportunityTiming({
+    definitions: factors,
+    evaluations: factorResult.evaluations,
+    evidence: member.evidence,
+  });
   const confidence = calculateConfidence({
     definitions: factors,
     evaluations: factorResult.evaluations,
@@ -160,6 +166,7 @@ export async function executeQualificationMember(input: {
     factorEvaluations: factorResult.evaluations,
     fit: reportableFit,
     commercialPotential: potential,
+    opportunityTiming,
     confidence,
     eligibility,
     lane,
@@ -375,13 +382,19 @@ async function executeQualificationAiTask<TRequest, TOutput>(input: {
         campaignRunId: input.member.campaignRunId,
         operation: "company_research_qualification",
         idempotencyKey: `company-qualification:${input.member.memberId}:${input.requestHash}`,
-        execute: () => generateTextResult(transportRequest.messages, {
-          role: "company_qualification",
-          maxCompletionTokens: transportRequest.maxCompletionTokens,
-          reasoningEffort: transportRequest.reasoningClass === "standard" ? "medium" : transportRequest.reasoningClass,
-          taskName: input.definition.title,
-          ...(transportRequest.output.mode === "json_schema" ? { jsonSchema: transportRequest.output } : { jsonMode: true }),
-        }),
+        execute: () =>
+          generateTextResult(transportRequest.messages, {
+            role: "company_qualification",
+            maxCompletionTokens: transportRequest.maxCompletionTokens,
+            reasoningEffort:
+              transportRequest.reasoningClass === "standard"
+                ? "medium"
+                : transportRequest.reasoningClass,
+            taskName: input.definition.title,
+            ...(transportRequest.output.mode === "json_schema"
+              ? { jsonSchema: transportRequest.output }
+              : { jsonMode: true }),
+          }),
       });
       return {
         output: call.data,

@@ -9,6 +9,7 @@ import {
   unknownSchema,
 } from "./shared.ts";
 import { intelligenceArtifactVersionSchema } from "./versioning.ts";
+import { commercialRelationshipTypeSchema } from "./commercial-intelligence.ts";
 
 export const marketSourceFamilySchema = z.enum([
   "local_business",
@@ -28,6 +29,27 @@ export const marketSourceFamilySchema = z.enum([
   "other",
 ]);
 
+export const marketOpportunityLaneSchema = z
+  .object({
+    id: referenceIdSchema,
+    sourceArchetypeId: referenceIdSchema.optional(),
+    label: z.string().min(1).max(200),
+    organizationType: z.string().min(1).max(300),
+    businessModels: z.array(z.string().min(1).max(240)).default([]),
+    industries: z.array(z.string().min(1).max(240)).default([]),
+    origin: z.enum(["initial_target", "market_research"]),
+    disposition: z.enum(["priority", "secondary", "exploratory", "weak", "rejected"]),
+    rationale: z.string().min(1).max(800),
+    relationships: z.array(commercialRelationshipTypeSchema).min(1),
+    evidenceIds: z.array(referenceIdSchema).max(30).default([]),
+    counterEvidenceIds: z.array(referenceIdSchema).max(30).default([]),
+    scaleDrivers: z.array(z.string().min(1).max(400)).default([]),
+    buyingTriggers: z.array(z.string().min(1).max(400)).default([]),
+    vocabulary: z.array(z.string().min(1).max(160)).default([]),
+    confidence: confidenceSchema,
+  })
+  .strict();
+
 export const marketAnalysisSchema = z
   .object({
     id: referenceIdSchema,
@@ -37,6 +59,16 @@ export const marketAnalysisSchema = z
     commercialIntelligenceVersionId: referenceIdSchema,
     geography: geographyScopeSchema,
     selectedOfferingIds: z.array(referenceIdSchema).min(1),
+    marketBreadth: z
+      .enum(["very_narrow", "narrow", "medium", "broad", "very_broad"])
+      .default("medium"),
+    estimatedCandidateRange: z
+      .object({
+        min: z.number().int().nonnegative().optional(),
+        max: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
     marketSummary: z.string().min(1).max(2400),
     targetArchetypes: z
       .array(
@@ -49,6 +81,9 @@ export const marketAnalysisSchema = z
           .strict(),
       )
       .min(1),
+    // Default keeps historical immutable v1 Market Analysis documents readable.
+    // New compiler versions always emit at least one lane.
+    opportunityLanes: z.array(marketOpportunityLaneSchema).default([]),
     marketStructure: z.array(intelligenceClaimSchema).default([]),
     localTerminology: z
       .array(
@@ -93,7 +128,8 @@ export const marketAnalysisSchema = z
 export const discoveryRouteSchema = z
   .object({
     id: referenceIdSchema,
-    archetypeIds: z.array(referenceIdSchema).min(1),
+    archetypeIds: z.array(referenceIdSchema).default([]),
+    opportunityLaneIds: z.array(referenceIdSchema).default([]),
     providerCapabilitySnapshotIds: z.array(referenceIdSchema).min(1),
     sourceFamily: marketSourceFamilySchema,
     providerSourceTypes: z.array(providerSourceTypeSchema).min(1),
@@ -106,7 +142,16 @@ export const discoveryRouteSchema = z
     expansionMode: z.enum(["none", "bounded", "resumable"]),
     expectedCoverage: z.enum(["low", "medium", "high", "unknown"]),
   })
-  .strict();
+  .strict()
+  .superRefine((route, context) => {
+    if (!route.archetypeIds.length && !route.opportunityLaneIds.length) {
+      context.addIssue({
+        code: "custom",
+        path: ["opportunityLaneIds"],
+        message: "A discovery route requires an opportunity lane or legacy archetype.",
+      });
+    }
+  });
 
 export const marketResearchPlanSchema = z
   .object({
@@ -116,6 +161,17 @@ export const marketResearchPlanSchema = z
     marketAnalysisVersionId: referenceIdSchema,
     campaignTargetModelVersionId: referenceIdSchema,
     providerCapabilitySnapshotIds: z.array(referenceIdSchema).default([]),
+    marketBreadth: z
+      .enum(["very_narrow", "narrow", "medium", "broad", "very_broad"])
+      .default("medium"),
+    estimatedCandidateRange: z
+      .object({
+        min: z.number().int().nonnegative().optional(),
+        max: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
+    opportunityLanes: z.array(marketOpportunityLaneSchema).default([]),
     discoveryRoutes: z.array(discoveryRouteSchema).min(1),
     verificationRoutes: z.array(discoveryRouteSchema).default([]),
     expectedCoverageRisks: z.array(unknownSchema).default([]),

@@ -8,6 +8,7 @@ export * from "./gaps";
 export * from "./planning";
 export * from "./market-research-plan-adapter";
 export * from "./progress";
+export * from "./reservoir";
 export * from "./stopping";
 export * from "./providers/web-query-generator";
 export * from "./providers/web-normalization";

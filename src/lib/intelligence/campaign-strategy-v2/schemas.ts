@@ -331,6 +331,7 @@ export const discoverySegmentRequestV2Schema = z
     id: z.string().min(1),
     strategyVersionId: z.string().min(1),
     archetypeId: z.string().min(1),
+    opportunityLaneId: z.string().min(1).optional(),
     label: z.string().min(1),
     rationale: z.string().min(1),
     geography: campaignGeographyV2Schema,

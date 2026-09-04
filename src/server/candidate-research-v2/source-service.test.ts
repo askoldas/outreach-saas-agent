@@ -83,6 +83,44 @@ test("first-party fetching stops once required questions have strong page covera
   assert.deepEqual(fetched, ["https://example.com/products"]);
 });
 
+test("supporting searches persist bounded off-domain timing evidence", async () => {
+  const researchMember = member([question("opportunity_timing", "freshness")], ["news"]);
+  researchMember.canonicalDomain = "example.com";
+  researchMember.sourcePlan.maximumSupportingSources = 1;
+  researchMember.sourcePlan.supportingQueries = ['"Example" expansion OR renovation'];
+  const persisted: CandidateResearchSource[] = [];
+  const result = await collectCandidateResearchSources(researchMember, {
+    searchSupportingSources: async () => ({
+      results: [
+        page(
+          "https://trusted-news.test/example-expands",
+          "Example announced a dated expansion and a new operating site. ".repeat(4),
+        ),
+        page(
+          "https://another-news.test/example-renovates",
+          "Example announced a renovation. ".repeat(5),
+        ),
+      ],
+      providerKey: "test-search",
+      providerRequestId: "request-1",
+    }),
+    discoverPages: async () => [],
+    extractPages: async () => [],
+    persistSupportingSource: async (input) => {
+      const source = {
+        ...persistedSource(input.sourceUrl, input.pageKind, input.content),
+        sourceKind: "supporting_search" as const,
+      };
+      persisted.push(source);
+      return source;
+    },
+  });
+  assert.equal(persisted.length, 1);
+  assert.equal(persisted[0]?.sourceKind, "supporting_search");
+  assert.equal(persisted[0]?.pageKind, "news");
+  assert.ok(result.sources.some(({ sourceKind }) => sourceKind === "supporting_search"));
+});
+
 test("website prompt injection remains untrusted evidence and missing evidence stays unknown", () => {
   const plan = member(
     [question("products_services", "business_model")],
@@ -165,6 +203,8 @@ function member(
       preferredPages,
       maximumDiscoverySources: 3,
       maximumFirstPartyFetches: 8,
+      maximumSupportingSources: 0,
+      supportingQueries: [],
       deferredQuestionKeys: [],
       deferredReusableQuestionKeys: [],
     },

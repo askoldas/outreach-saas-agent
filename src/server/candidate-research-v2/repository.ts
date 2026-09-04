@@ -150,12 +150,29 @@ const sourcePlanSchema = z
     preferredPages: z.array(websitePageKindSchema),
     maximumDiscoverySources: z.number().int().positive(),
     maximumFirstPartyFetches: z.number().int().nonnegative(),
+    maximumSupportingSources: z.number().int().nonnegative().default(0),
+    supportingQueries: z.array(z.string().min(1).max(500)).default([]),
     deferredQuestionKeys: z.array(z.string().min(1)),
     deferredReusableQuestionKeys: z.array(z.string().min(1)),
     prioritization: z
       .object({
-        version: z.literal("candidate-priority-v1"),
+        version: z.literal("candidate-opportunity-triage-v2"),
         score: z.number().min(0).max(100),
+        lane: z.enum(["deep_research", "hold", "suppress"]),
+        suppressedReason: z
+          .enum([
+            "existing_customer",
+            "excluded_relationship",
+            "outside_target_geography",
+            "not_operating_organization",
+          ])
+          .optional(),
+        researchability: z
+          .object({
+            score: z.number().min(0).max(100),
+            difficulty: z.enum(["low", "medium", "high"]),
+          })
+          .strict(),
         signals: z.array(
           z
             .object({
@@ -177,6 +194,7 @@ const discoverySourceSchema = z
     providerExecutionId: z.string().min(1),
     sourceUrl: z.string().nullable(),
     retrievedAt: z.iso.datetime({ offset: true }),
+    publishedAt: z.iso.datetime({ offset: true }).optional(),
     rawPayload: z.unknown(),
   })
   .strict();
@@ -185,10 +203,11 @@ const persistedSourceSchema = z
   .object({
     artifactId: z.string().min(1),
     evidenceId: z.string().min(1),
-    sourceKind: z.enum(["discovery", "first_party_fetch"]),
+    sourceKind: z.enum(["discovery", "first_party_fetch", "supporting_search"]),
     sourceUrl: z.string().min(1),
     pageKind: z.string().min(1),
     retrievedAt: z.iso.datetime({ offset: true }),
+    publishedAt: z.iso.datetime({ offset: true }).optional(),
     contentHash: z.string().length(64),
     content: z.string(),
   })
@@ -284,6 +303,107 @@ export async function loadCampaignResearchContext(input: {
       target_workspace_id: input.workspaceId,
     }),
   );
+}
+
+const normalizedTriageCandidateSchema = z
+  .object({
+    id: z.string().min(1),
+    employee_count: z.number().int().nonnegative().nullable(),
+    industries_json: z.array(z.string()),
+    keywords_json: z.array(z.string()),
+    matched_signals_json: z.array(z.string()),
+    preliminary_quality_json: z
+      .object({
+        likelyOperatingOrganization: z.boolean().nullable(),
+        likelyTargetGeography: z.boolean().nullable(),
+        confidence: z.number().min(0).max(1),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export async function loadCandidateTriageEvidence(input: {
+  workspaceId: string;
+  campaignCandidateIds: string[];
+}) {
+  if (!input.campaignCandidateIds.length) return new Map();
+  const supabase = createServiceRoleClient();
+  const { data: links, error: linkError } = await supabase
+    .from("campaign_candidate_discovery_links")
+    .select("campaign_candidate_id,normalized_candidate_id")
+    .eq("workspace_id", input.workspaceId)
+    .in("campaign_candidate_id", input.campaignCandidateIds)
+    .not("normalized_candidate_id", "is", null);
+  if (linkError) {
+    throw new Error(`Could not load Candidate triage links: ${linkError.message}`);
+  }
+  const candidateIds = [
+    ...new Set(
+      (links ?? []).flatMap(({ normalized_candidate_id }) =>
+        normalized_candidate_id ? [normalized_candidate_id] : [],
+      ),
+    ),
+  ];
+  if (!candidateIds.length) return new Map();
+  const { data: candidates, error: candidateError } = await supabase
+    .from("normalized_provider_candidates")
+    .select(
+      "id,employee_count,industries_json,keywords_json,matched_signals_json,preliminary_quality_json",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .in("id", candidateIds);
+  if (candidateError) {
+    throw new Error(
+      `Could not load Candidate triage evidence: ${candidateError.message}`,
+    );
+  }
+  const candidateById = new Map(
+    normalizedTriageCandidateSchema
+      .array()
+      .parse(candidates ?? [])
+      .map((candidate) => [candidate.id, candidate] as const),
+  );
+  const evidenceByCampaignCandidate = new Map<
+    string,
+    {
+      employeeCount?: number;
+      industries: string[];
+      keywords: string[];
+      matchedSignals: string[];
+      preliminaryQuality: Array<{
+        likelyOperatingOrganization: boolean | null;
+        likelyTargetGeography: boolean | null;
+        confidence: number;
+      }>;
+    }
+  >();
+  for (const link of links ?? []) {
+    if (!link.normalized_candidate_id) continue;
+    const candidate = candidateById.get(link.normalized_candidate_id);
+    if (!candidate) continue;
+    const current = evidenceByCampaignCandidate.get(link.campaign_candidate_id) ?? {
+      industries: [],
+      keywords: [],
+      matchedSignals: [],
+      preliminaryQuality: [],
+    };
+    current.employeeCount = Math.max(
+      current.employeeCount ?? 0,
+      candidate.employee_count ?? 0,
+    );
+    current.industries.push(...candidate.industries_json);
+    current.keywords.push(...candidate.keywords_json);
+    current.matchedSignals.push(...candidate.matched_signals_json);
+    current.preliminaryQuality.push(candidate.preliminary_quality_json);
+    evidenceByCampaignCandidate.set(link.campaign_candidate_id, current);
+  }
+  for (const evidence of evidenceByCampaignCandidate.values()) {
+    evidence.industries = [...new Set(evidence.industries)].sort();
+    evidence.keywords = [...new Set(evidence.keywords)].sort();
+    evidence.matchedSignals = [...new Set(evidence.matchedSignals)].sort();
+    if (evidence.employeeCount === 0) delete evidence.employeeCount;
+  }
+  return evidenceByCampaignCandidate;
 }
 
 export async function findCandidateResearchBatch(input: {
@@ -420,6 +540,113 @@ export async function persistCandidateResearchSource(input: {
       target_content: input.content,
       target_content_hash: input.contentHash,
       target_retrieved_at: input.retrievedAt,
+    }),
+  );
+}
+
+export async function persistCandidateSupportingSource(input: {
+  workspaceId: string;
+  memberId: string;
+  sourceUrl: string;
+  pageKind: "news" | "careers" | "other";
+  evidenceType:
+    | "news_article"
+    | "job_posting"
+    | "official_document"
+    | "legal_registry"
+    | "company_database"
+    | "directory_profile"
+    | "social_company_profile"
+    | "map_listing"
+    | "marketplace_profile";
+  content: string;
+  contentHash: string;
+  retrievedAt: string;
+  publishedAt?: string;
+  providerKey: string;
+  providerRequestId?: string;
+}) {
+  const persisted = persistedSourceSchema.parse(
+    await rpc("persist_candidate_supporting_source_v2", {
+      target_workspace_id: input.workspaceId,
+      target_member_id: input.memberId,
+      target_source_url: input.sourceUrl,
+      target_page_kind: input.pageKind,
+      target_evidence_type: input.evidenceType,
+      target_content: input.content,
+      target_content_hash: input.contentHash,
+      target_retrieved_at: input.retrievedAt,
+      target_published_at: input.publishedAt ?? null,
+      target_provider_key: input.providerKey,
+      target_provider_request_id: input.providerRequestId ?? null,
+    }),
+  );
+  return {
+    ...persisted,
+    ...(input.publishedAt ? { publishedAt: input.publishedAt } : {}),
+  };
+}
+
+export async function loadPersistedCandidateSupportingSources(input: {
+  workspaceId: string;
+  memberId: string;
+}) {
+  const supabase = createServiceRoleClient();
+  const { data: links, error: linkError } = await supabase
+    .from("candidate_research_member_sources_v2")
+    .select("source_artifact_id,evidence_id")
+    .eq("workspace_id", input.workspaceId)
+    .eq("candidate_research_member_id", input.memberId);
+  if (linkError) {
+    throw new Error(`Could not load supporting source links: ${linkError.message}`);
+  }
+  const artifactIds = (links ?? []).map(({ source_artifact_id }) => source_artifact_id);
+  if (!artifactIds.length) return [];
+  const { data: artifacts, error: artifactError } = await supabase
+    .from("candidate_research_source_artifacts_v2")
+    .select(
+      "id,source_url,page_kind,retrieved_at,content_hash,content_text,provider_source_record_id,candidate_page_fetch_id",
+    )
+    .eq("workspace_id", input.workspaceId)
+    .in("id", artifactIds)
+    .is("provider_source_record_id", null)
+    .is("candidate_page_fetch_id", null);
+  if (artifactError) {
+    throw new Error(
+      `Could not load supporting source artifacts: ${artifactError.message}`,
+    );
+  }
+  const evidenceIdByArtifact = new Map(
+    (links ?? []).map(({ source_artifact_id, evidence_id }) => [
+      source_artifact_id,
+      evidence_id,
+    ]),
+  );
+  const evidenceIds = [...evidenceIdByArtifact.values()];
+  const { data: evidence, error: evidenceError } = await supabase
+    .from("evidence_items")
+    .select("id,observed_at")
+    .eq("workspace_id", input.workspaceId)
+    .in("id", evidenceIds);
+  if (evidenceError) {
+    throw new Error(`Could not load supporting evidence dates: ${evidenceError.message}`);
+  }
+  const publishedAtByEvidence = new Map(
+    (evidence ?? []).flatMap(({ id, observed_at }) =>
+      observed_at ? [[id, observed_at] as const] : [],
+    ),
+  );
+  return (artifacts ?? []).map((artifact) =>
+    persistedSourceSchema.parse({
+      artifactId: artifact.id,
+      evidenceId: evidenceIdByArtifact.get(artifact.id),
+      sourceKind: "supporting_search",
+      sourceUrl: artifact.source_url,
+      pageKind: artifact.page_kind,
+      retrievedAt: artifact.retrieved_at,
+      publishedAt: publishedAtByEvidence.get(evidenceIdByArtifact.get(artifact.id) ?? ""),
+      contentHash: artifact.content_hash,
+      content: artifact.content_text,
     }),
   );
 }

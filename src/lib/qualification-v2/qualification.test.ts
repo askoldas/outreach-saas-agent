@@ -6,6 +6,7 @@ import { classifyRelationship } from "./relationship.ts";
 import {
   calculateConfidence,
   calculateFit,
+  calculateOpportunityTiming,
   calculatePotential,
   suppressFitWhenEvidenceIsInsufficient,
 } from "./scoring.ts";
@@ -45,6 +46,60 @@ test("unknown factors are excluded from the score denominator", () => {
 test("empty fit and potential denominators return null", () => {
   assert.equal(calculateFit(factors, []).score, null);
   assert.equal(calculatePotential(factors, []).score, null);
+});
+
+test("qualification derives timing only from dated supported trigger evidence", () => {
+  const triggerFactors = compileFactorLibrary(["trigger_strength"]);
+  const evaluation = {
+    factorKey: "trigger_strength",
+    applicability: "applicable" as const,
+    state: "positive" as const,
+    signedValue: 1,
+    potentialValue: 1,
+    confidence: 0.8,
+    evidenceQuality: 0.9,
+    evidenceIds: ["trigger-evidence"],
+    counterEvidenceIds: [],
+  };
+  assert.deepEqual(
+    calculateOpportunityTiming({
+      definitions: triggerFactors,
+      evaluations: [evaluation],
+      evidence: [
+        {
+          id: "trigger-evidence",
+          evidenceType: "news",
+          excerpt: "The company announced a new facility.",
+          directness: "reported",
+          sourceReliability: "reputable_secondary",
+          freshnessState: "current",
+        },
+      ],
+    }),
+    {
+      score: 72,
+      freshnessClass: "current",
+      confidence: 0.8,
+      evidenceIds: ["trigger-evidence"],
+    },
+  );
+  assert.equal(
+    calculateOpportunityTiming({
+      definitions: triggerFactors,
+      evaluations: [evaluation],
+      evidence: [
+        {
+          id: "trigger-evidence",
+          evidenceType: "news",
+          excerpt: "The publication date is unavailable.",
+          directness: "reported",
+          sourceReliability: "reputable_secondary",
+          freshnessState: "unknown",
+        },
+      ],
+    }).score,
+    0,
+  );
 });
 
 test("hard exclusions and invalid identity precede fit", () => {

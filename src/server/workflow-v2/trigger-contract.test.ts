@@ -17,15 +17,17 @@ test("V2 parent resumes from checkpoints and waits for durable child stages", ()
   assert.match(parent, /loadCompletedCheckpointKeys/);
   assert.match(parent, /stagesForResearchCycle/);
   assert.match(parent, /runCampaignV2StageTask\.triggerAndWait/);
-  assert.match(parent, /campaign-v2:\$\{workflowRunId\}:cycle-\$\{cycleNumber\}:\$\{stage\}/);
+  assert.match(
+    parent,
+    /campaign-v2:\$\{workflowRunId\}:cycle-\$\{cycleNumber\}:\$\{stage\}/,
+  );
   assert.match(parent, /consumeWorkflowControl/);
   assert.match(parent, /beforeStage/);
   assert.match(parent, /afterStage/);
 });
 
-test("Market Overview enrichment never blocks initial discovery", () => {
-  assert.match(parent, /bootstrapCompanyResearchContextV2Task\.trigger\(/);
-  assert.doesNotMatch(parent, /bootstrapCompanyResearchContextV2Task\.triggerAndWait/);
+test("market opportunity bootstrap completes before initial discovery", () => {
+  assert.match(parent, /bootstrapCompanyResearchContextV2Task\.triggerAndWait\(/);
   assert.match(bootstrap, /executeCompanyResearchBootstrap/);
   assert.doesNotMatch(service, /executeCompanyResearchBootstrap/);
 });

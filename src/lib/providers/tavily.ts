@@ -8,6 +8,7 @@ type TavilySearchResult = {
   score?: number;
   title?: string;
   url: string;
+  published_date?: string;
 };
 
 type TavilyExtractResponse = {
@@ -39,6 +40,7 @@ export type SearchResult = {
   score: number | null;
   title: string;
   url: string;
+  publishedAt?: string;
 };
 
 export async function searchWeb(
@@ -100,6 +102,9 @@ export async function searchWebResult(
     score: typeof result.score === "number" ? result.score : null,
     title: result.title ?? result.url,
     url: result.url,
+    ...(normalizedPublishedAt(result.published_date)
+      ? { publishedAt: normalizedPublishedAt(result.published_date) }
+      : {}),
   }));
   return {
     data,
@@ -183,6 +188,12 @@ async function tavilyHttpError(response: Response, operation: "search" | "extrac
       700,
     ),
   );
+}
+
+function normalizedPublishedAt(value: string | undefined) {
+  if (!value) return undefined;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.valueOf()) ? undefined : parsed.toISOString();
 }
 
 async function readProviderErrorDetail(response: Response) {

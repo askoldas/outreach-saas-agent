@@ -17,7 +17,7 @@ import {
 } from "./factor-library.ts";
 
 export const QUALIFICATION_RUNTIME_CONTRACT_VERSION =
-  "candidate-qualification-v2.5-relationship-assessment";
+  "candidate-qualification-v2.6-commercial-ranking-inputs";
 export const QUALIFICATION_RELATIONSHIP_PROMPT_VERSION =
   "candidate-relationship-classification-v2.4-multidimensional";
 export const QUALIFICATION_FACTOR_PROMPT_VERSION =
@@ -193,29 +193,87 @@ export function compileQualificationRubric(
   const standardByKey = new Map(
     STANDARD_FACTOR_LIBRARY.map((factor) => [factor.key, factor] as const),
   );
-  const factors = strategy.qualificationPolicy.factorDefinitions.map((factor) => {
-    const standard = standardByKey.get(factor.factorKey);
-    return {
-      key: factor.factorKey,
-      label: factor.label,
-      definition: factor.definition,
-      purposes: standard
-        ? [...standard.purposes]
-        : (["fit"] as FactorDefinition["purposes"]),
-      weight: factor.weight,
-      criticality:
-        factor.criticality === "critical" ? ("required" as const) : factor.criticality,
-      unknownPolicy:
-        factor.unknownPolicy === "confidence_only"
-          ? ("reduce_confidence_only" as const)
-          : factor.unknownPolicy === "gate_if_critical"
-            ? ("requires_research_if_required" as const)
-            : ("requires_research_if_required" as const),
-      positiveDefinition: factor.positiveDefinition,
-      negativeDefinition: factor.negativeDefinition,
-      acceptedEvidenceTypes: [...factor.acceptedEvidenceTypes],
-    };
-  });
+  const factors: RuntimeQualificationFactor[] =
+    strategy.qualificationPolicy.factorDefinitions.map((factor) => {
+      const standard = standardByKey.get(factor.factorKey);
+      return {
+        key: factor.factorKey,
+        label: factor.label,
+        definition: factor.definition,
+        purposes: standard
+          ? [...standard.purposes]
+          : (["fit"] as FactorDefinition["purposes"]),
+        weight: factor.weight,
+        criticality:
+          factor.criticality === "critical" ? ("required" as const) : factor.criticality,
+        unknownPolicy:
+          factor.unknownPolicy === "confidence_only"
+            ? ("reduce_confidence_only" as const)
+            : factor.unknownPolicy === "gate_if_critical"
+              ? ("requires_research_if_required" as const)
+              : ("requires_research_if_required" as const),
+        positiveDefinition: factor.positiveDefinition,
+        negativeDefinition: factor.negativeDefinition,
+        acceptedEvidenceTypes: [...factor.acceptedEvidenceTypes],
+      };
+    });
+  const commercialFactors: RuntimeQualificationFactor[] = [
+    {
+      key: "account_scale",
+      label: "Account scale",
+      definition:
+        "Evidence-backed operating scale that affects attainable account value.",
+      purposes: ["commercial_potential"],
+      weight: 1,
+      criticality: "supporting",
+      unknownPolicy: "reduce_confidence_only",
+      positiveDefinition:
+        "Reliable evidence establishes material operating or purchasing scale.",
+      negativeDefinition:
+        "Reliable evidence establishes scale below the commercially useful range.",
+      acceptedEvidenceTypes: [
+        "company_website",
+        "official_document",
+        "reliable_public_source",
+      ],
+    },
+    {
+      key: "geographic_reach",
+      label: "Geographic reach",
+      definition:
+        "Evidence-backed geographic footprint that affects attainable account value.",
+      purposes: ["commercial_potential"],
+      weight: 0.8,
+      criticality: "supporting",
+      unknownPolicy: "reduce_confidence_only",
+      positiveDefinition:
+        "Reliable evidence establishes a meaningful multi-location or multi-market footprint.",
+      negativeDefinition: "Reliable evidence establishes a narrowly limited footprint.",
+      acceptedEvidenceTypes: [
+        "company_website",
+        "official_document",
+        "reliable_public_source",
+      ],
+    },
+    {
+      key: "trigger_strength",
+      label: "Current commercial trigger",
+      definition:
+        "Dated evidence of expansion, investment, procurement, hiring, opening, renovation, or another relevant buying trigger.",
+      purposes: ["commercial_potential"],
+      weight: 0.7,
+      criticality: "supporting",
+      unknownPolicy: "reduce_confidence_only",
+      positiveDefinition:
+        "Current or recent reliable evidence establishes a commercially relevant trigger.",
+      negativeDefinition:
+        "Reliable evidence establishes that a suspected trigger is not occurring.",
+      acceptedEvidenceTypes: ["official_document", "reliable_public_source", "news"],
+    },
+  ];
+  for (const factor of commercialFactors) {
+    if (!factors.some(({ key }) => key === factor.key)) factors.push(factor);
+  }
   if (
     !strategy.geography.countryCodes.includes("WORLDWIDE") &&
     !factors.some(({ key }) => key === "target_geography")
@@ -737,6 +795,20 @@ export function mapCampaignRelationshipsToQualification(
     return "unknown";
   });
   return uniqueSorted(mapped);
+}
+
+export function qualificationClaimFactorKeys(
+  claimKey: string,
+  availableFactorKeys: Iterable<string>,
+) {
+  const available = new Set(availableFactorKeys);
+  const directKey = claimKey.startsWith("factor.") ? claimKey.slice(7) : claimKey;
+  if (available.has(directKey)) return [directKey];
+  const aliases: Record<string, string[]> = {
+    commercial_scale: ["account_scale", "geographic_reach"],
+    opportunity_timing: ["trigger_strength"],
+  };
+  return (aliases[claimKey] ?? []).filter((key) => available.has(key));
 }
 
 function calculateEvidenceQuality(evidence: QualificationEvidence[]) {

@@ -106,3 +106,10 @@ export type ConfidenceCalculation = {
   evidenceConsistency: number;
   caps: string[];
 };
+
+export type OpportunityTimingCalculation = {
+  score: number;
+  freshnessClass: "current" | "recent" | "aging" | "none";
+  confidence: number;
+  evidenceIds: string[];
+};

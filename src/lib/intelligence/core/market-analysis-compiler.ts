@@ -8,8 +8,9 @@ import {
   type MarketResearchPlan,
 } from "./market-intelligence.ts";
 
-export const MARKET_ANALYSIS_SCHEMA_VERSION = "market-analysis/v1";
-export const MARKET_ANALYSIS_COMPILER_VERSION = "target-market-analysis-compiler/v1";
+export const MARKET_ANALYSIS_SCHEMA_VERSION = "market-analysis/v2-opportunity-map";
+export const MARKET_ANALYSIS_COMPILER_VERSION =
+  "target-market-analysis-compiler/v2-opportunity-map";
 
 export type MarketAnalysisModelProvenance = {
   promptVersion: string;
@@ -31,10 +32,19 @@ export function compileMarketAnalysis(input: {
     ...targetEvidenceIds(input.target),
   ]);
   const marketStructure = marketStructureClaims(input.marketContext);
+  const opportunityLanes = compileOpportunityLanes({
+    target: input.target,
+    marketContext: input.marketContext,
+    allowedEvidenceIds,
+  });
   for (const claim of marketStructure)
     assertClaimEvidenceScope(claim, allowedEvidenceIds);
   const evidenceIds = uniqueSorted([
     ...marketStructure.flatMap(({ evidenceIds, counterEvidenceIds }) => [
+      ...evidenceIds,
+      ...counterEvidenceIds,
+    ]),
+    ...opportunityLanes.flatMap(({ evidenceIds, counterEvidenceIds }) => [
       ...evidenceIds,
       ...counterEvidenceIds,
     ]),
@@ -46,6 +56,10 @@ export function compileMarketAnalysis(input: {
     commercialIntelligenceVersionId: input.target.commercialIntelligenceVersionId,
     geography: input.target.geography,
     selectedOfferingIds: input.target.offeringIds,
+    marketBreadth: input.marketContext.marketBreadth,
+    ...(input.marketContext.estimatedCandidateRange
+      ? { estimatedCandidateRange: input.marketContext.estimatedCandidateRange }
+      : {}),
     marketSummary: input.marketContext.summary,
     targetArchetypes: input.target.archetypes
       .filter(({ priority }) => priority !== "incompatible")
@@ -54,6 +68,7 @@ export function compileMarketAnalysis(input: {
         priority,
         rationale: boundedText(whyItCanBuyOrUse, 800),
       })),
+    opportunityLanes,
     marketStructure,
     localTerminology: input.marketContext.localTerminology.map((term) => ({
       language: term.language,
@@ -102,6 +117,110 @@ export function compileMarketAnalysis(input: {
       ...input.provenance,
     },
   });
+}
+
+function compileOpportunityLanes(input: {
+  target: CampaignTargetModel;
+  marketContext: MarketContextOutput;
+  allowedEvidenceIds: Set<string>;
+}) {
+  const eligibleArchetypes = input.target.archetypes.filter(
+    ({ priority }) => priority !== "incompatible",
+  );
+  const knownArchetypeIds = new Set(eligibleArchetypes.map(({ id }) => id));
+  const proposalsByArchetype = new Map<
+    string,
+    MarketContextOutput["opportunityLanes"][number]
+  >();
+  const proposals = input.marketContext.opportunityLanes ?? [];
+  for (const proposal of proposals) {
+    if (proposal.sourceArchetypeId) {
+      if (!knownArchetypeIds.has(proposal.sourceArchetypeId)) {
+        throw new Error(
+          `Market opportunity lane references unknown target archetype ${proposal.sourceArchetypeId}.`,
+        );
+      }
+      if (proposalsByArchetype.has(proposal.sourceArchetypeId)) {
+        throw new Error(
+          `Market opportunity map contains duplicate decisions for ${proposal.sourceArchetypeId}.`,
+        );
+      }
+      proposalsByArchetype.set(proposal.sourceArchetypeId, proposal);
+    }
+    assertEvidenceIdsInScope(proposal.evidenceIds, input.allowedEvidenceIds);
+    assertEvidenceIdsInScope(proposal.counterEvidenceIds, input.allowedEvidenceIds);
+  }
+
+  const initial = eligibleArchetypes.map((archetype) => {
+    const proposal = proposalsByArchetype.get(archetype.id);
+    return {
+      id: `lane.initial.${archetype.id}`,
+      sourceArchetypeId: archetype.id,
+      label: proposal?.label ?? archetype.label,
+      organizationType: proposal?.organizationType ?? archetype.organizationType,
+      businessModels: uniqueSorted(proposal?.businessModels ?? archetype.businessModel),
+      industries: uniqueSorted(proposal?.industries ?? []),
+      origin: "initial_target" as const,
+      disposition: proposal?.disposition ?? archetype.priority,
+      rationale: boundedText(proposal?.rationale ?? archetype.whyItCanBuyOrUse, 800),
+      relationships: input.target.objective.desiredRelationships,
+      evidenceIds: uniqueSorted(proposal?.evidenceIds ?? []),
+      counterEvidenceIds: uniqueSorted(proposal?.counterEvidenceIds ?? []),
+      scaleDrivers: uniqueSorted(
+        proposal?.scaleDrivers ??
+          archetype.scaleSignals.map(({ statement }) => statement),
+      ),
+      buyingTriggers: uniqueSorted(proposal?.buyingTriggers ?? []),
+      vocabulary: uniqueSorted(proposal?.vocabulary ?? []),
+      confidence: proposal?.confidence ?? archetype.confidence,
+    };
+  });
+  const discovered = proposals
+    .filter(({ sourceArchetypeId }) => !sourceArchetypeId)
+    .map((proposal) => ({
+      id: `lane.market.${stableLaneKey(proposal.laneKey)}`,
+      label: proposal.label,
+      organizationType: proposal.organizationType,
+      businessModels: uniqueSorted(proposal.businessModels),
+      industries: uniqueSorted(proposal.industries),
+      origin: "market_research" as const,
+      disposition: proposal.disposition,
+      rationale: proposal.rationale,
+      relationships: input.target.objective.desiredRelationships,
+      evidenceIds: uniqueSorted(proposal.evidenceIds),
+      counterEvidenceIds: uniqueSorted(proposal.counterEvidenceIds),
+      scaleDrivers: uniqueSorted(proposal.scaleDrivers),
+      buyingTriggers: uniqueSorted(proposal.buyingTriggers),
+      vocabulary: uniqueSorted(proposal.vocabulary),
+      confidence: proposal.confidence,
+    }));
+  const lanes = [...initial, ...discovered].sort((left, right) =>
+    left.id.localeCompare(right.id),
+  );
+  if (new Set(lanes.map(({ id }) => id)).size !== lanes.length) {
+    throw new Error("Market opportunity lane keys must be unique.");
+  }
+  if (!lanes.some(({ disposition }) => disposition === "priority")) {
+    throw new Error("Market Opportunity Map requires at least one priority lane.");
+  }
+  return lanes;
+}
+
+function assertEvidenceIdsInScope(values: string[], allowed: Set<string>) {
+  const unknown = values.find((id) => !allowed.has(id));
+  if (unknown)
+    throw new Error(`Market opportunity lane references unknown evidence ${unknown}.`);
+}
+
+function stableLaneKey(value: string) {
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-+|-+$/g, "")
+    .slice(0, 120);
+  if (!normalized) throw new Error("Market opportunity lane key must be stable text.");
+  return normalized;
 }
 
 function boundedText(value: string, maximum: number) {

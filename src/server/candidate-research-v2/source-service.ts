@@ -23,9 +23,20 @@ const minimumUsefulPageLength = 80;
 type SourceDependencies = {
   discoverPages?: typeof searchWeb;
   extractPages?: typeof extractWebPages;
+  searchSupportingSources?: SupportingSearch;
   now?: () => string;
   persistSource?: PersistSource;
+  persistSupportingSource?: PersistSupportingSource;
 };
+
+type SupportingSearch = (
+  query: string,
+  maxResults: number,
+) => Promise<{
+  results: SearchResult[];
+  providerKey: string;
+  providerRequestId?: string;
+}>;
 
 type PersistSource = (input: {
   workspaceId: string;
@@ -37,6 +48,29 @@ type PersistSource = (input: {
   content: string;
   contentHash: string;
   retrievedAt: string;
+}) => Promise<CandidateResearchSource>;
+
+type PersistSupportingSource = (input: {
+  workspaceId: string;
+  memberId: string;
+  sourceUrl: string;
+  pageKind: "news" | "careers" | "other";
+  evidenceType:
+    | "news_article"
+    | "job_posting"
+    | "official_document"
+    | "legal_registry"
+    | "company_database"
+    | "directory_profile"
+    | "social_company_profile"
+    | "map_listing"
+    | "marketplace_profile";
+  content: string;
+  contentHash: string;
+  retrievedAt: string;
+  publishedAt?: string;
+  providerKey: string;
+  providerRequestId?: string;
 }) => Promise<CandidateResearchSource>;
 
 const fallbackPaths: Record<WebsitePageKind, string> = {
@@ -58,11 +92,13 @@ export async function collectCandidateResearchSources(
   member: CandidateResearchMemberContext,
   dependencies: SourceDependencies = {},
 ): Promise<{ sources: CandidateResearchSource[]; warnings: string[] }> {
-  const discoverPages =
-    dependencies.discoverPages ?? budgetedPageDiscovery(member);
-  const extractPages =
-    dependencies.extractPages ?? budgetedPageExtraction(member);
+  const discoverPages = dependencies.discoverPages ?? budgetedPageDiscovery(member);
+  const extractPages = dependencies.extractPages ?? budgetedPageExtraction(member);
   const persistSource = dependencies.persistSource ?? defaultPersistSource;
+  const persistSupportingSource =
+    dependencies.persistSupportingSource ?? defaultPersistSupportingSource;
+  const searchSupportingSources =
+    dependencies.searchSupportingSources ?? budgetedSupportingSearch(member);
   const now = dependencies.now ?? (() => new Date().toISOString());
   const sources = new Map(
     member.persistedSources.map((source) => [source.evidenceId, source] as const),
@@ -92,6 +128,66 @@ export async function collectCandidateResearchSources(
       retrievedAt: source.retrievedAt,
     });
     sources.set(persisted.evidenceId, persisted);
+  }
+
+  const existingSupportingCount = [...sources.values()].filter(
+    ({ sourceKind }) => sourceKind === "supporting_search",
+  ).length;
+  let remainingSupportingSources = Math.max(
+    0,
+    member.sourcePlan.maximumSupportingSources - existingSupportingCount,
+  );
+  const seenSupportingUrls = new Set(
+    [...sources.values()].map(({ sourceUrl }) => canonicalizeUrl(sourceUrl)),
+  );
+  for (const query of member.sourcePlan.supportingQueries) {
+    if (remainingSupportingSources <= 0) break;
+    try {
+      assertIntelligenceExternalCallsAllowed("provider");
+      const result = await searchSupportingSources(
+        query,
+        Math.min(6, remainingSupportingSources + 2),
+      );
+      for (const candidate of result.results
+        .filter(({ content, url, score }) =>
+          Boolean(
+            content.trim().length >= minimumUsefulPageLength &&
+            (score === null || score >= 0.35) &&
+            isSecurePublicUrl(url) &&
+            (!member.canonicalDomain || !isSameDomain(url, member.canonicalDomain)),
+          ),
+        )
+        .sort(
+          (left, right) =>
+            (right.score ?? 0) - (left.score ?? 0) || left.url.localeCompare(right.url),
+        )) {
+        if (remainingSupportingSources <= 0) break;
+        const canonicalUrl = canonicalizeUrl(candidate.url);
+        if (!canonicalUrl || seenSupportingUrls.has(canonicalUrl)) continue;
+        seenSupportingUrls.add(canonicalUrl);
+        const content = candidate.content.slice(0, maximumStoredContentLength);
+        const classification = classifySupportingSource(candidate);
+        const persisted = await persistSupportingSource({
+          workspaceId: member.workspaceId,
+          memberId: member.memberId,
+          sourceUrl: canonicalUrl,
+          pageKind: classification.pageKind,
+          evidenceType: classification.evidenceType,
+          content,
+          contentHash: digest(content),
+          retrievedAt: now(),
+          ...(candidate.publishedAt ? { publishedAt: candidate.publishedAt } : {}),
+          providerKey: result.providerKey,
+          ...(result.providerRequestId
+            ? { providerRequestId: result.providerRequestId }
+            : {}),
+        });
+        sources.set(persisted.evidenceId, persisted);
+        remainingSupportingSources -= 1;
+      }
+    } catch (error) {
+      warnings.push(`Supporting-source search failed: ${boundedMessage(error)}`);
+    }
   }
 
   if (
@@ -178,13 +274,9 @@ export async function collectCandidateResearchSources(
   return orderedResult(sources, warnings);
 }
 
-function budgetedPageDiscovery(
-  member: CandidateResearchMemberContext,
-): typeof searchWeb {
+function budgetedPageDiscovery(member: CandidateResearchMemberContext): typeof searchWeb {
   return async (query, maxResults, options) => {
-    const { runBudgetedTavilyCall } = await import(
-      "../credits/budgeted-tavily-call.ts"
-    );
+    const { runBudgetedTavilyCall } = await import("../credits/budgeted-tavily-call.ts");
     return runBudgetedTavilyCall({
       workspaceId: member.workspaceId,
       campaignRunId: member.campaignRunId,
@@ -206,9 +298,7 @@ function budgetedPageExtraction(
   member: CandidateResearchMemberContext,
 ): typeof extractWebPages {
   return async (urls) => {
-    const { runBudgetedTavilyCall } = await import(
-      "../credits/budgeted-tavily-call.ts"
-    );
+    const { runBudgetedTavilyCall } = await import("../credits/budgeted-tavily-call.ts");
     return runBudgetedTavilyCall({
       workspaceId: member.workspaceId,
       campaignRunId: member.campaignRunId,
@@ -225,6 +315,35 @@ function budgetedPageExtraction(
           : {}),
       }),
     }).then(({ data }) => data);
+  };
+}
+
+function budgetedSupportingSearch(
+  member: CandidateResearchMemberContext,
+): SupportingSearch {
+  return async (query, maxResults) => {
+    const { runBudgetedTavilyCall } = await import("../credits/budgeted-tavily-call.ts");
+    const result = await runBudgetedTavilyCall({
+      workspaceId: member.workspaceId,
+      campaignRunId: member.campaignRunId,
+      operation: "company_research_supporting_source_search",
+      idempotencyKey: `candidate-supporting-search:${member.memberId}:${digest(query)}`,
+      estimatedProviderCredits: 1,
+      execute: () => searchWebResult(query, maxResults, { includeRawContent: true }),
+      usage: ({ usage }) => ({
+        providerCredits: usage.providerUnits,
+        ...(usage.providerRequestId
+          ? { providerRequestId: usage.providerRequestId }
+          : {}),
+      }),
+    });
+    return {
+      results: result.data,
+      providerKey: result.usage.provider,
+      ...(result.usage.providerRequestId
+        ? { providerRequestId: result.usage.providerRequestId }
+        : {}),
+    };
   };
 }
 
@@ -358,11 +477,40 @@ function pageKindFromRawPayload(value: unknown) {
   return "other";
 }
 
+function classifySupportingSource(result: SearchResult): {
+  pageKind: "news" | "careers" | "other";
+  evidenceType: PersistSupportingSource extends (input: infer Input) => unknown
+    ? Input extends { evidenceType: infer EvidenceType }
+      ? EvidenceType
+      : never
+    : never;
+} {
+  const value = `${result.title} ${result.url}`.toLowerCase();
+  if (/\b(?:job|jobs|career|vacancy|hiring|recruit)/.test(value)) {
+    return { pageKind: "careers", evidenceType: "job_posting" };
+  }
+  if (/\b(?:registry|register|companies house)/.test(value)) {
+    return { pageKind: "other", evidenceType: "legal_registry" };
+  }
+  if (/\b(?:directory|database|profile)/.test(value)) {
+    return { pageKind: "other", evidenceType: "directory_profile" };
+  }
+  return { pageKind: "news", evidenceType: "news_article" };
+}
+
 function isSameDomain(value: string, expectedDomain: string) {
   try {
     const actual = new URL(value).hostname.toLowerCase().replace(/^www\./, "");
     const expected = expectedDomain.toLowerCase().replace(/^www\./, "");
     return actual === expected || actual.endsWith(`.${expected}`);
+  } catch {
+    return false;
+  }
+}
+
+function isSecurePublicUrl(value: string) {
+  try {
+    return new URL(value).protocol === "https:";
   } catch {
     return false;
   }
@@ -403,4 +551,11 @@ function boundedMessage(error: unknown) {
 async function defaultPersistSource(input: Parameters<PersistSource>[0]) {
   const { persistCandidateResearchSource } = await import("./repository.ts");
   return persistCandidateResearchSource(input);
+}
+
+async function defaultPersistSupportingSource(
+  input: Parameters<PersistSupportingSource>[0],
+) {
+  const { persistCandidateSupportingSource } = await import("./repository.ts");
+  return persistCandidateSupportingSource(input);
 }

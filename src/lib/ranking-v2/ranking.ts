@@ -21,9 +21,9 @@ export function rankCandidates(candidates: RankableCandidate[]): RankableCandida
       LANE_ORDER[left.lane] - LANE_ORDER[right.lane] ||
       descending(left.fitScore, right.fitScore) ||
       descending(left.potentialScore, right.potentialScore) ||
+      right.freshness - left.freshness ||
       right.confidence - left.confidence ||
       right.strongestEvidenceDirectness - left.strongestEvidenceDirectness ||
-      right.freshness - left.freshness ||
       left.campaignCandidateId.localeCompare(right.campaignCandidateId),
   );
 }

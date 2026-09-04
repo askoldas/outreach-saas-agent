@@ -19,29 +19,148 @@ const base: CampaignResearchCandidateInput = {
   claimStates: [],
 };
 
-test("candidate prioritization rewards identity, source diversity, and campaign fit", () => {
-  const strong = prioritizeResearchCandidate(base);
-  const weak = prioritizeResearchCandidate({
-    ...base,
-    canonicalDomain: null,
-    canonicalUrl: null,
-    organizationType: "unknown",
-    matchedArchetypeIds: [],
-    discoverySourceIds: [],
-  });
+test("commercial opportunity outranks excellent researchability", () => {
+  const strong = prioritizeResearchCandidate(
+    {
+      ...base,
+      canonicalDomain: null,
+      canonicalUrl: null,
+      discoverySourceIds: ["source-1"],
+      claimStates: [
+        {
+          key: "scale.locations",
+          epistemicStatus: "explicit_fact",
+          freshnessState: "current",
+          reusableStatus: "active",
+          reusableScope: "organization",
+        },
+        {
+          key: "timing.expansion",
+          epistemicStatus: "explicit_fact",
+          freshnessState: "current",
+          reusableStatus: "active",
+          reusableScope: "campaign_only",
+        },
+      ],
+    },
+    { matchedLanePriorities: ["priority"], positiveSignalCount: 2 },
+  );
+  const weak = prioritizeResearchCandidate(
+    {
+      ...base,
+      matchedArchetypeIds: ["archetype-1"],
+    },
+    { matchedLanePriorities: ["exploratory"] },
+  );
   assert.ok(strong.score > weak.score);
-  assert.ok(strong.signals.some(({ key }) => key === "source_diversity"));
+  assert.ok(strong.researchability.score < weak.researchability.score);
 });
 
-test("candidate prioritization is bounded and records negative conflict signals", () => {
+test("known customers are suppressed before expensive research", () => {
   const result = prioritizeResearchCandidate({
     ...base,
-    conflictKeys: ["a", "b", "c", "d"],
-    unresolvedQuestionKeys: ["e", "f", "g", "h", "i", "j"],
+    claimStates: [
+      {
+        key: "relationship.existing_customer",
+        epistemicStatus: "explicit_fact",
+        freshnessState: "current",
+        reusableStatus: "active",
+        reusableScope: "organization",
+      },
+    ],
   });
-  assert.ok(result.score >= 0 && result.score <= 100);
-  assert.equal(
-    result.signals.find(({ key }) => key === "evidence_conflicts")?.contribution,
-    -15,
+  assert.equal(result.lane, "suppress");
+  assert.equal(result.suppressedReason, "existing_customer");
+  assert.equal(result.score, 0);
+});
+
+test("cheap discovery evidence raises potential and timing without rewarding website quality", () => {
+  const result = prioritizeResearchCandidate(
+    {
+      ...base,
+      canonicalDomain: null,
+      canonicalUrl: null,
+      triageEvidence: {
+        employeeCount: 280,
+        industries: ["Hospitality"],
+        keywords: ["new banquet wing"],
+        matchedSignals: ["conference capacity expansion"],
+        preliminaryQuality: [
+          {
+            likelyOperatingOrganization: true,
+            likelyTargetGeography: true,
+            confidence: 0.91,
+          },
+        ],
+      },
+    },
+    {
+      matchedLanePriorities: ["priority"],
+      expectedScaleSignals: ["banquet capacity"],
+      expectedBuyingSignals: ["new venue expansion"],
+    },
   );
+  assert.equal(result.lane, "deep_research");
+  assert.ok(
+    result.signals.find(({ key }) => key === "account_potential")!.contribution > 0,
+  );
+  assert.ok(result.signals.find(({ key }) => key === "buying_timing")!.contribution > 0);
+  assert.equal(result.researchability.difficulty, "high");
+});
+
+test("high-confidence non-company and out-of-market evidence is suppressed early", () => {
+  for (const [quality, reason] of [
+    [
+      {
+        likelyOperatingOrganization: false,
+        likelyTargetGeography: true,
+        confidence: 0.9,
+      },
+      "not_operating_organization",
+    ],
+    [
+      {
+        likelyOperatingOrganization: true,
+        likelyTargetGeography: false,
+        confidence: 0.9,
+      },
+      "outside_target_geography",
+    ],
+  ] as const) {
+    const result = prioritizeResearchCandidate({
+      ...base,
+      triageEvidence: {
+        industries: [],
+        keywords: [],
+        matchedSignals: [],
+        preliminaryQuality: [quality],
+      },
+    });
+    assert.equal(result.lane, "suppress");
+    assert.equal(result.suppressedReason, reason);
+  }
+});
+
+test("conflicting preliminary evidence remains reviewable instead of being suppressed", () => {
+  const result = prioritizeResearchCandidate({
+    ...base,
+    triageEvidence: {
+      industries: [],
+      keywords: [],
+      matchedSignals: [],
+      preliminaryQuality: [
+        {
+          likelyOperatingOrganization: true,
+          likelyTargetGeography: true,
+          confidence: 0.9,
+        },
+        {
+          likelyOperatingOrganization: false,
+          likelyTargetGeography: false,
+          confidence: 0.85,
+        },
+      ],
+    },
+  });
+  assert.notEqual(result.lane, "suppress");
 });

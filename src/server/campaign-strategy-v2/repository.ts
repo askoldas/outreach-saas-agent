@@ -579,10 +579,18 @@ export async function getPublishedCampaignPlanningProfile(
             description:
               optionalString(details.description) ??
               `Organizations compatible with ${row.name}.`,
+            businessRoles: stringArray(details.businessRoles),
+            businessModels: stringArray(details.businessModels),
+            industries: stringArray(details.industries),
             whyCompatible: stringArray(details.whyCompatible),
+            requiredConditions: stringArray(details.requiredConditions),
+            preferredConditions: stringArray(details.preferredConditions),
+            incompatibleConditions: stringArray(details.incompatibleConditions),
             requiredEvidence: stringArray(details.requiredEvidence),
             positiveSignals: stringArray(details.positiveSignals),
             negativeSignals: stringArray(details.negativeSignals),
+            scaleSignals: stringArray(details.scaleSignals),
+            buyingTriggers: stringArray(details.buyingTriggers),
             likelyDecisionRoles: stringArray(details.likelyDecisionRoles),
             confidence: numericValue(archetype.confidence),
             evidenceIds: archetype.evidence_ids,

@@ -12,6 +12,7 @@ import {
   findCandidateResearchBatch,
   finalizeCandidateResearchBatch,
   initializeCandidateResearchBatch,
+  loadCandidateTriageEvidence,
   loadCampaignResearchContext,
 } from "./repository";
 import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
@@ -49,12 +50,22 @@ export async function prepareCandidateResearchStage(input: {
         marketAnalysisVersionId: marketResearchPlan.marketAnalysisVersionId,
       })
     : [];
+  const triageEvidence = await loadCandidateTriageEvidence({
+    workspaceId: input.workspaceId,
+    campaignCandidateIds: context.candidates.map(
+      ({ campaignCandidateId }) => campaignCandidateId,
+    ),
+  });
   const prioritizedPlans = prepareCampaignResearchPlans({
     campaignRunId: context.campaignRunId,
     strategyVersionId: context.strategyVersionId,
     strategy,
     researchBlueprints,
-    candidates: context.candidates,
+    opportunityLanes: marketResearchPlan?.opportunityLanes,
+    candidates: context.candidates.map((candidate) => ({
+      ...candidate,
+      triageEvidence: triageEvidence.get(candidate.campaignCandidateId),
+    })),
   });
   const plans = prioritizedPlans.slice(
     0,

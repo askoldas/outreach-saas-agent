@@ -8,6 +8,7 @@ import {
   normalizeFactorEvaluations,
   normalizeRelationshipClassification,
   prepareQualificationCandidates,
+  qualificationClaimFactorKeys,
   qualificationFactorTaskDefinition,
   qualificationRelationshipTaskDefinition,
   type QualificationClaim,
@@ -76,6 +77,38 @@ test("qualification injects a target-market eligibility gate for older frozen st
   assert.equal(geography?.criticality, "required");
   assert.match(geography?.definition ?? "", /Lithuania/);
   assert.match(geography?.definition ?? "", /incidental mentions/i);
+});
+
+test("qualification always includes evidence-backed commercial ranking dimensions", () => {
+  const rubric = compileQualificationRubric(createNativeCampaignStrategyFixture());
+  assert.deepEqual(
+    rubric.factors
+      .filter(({ key }) =>
+        ["account_scale", "geographic_reach", "trigger_strength"].includes(key),
+      )
+      .map(({ key }) => key)
+      .sort(),
+    ["account_scale", "geographic_reach", "trigger_strength"],
+  );
+  assert.equal(
+    rubric.factors
+      .filter(({ key }) =>
+        ["account_scale", "geographic_reach", "trigger_strength"].includes(key),
+      )
+      .every(({ purposes }) => purposes.includes("commercial_potential")),
+    true,
+  );
+});
+
+test("generic commercial research claims bind to ranking factors", () => {
+  const keys = ["account_scale", "geographic_reach", "trigger_strength"];
+  assert.deepEqual(qualificationClaimFactorKeys("commercial_scale", keys), [
+    "account_scale",
+    "geographic_reach",
+  ]);
+  assert.deepEqual(qualificationClaimFactorKeys("opportunity_timing", keys), [
+    "trigger_strength",
+  ]);
 });
 
 test("relationship classification cannot cite claims outside the frozen context", () => {

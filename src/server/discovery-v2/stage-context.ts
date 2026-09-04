@@ -9,6 +9,7 @@ const campaignRunContextSchema = z
     strategy_version_id: z.string().min(1),
     workflow_version: z.string().min(1),
     created_at: z.iso.datetime({ offset: true }),
+    metadata: z.unknown(),
   })
   .strict();
 
@@ -31,7 +32,7 @@ export async function loadInitialDiscoveryContext(input: {
   const supabase = createServiceRoleClient();
   const { data: campaignRun, error: runError } = await supabase
     .from("campaign_runs")
-    .select("id,campaign_id,strategy_version_id,workflow_version,created_at")
+    .select("id,campaign_id,strategy_version_id,workflow_version,created_at,metadata")
     .eq("workspace_id", input.workspaceId)
     .eq("id", input.campaignRunId)
     .single();
@@ -66,6 +67,10 @@ export async function loadInitialDiscoveryContext(input: {
     campaignRunId: parsedCampaignRun.id,
     campaignInternalId: parsedCampaignRun.campaign_id,
     campaignRunCreatedAt: new Date(parsedCampaignRun.created_at).toISOString(),
+    requestedCompanyCount: Math.max(
+      1,
+      Number(objectValue(parsedCampaignRun.metadata).desiredCompanyCount ?? 25),
+    ),
     ...(parsedStrategyVersion.confirmed_by
       ? { confirmedByUserId: parsedStrategyVersion.confirmed_by }
       : {}),
@@ -75,6 +80,12 @@ export async function loadInitialDiscoveryContext(input: {
     strategyVersionNumber: parsedStrategyVersion.version,
     workspaceId: input.workspaceId,
   };
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 export async function loadEnabledDiscoveryProviderIds(workspaceId: string) {

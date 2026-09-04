@@ -83,3 +83,9 @@ The V1 profile analyzer, flat Strategy generator, search-result classification p
 sequential lead evaluator, Campaign Agent loop, and adapter-seeded V2 constructors are
 retired. Their immutable database outputs remain readable for historical reports and
 exports, but no live code can create or execute new V1 work.
+
+# Research improvement
+
+The current commercial research allocation, projection rules, reservoir policy,
+triage boundary, and timing-aware ranking are documented in
+[`V2/research-improvement-pipeline.md`](V2/research-improvement-pipeline.md).

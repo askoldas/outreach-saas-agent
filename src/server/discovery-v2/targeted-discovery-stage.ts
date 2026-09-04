@@ -42,7 +42,6 @@ import { reconstructSettledProviderExecution } from "./provider-coverage";
 import { executeAndPersistDiscoveryProvider } from "./provider-service";
 import { prepareSemanticDiscoveryContext } from "./semantic-context";
 
-const maximumResultsPerTargetedSegment = 25;
 const normalizationVersion = "web-search-normalization-v3.1-source-expansion";
 
 export async function executeSemanticDiscoveryStage(input: {
@@ -259,6 +258,10 @@ async function executeTargetedPass(input: {
       actions: batch.actions,
       passNumber,
       history,
+      targetUniqueCandidates: coverageTargetForSegment(
+        input.latestDecision.coverage_summary_json,
+        batch.segment.id,
+      ),
       deadlineAt: input.plan.budgetPolicy.deadlineAt,
     });
     const proposedQueries =
@@ -341,6 +344,10 @@ async function executeTargetedPass(input: {
       segment,
       outcome: { coverageFacts: history.coverageFacts },
       updatedAt: history.completedAt ?? input.context.campaignRunCreatedAt,
+      targetUniqueCandidates: coverageTargetForSegment(
+        input.latestDecision.coverage_summary_json,
+        segment.id,
+      ),
     });
     const coverage = calculateDiscoveryCoverage(metrics);
     const gaps = analyzeDiscoveryGaps({
@@ -455,6 +462,24 @@ async function executeTargetedPass(input: {
   return persistedDecision;
 }
 
+function coverageTargetForSegment(value: unknown, segmentId: string) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const cells = (value as { cells?: unknown }).cells;
+  if (!Array.isArray(cells)) return undefined;
+  const cell = cells.find(
+    (item) =>
+      item &&
+      typeof item === "object" &&
+      !Array.isArray(item) &&
+      (item as { discoverySegmentId?: unknown }).discoverySegmentId === segmentId,
+  ) as { targetUniqueCandidates?: unknown } | undefined;
+  return typeof cell?.targetUniqueCandidates === "number" &&
+    Number.isInteger(cell.targetUniqueCandidates) &&
+    cell.targetUniqueCandidates > 0
+    ? cell.targetUniqueCandidates
+    : undefined;
+}
+
 function targetedRequest(input: {
   workspaceId: string;
   campaignId: string;
@@ -463,11 +488,28 @@ function targetedRequest(input: {
   actions: SelectedDiscoveryGapAction[];
   passNumber: number;
   history: Awaited<ReturnType<typeof loadDiscoverySegmentHistory>>;
+  targetUniqueCandidates?: number;
   deadlineAt?: string;
 }) {
   const maxCalls = input.actions.reduce(
     (total, action) => total + (action.maxCalls ?? 1),
     0,
+  );
+  const remainingCandidateTarget = input.targetUniqueCandidates
+    ? Math.max(
+        0,
+        input.targetUniqueCandidates -
+          input.history.coverageFacts.uniquePlausibleCandidateHints,
+      )
+    : undefined;
+  const maxResults = Math.min(
+    100,
+    Math.max(
+      10,
+      remainingCandidateTarget === undefined
+        ? 25
+        : Math.ceil(remainingCandidateTarget * 1.5),
+    ),
   );
   return providerDiscoveryRequestSchema.parse({
     workspaceId: input.workspaceId,
@@ -484,7 +526,7 @@ function targetedRequest(input: {
     },
     budget: {
       maxCalls,
-      maxResults: maximumResultsPerTargetedSegment,
+      maxResults,
       ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
     },
   });

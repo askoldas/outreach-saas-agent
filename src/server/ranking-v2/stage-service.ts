@@ -70,6 +70,14 @@ const finalSnapshotSchema = z.object({
     score: z.number().min(0).max(100),
     evidenceCoverage: z.number().min(0).max(1),
   }),
+  opportunityTiming: z
+    .object({
+      score: z.number().min(0).max(100),
+      freshnessClass: z.enum(["current", "recent", "aging", "none"]),
+      confidence: z.number().min(0).max(1),
+      evidenceIds: z.array(z.string()),
+    })
+    .optional(),
   eligibility: z.enum([
     "eligible",
     "conditional",
@@ -178,7 +186,7 @@ function toRankableCandidate(input: {
       0,
       ...snapshot.factorEvaluations.map(({ evidenceQuality }) => evidenceQuality),
     ),
-    freshness: 0,
+    freshness: opportunityTimingScore(snapshot),
     evidenceCoverage: snapshot.confidence.evidenceCoverage,
     factorEvaluations: snapshot.factorEvaluations,
     hardExclusionTriggered: snapshot.exclusions.some(
@@ -186,6 +194,34 @@ function toRankableCandidate(input: {
     ),
     merged: frozenInput.merged,
   };
+}
+
+function opportunityTimingScore(snapshot: z.infer<typeof finalSnapshotSchema>) {
+  if (snapshot.opportunityTiming) return snapshot.opportunityTiming.score;
+  const timingFactors = snapshot.factorEvaluations.filter(({ factorKey }) =>
+    /(?:timing|freshness|expansion|opening|renovation|procurement|investment)/i.test(
+      factorKey,
+    ),
+  );
+  if (!timingFactors.length) return 0;
+  const supported = timingFactors.filter(
+    ({ state, evidenceIds }) => state === "positive" && evidenceIds.length > 0,
+  );
+  if (!supported.length) return 0;
+  return (
+    Math.round(
+      (supported.reduce(
+        (sum, factor) =>
+          sum +
+          (factor.potentialValue ?? Math.max(0, factor.signedValue ?? 0)) *
+            factor.confidence *
+            100,
+        0,
+      ) /
+        supported.length) *
+        100,
+    ) / 100
+  );
 }
 
 function createComparativeBatches(

@@ -12,15 +12,15 @@ const generator = source("src/lib/discovery-v2/providers/web-query-generator.ts"
 test("one targeted pass returns control to the adaptive Company Research cycle", () => {
   assert.match(stage, /loadLatestDiscoveryPassDecision/);
   assert.match(stage, /if \(latestDecision\.decision_json\.decision === "continue"\)/);
-  assert.doesNotMatch(stage, /while \(latestDecision\.decision_json\.decision === "continue"\)/);
+  assert.doesNotMatch(
+    stage,
+    /while \(latestDecision\.decision_json\.decision === "continue"\)/,
+  );
   assert.match(stage, /selectedActionPlans/);
   assert.match(stage, /startTargetedDiscoveryPass/);
   assert.match(stage, /completeTargetedDiscoverySegmentPass/);
   assert.match(stage, /finalizeTargetedDiscoveryPass/);
-  assert.match(
-    stage,
-    /status: decisionKind === "stop" \? "completed" : "partial"/,
-  );
+  assert.match(stage, /status: decisionKind === "stop" \? "completed" : "partial"/);
   assert.doesNotMatch(
     stage,
     /status: decisionKind === "stop" \? "completed" : "blocked"/,
@@ -36,6 +36,8 @@ test("targeted discovery freezes history before a pass and recomputes cumulative
   assert.match(stage, /globalPlausibleCandidateHints/);
   assert.match(stage, /marginalUniqueYieldPerCall/);
   assert.match(stage, /consecutiveLowYieldPasses/);
+  assert.match(stage, /coverageTargetForSegment/);
+  assert.match(stage, /targetUniqueCandidates:/);
 });
 
 test("targeted provider work remains globally bounded and query-plan replay safe", () => {

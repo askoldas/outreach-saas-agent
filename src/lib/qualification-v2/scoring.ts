@@ -2,8 +2,10 @@ import type {
   ConfidenceCalculation,
   FactorDefinition,
   FactorEvaluation,
+  OpportunityTimingCalculation,
   ScoreCalculation,
 } from "./contracts.ts";
+import type { QualificationEvidence } from "./runtime.ts";
 
 function calculateWeightedScore(
   definitions: FactorDefinition[],
@@ -70,6 +72,65 @@ export function calculatePotential(
   evaluations: FactorEvaluation[],
 ): ScoreCalculation {
   return calculateWeightedScore(definitions, evaluations, "commercial_potential");
+}
+
+export function calculateOpportunityTiming(input: {
+  definitions: FactorDefinition[];
+  evaluations: FactorEvaluation[];
+  evidence: QualificationEvidence[];
+}): OpportunityTimingCalculation {
+  const timingKeys = new Set(
+    input.definitions
+      .filter(({ key }) =>
+        /(?:trigger|timing|freshness|expansion|investment|procurement)/i.test(key),
+      )
+      .map(({ key }) => key),
+  );
+  const positive = input.evaluations.filter(
+    ({ factorKey, state, evidenceIds }) =>
+      timingKeys.has(factorKey) && state === "positive" && evidenceIds.length > 0,
+  );
+  if (positive.length === 0) {
+    return { score: 0, freshnessClass: "none", confidence: 0, evidenceIds: [] };
+  }
+  const evidenceById = new Map(input.evidence.map((item) => [item.id, item]));
+  const freshnessWeight = { current: 1, recent: 0.75, stale: 0.2, unknown: 0 } as const;
+  const evidenceIds = [
+    ...new Set(positive.flatMap((factor) => factor.evidenceIds)),
+  ].sort();
+  const strongestFreshness = Math.max(
+    0,
+    ...evidenceIds.map(
+      (id) => freshnessWeight[evidenceById.get(id)?.freshnessState ?? "unknown"],
+    ),
+  );
+  const weightedSignal =
+    positive.reduce(
+      (sum, factor) =>
+        sum +
+        (factor.potentialValue ?? Math.max(0, factor.signedValue ?? 0)) *
+          factor.confidence *
+          factor.evidenceQuality,
+      0,
+    ) / positive.length;
+  const score = Math.round(100 * weightedSignal * strongestFreshness);
+  return {
+    score,
+    freshnessClass:
+      strongestFreshness >= 1
+        ? "current"
+        : strongestFreshness >= 0.75
+          ? "recent"
+          : strongestFreshness > 0
+            ? "aging"
+            : "none",
+    confidence:
+      Math.round(
+        (positive.reduce((sum, factor) => sum + factor.confidence, 0) / positive.length) *
+          100,
+      ) / 100,
+    evidenceIds,
+  };
 }
 
 export function suppressFitWhenEvidenceIsInsufficient(

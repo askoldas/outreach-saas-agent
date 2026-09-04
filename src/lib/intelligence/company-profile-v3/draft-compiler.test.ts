@@ -67,10 +67,18 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
           relationshipType: "distributor",
           priority: "priority",
           description: "Resells the products.",
+          businessRoles: ["operator"],
+          businessModels: ["multi-site operator"],
+          industries: ["hospitality"],
           whyCompatible: ["Has a resale channel"],
+          requiredConditions: ["Runs relevant operations"],
+          preferredConditions: ["Multiple locations"],
+          incompatibleConditions: ["No operating facilities"],
           requiredEvidence: [],
           positiveSignals: [],
           negativeSignals: [],
+          scaleSignals: ["Location count"],
+          buyingTriggers: ["New location opening"],
           likelyDecisionRoles: [],
           evidenceIds: [],
           epistemicStatus: "hypothesis",
@@ -92,6 +100,12 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
   });
 
   assert.equal(compiled.offerings[0]?.archetypes[0]?.archetypeKey, "distributor");
+  assert.deepEqual(compiled.offerings[0]?.archetypes[0]?.details.scaleSignals, [
+    "Location count",
+  ]);
+  assert.deepEqual(compiled.offerings[0]?.archetypes[0]?.details.businessModels, [
+    "multi-site operator",
+  ]);
   assert.equal(
     compiled.offerings[0]?.relationshipOptions[0]?.relationshipType,
     "distributor",
@@ -338,10 +352,18 @@ function archetype(archetypeKey: string, offeringKey: string, relationshipType: 
     relationshipType,
     priority: "priority" as const,
     description: "Offering-specific buyer archetype.",
+    businessRoles: ["operator"],
+    businessModels: ["multi-site operator"],
+    industries: ["hospitality"],
     whyCompatible: ["Commercially compatible"],
+    requiredConditions: ["Runs relevant operations"],
+    preferredConditions: ["Multiple locations"],
+    incompatibleConditions: ["No operating facilities"],
     requiredEvidence: [],
     positiveSignals: [],
     negativeSignals: [],
+    scaleSignals: ["Location count"],
+    buyingTriggers: ["New location opening"],
     likelyDecisionRoles: [],
     evidenceIds: [],
     epistemicStatus: "hypothesis" as const,

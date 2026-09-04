@@ -1,5 +1,9 @@
 import { hashCanonical } from "@/lib/intelligence/campaign-strategy-v2";
-import { marketAnalysisSchema, marketResearchPlanSchema } from "@/lib/intelligence/core";
+import {
+  marketAnalysisSchema,
+  marketEvidenceCorpusSchema,
+  marketResearchPlanSchema,
+} from "@/lib/intelligence/core";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { StageResult } from "@/lib/workflow-v2";
 import { compileAndPersistCampaignTargetModel } from "@/server/core-intelligence-v2/campaign-target-model-service";
@@ -12,6 +16,7 @@ import { loadCampaignV2Run } from "@/server/workflow-v2/repository";
 import { freezeEnabledDiscoveryProviderCapabilities } from "./provider-capabilities";
 import { runBudgetedOpenRouterCall } from "@/server/credits/budgeted-provider-call";
 import { generateTextResult } from "@/lib/providers/openrouter";
+import { executeMarketReconnaissance } from "./market-reconnaissance";
 
 export async function executeCompanyResearchBootstrap(input: {
   campaignRunId: string;
@@ -45,6 +50,7 @@ export async function executeCompanyResearchBootstrap(input: {
       campaignTargetModelVersionId: resumed.analysis.campaignTargetModelVersionId,
       marketAnalysisVersionId: resumed.analysis.id,
       marketResearchPlanVersionId: researchPlan.id,
+      ...(resumed.corpus ? { marketResearchExecutionId: resumed.corpus.id } : {}),
       providerCapabilitySnapshotIds,
       cached: true,
       resultStage: input.resultStage,
@@ -77,11 +83,19 @@ export async function executeCompanyResearchBootstrap(input: {
     ]),
     ...context.strategy.campaignRules.flatMap(({ evidenceIds }) => evidenceIds),
   ]);
+  const reconnaissance = await executeMarketReconnaissance({
+    workspaceId: input.workspaceId,
+    campaignId: context.campaignInternalId,
+    campaignRunId: input.campaignRunId,
+    target: target.artifact,
+  });
+  evidenceIds.push(...reconnaissance.corpus.evidence.map(({ id }) => id));
   const frozenInput = {
     campaignRunId: input.campaignRunId,
     strategyVersionId: context.strategyVersionId,
     strategy: context.strategy,
     target: target.artifact,
+    marketEvidenceCorpus: reconnaissance.corpus,
   };
   let providerAttempt = 0;
   const analysis = await compileAndPersistMarketAnalysis({
@@ -134,6 +148,7 @@ export async function executeCompanyResearchBootstrap(input: {
     campaignTargetModelVersionId: target.id,
     marketAnalysisVersionId: analysis.id,
     marketResearchPlanVersionId: researchPlan.id,
+    marketResearchExecutionId: reconnaissance.corpus.id,
     providerCapabilitySnapshotIds,
     cached: commercial.cached && target.cached && analysis.cached && researchPlan.cached,
     resultStage: input.resultStage,
@@ -152,6 +167,7 @@ function completedResult(input: {
   campaignTargetModelVersionId: string;
   marketAnalysisVersionId: string;
   marketResearchPlanVersionId: string;
+  marketResearchExecutionId?: string;
   providerCapabilitySnapshotIds: string[];
   cached: boolean;
   resultStage?: "initialize" | "market_analysis";
@@ -172,7 +188,7 @@ async function loadExistingMarketStageArtifacts(input: {
   workspaceId: string;
 }) {
   const supabase = createServiceRoleClient();
-  const [analysisResult, planResult] = await Promise.all([
+  const [analysisResult, planResult, corpusResult] = await Promise.all([
     supabase
       .from("market_analyses")
       .select("analysis")
@@ -189,20 +205,35 @@ async function loadExistingMarketStageArtifacts(input: {
       .order("version", { ascending: false })
       .limit(1)
       .maybeSingle(),
+    supabase
+      .from("market_research_executions_v2")
+      .select("corpus_json")
+      .eq("workspace_id", input.workspaceId)
+      .eq("campaign_run_id", input.campaignRunId)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
   if (analysisResult.error)
     throw new Error(`Could not resume Market Analysis: ${analysisResult.error.message}`);
   if (planResult.error)
     throw new Error(`Could not resume Market Research Plan: ${planResult.error.message}`);
+  if (corpusResult.error)
+    throw new Error(
+      `Could not resume Market Research corpus: ${corpusResult.error.message}`,
+    );
   const analysis = analysisResult.data
     ? marketAnalysisSchema.parse(analysisResult.data.analysis)
     : undefined;
   const plan = planResult.data
     ? marketResearchPlanSchema.parse(planResult.data.plan_json)
     : undefined;
+  const corpus = corpusResult.data
+    ? marketEvidenceCorpusSchema.parse(corpusResult.data.corpus_json)
+    : undefined;
   if (plan && (!analysis || plan.marketAnalysisVersionId !== analysis.id))
     throw new Error("Run-tied Market Research Plan does not match Market Analysis.");
-  return { analysis, plan };
+  return { analysis, plan, corpus };
 }
 
 function unique(values: string[]) {

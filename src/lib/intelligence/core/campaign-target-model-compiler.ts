@@ -64,10 +64,14 @@ export function compileCampaignTargetModel(input: {
         ]),
         priority: targetPriority(archetype.sourcePriority),
         whyItCanBuyOrUse: archetype.rationale,
-        operationalEvidenceOfNeed: uniqueSorted(archetype.operationalUseCases),
+        operationalEvidenceOfNeed: uniqueSorted([
+          ...archetype.operationalUseCases,
+          ...archetype.requiredConditions,
+          ...archetype.preferredConditions,
+        ]),
         positiveSignals: archetype.positiveSignals,
         negativeSignals: archetype.negativeSignals,
-        scaleSignals: [],
+        scaleSignals: archetype.scaleSignals,
         geographyRequirements: geographyRequirements(input.geography),
         hardExclusionRuleKeys: [],
         likelyRelationships: uniqueSorted(archetype.possibleRelationships),
@@ -107,7 +111,7 @@ export function compileCampaignTargetModel(input: {
                 : [boundedText(archetype.description, 500)],
             positiveSignals: archetype.positiveSignals.map(strategySignal),
             negativeSignals: archetype.negativeSignals.map(strategySignal),
-            scaleSignals: [],
+            scaleSignals: strategyScaleSignals(archetype),
             geographyRequirements: geographyRequirements(input.geography),
             hardExclusionRuleKeys: strategyProjection.campaignRules
               .filter(
@@ -177,7 +181,16 @@ export function compileCampaignTargetModel(input: {
       workingLanguages: uniqueSorted(input.geography.workingLanguages),
     },
     archetypes,
-    requiredSignals: [],
+    requiredSignals: dedupeSignals(
+      selectedOfferings.flatMap((offering) =>
+        offering.requiredBuyerConditions.map((statement, index) => ({
+          key: `offering.${offering.offeringId}.required.${index + 1}`,
+          statement,
+          evidenceIds: offering.evidenceIds,
+          confidence: offering.confidence,
+        })),
+      ),
+    ),
     positiveSignals: dedupeSignals(
       selectedOfferings.flatMap(({ positiveSignals }) => positiveSignals),
     ),
@@ -322,6 +335,14 @@ function strategySignal(
     confidence:
       signal.reliability === "high" ? 0.85 : signal.reliability === "medium" ? 0.65 : 0.4,
   };
+}
+
+function strategyScaleSignals(archetype: CampaignStrategyV2["archetypes"][number]) {
+  const scalePattern =
+    /\b(?:scale|size|employee|revenue|turnover|location|site|branch|facility|capacity|volume|throughput|room|bed|unit|fleet|production|multi[- ]?site|business unit)\b/i;
+  return archetype.positiveSignals
+    .filter(({ key, description }) => scalePattern.test(`${key} ${description}`))
+    .map(strategySignal);
 }
 
 function boundedText(value: string, maximum: number) {

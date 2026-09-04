@@ -6,6 +6,7 @@ import type {
   QualificationRubricRuntime,
   RuntimeQualificationFactor,
 } from "@/lib/qualification-v2";
+import { qualificationClaimFactorKeys } from "@/lib/qualification-v2";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 import {
@@ -399,11 +400,7 @@ export async function claimQualificationMember(input: {
         archetypeIds: [...parsed.rubric.archetypeIds].sort(),
         questionKeys: [claim.key],
         relationship: claim.key.includes("relationship"),
-        factorKeys: factorKeys.has(claim.key)
-          ? [claim.key]
-          : claim.key.startsWith("factor.") && factorKeys.has(claim.key.slice(7))
-            ? [claim.key.slice(7)]
-            : [],
+        factorKeys: qualificationClaimFactorKeys(claim.key, factorKeys),
         exclusionRuleKeys: claim.key.startsWith("exclusion.")
           ? exclusionRuleKeys.has(claim.key.slice(10))
             ? [claim.key.slice(10)]

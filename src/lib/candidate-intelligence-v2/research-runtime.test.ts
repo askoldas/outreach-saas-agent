@@ -68,8 +68,24 @@ test("Campaign research plans freeze required policy questions and reusable stat
   assert.equal(prepared.contentHash.length, 64);
   assert.equal(prepared.reusableIntelligenceVersionId, null);
   assert.equal(prepared.priority, prepared.sourcePlan.prioritization.score);
-  assert.equal(prepared.sourcePlan.prioritization.version, "candidate-priority-v1");
+  assert.equal(
+    prepared.sourcePlan.prioritization.version,
+    "candidate-opportunity-triage-v2",
+  );
   assert.ok(prepared.sourcePlan.prioritization.signals.length >= 6);
+  assert.ok(
+    prepared.plan.questions.some(
+      ({ key, purpose }) =>
+        key === "commercial_scale" && purpose === "commercial_potential",
+    ),
+  );
+  assert.ok(
+    prepared.plan.questions.some(
+      ({ key, purpose }) => key === "opportunity_timing" && purpose === "freshness",
+    ),
+  );
+  assert.equal(prepared.sourcePlan.supportingQueries.length, 2);
+  assert.ok(prepared.sourcePlan.maximumSupportingSources >= 2);
 });
 
 test("Candidate research plans cap the frozen question set at twelve", () => {
@@ -123,6 +139,45 @@ test("Deferred reusable gaps retain organization scope", () => {
       .filter(({ key }) => unresolvedQuestionKeys.includes(key))
       .every(({ reusableScope }) => reusableScope === "organization"),
   );
+});
+
+test("market-discovered priority lanes can enter research without Strategy archetype identity", () => {
+  const strategy = confirmedStrategy();
+  const plans = prepareCampaignResearchPlans({
+    campaignRunId: "run-1",
+    strategyVersionId: strategy.id,
+    strategy,
+    opportunityLanes: [
+      {
+        id: "market-lane-event-venues",
+        disposition: "priority",
+        scaleDrivers: ["conference capacity"],
+        buyingTriggers: ["renovation"],
+      },
+    ],
+    candidates: [candidate("market-lane-event-venues")],
+  });
+  assert.equal(plans.length, 1);
+  assert.equal(plans[0]?.sourcePlan.prioritization.lane, "deep_research");
+});
+
+test("hold-lane candidates do not consume the deep-research ceiling", () => {
+  const strategy = confirmedStrategy();
+  const plans = prepareCampaignResearchPlans({
+    campaignRunId: "run-1",
+    strategyVersionId: strategy.id,
+    strategy,
+    opportunityLanes: [
+      {
+        id: "market-lane-exploratory",
+        disposition: "exploratory",
+        scaleDrivers: [],
+        buyingTriggers: [],
+      },
+    ],
+    candidates: [candidate("market-lane-exploratory")],
+  });
+  assert.deepEqual(plans, []);
 });
 
 test("Research Blueprints add reusable questions while Strategy policy remains campaign-only", () => {

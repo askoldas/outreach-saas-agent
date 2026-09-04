@@ -22,6 +22,7 @@ import {
   claimCandidateResearchMember,
   completeCandidateResearchMember,
   findCandidateResearchExtraction,
+  loadPersistedCandidateSupportingSources,
   parseCandidateResearchMemberResult,
   saveCandidateResearchExtraction,
   type CandidateResearchMemberContext,
@@ -40,15 +41,31 @@ export async function executeCandidateResearchMember(input: {
   triggerRunId: string;
   workspaceId: string;
 }) {
-  const member = await claimCandidateResearchMember(input);
-  if (member.status === "completed" || member.status === "blocked") {
-    const completed = parseCandidateResearchMemberResult(member.outputReference);
+  const claimedMember = await claimCandidateResearchMember(input);
+  if (claimedMember.status === "completed" || claimedMember.status === "blocked") {
+    const completed = parseCandidateResearchMemberResult(claimedMember.outputReference);
     await ensureCompanyIntelligenceForCandidateSource({
       workspaceId: input.workspaceId,
       sourceCandidateIntelligenceVersionId: completed.intelligenceVersionId,
     });
     return completed;
   }
+  const supportingSources = await loadPersistedCandidateSupportingSources({
+    workspaceId: input.workspaceId,
+    memberId: claimedMember.memberId,
+  });
+  const member = {
+    ...claimedMember,
+    persistedSources: [
+      ...claimedMember.persistedSources,
+      ...supportingSources.filter(
+        ({ evidenceId }) =>
+          !claimedMember.persistedSources.some(
+            (source) => source.evidenceId === evidenceId,
+          ),
+      ),
+    ],
+  };
 
   const { sources, warnings } = await collectCandidateResearchSources(member);
   const evidenceContext = sources.map((source) => ({
@@ -56,6 +73,7 @@ export async function executeCandidateResearchMember(input: {
     sourceUrl: source.sourceUrl,
     pageKind: source.pageKind,
     retrievedAt: source.retrievedAt,
+    ...(source.publishedAt ? { publishedAt: source.publishedAt } : {}),
     content: source.content,
   }));
   const extractionRequestHash = hashCanonical({
@@ -143,13 +161,19 @@ export async function executeCandidateResearchMember(input: {
             campaignRunId: member.campaignRunId,
             operation: "company_research_evidence_extraction",
             idempotencyKey: `company-research:${member.memberId}:${extractionRequestHash}`,
-            execute: () => generateTextResult(transportRequest.messages, {
-              role: "website_extraction",
-              maxCompletionTokens: transportRequest.maxCompletionTokens,
-              reasoningEffort: transportRequest.reasoningClass === "standard" ? "medium" : transportRequest.reasoningClass,
-              taskName: "Company Research evidence extraction",
-              ...(transportRequest.output.mode === "json_schema" ? { jsonSchema: transportRequest.output } : { jsonMode: true }),
-            }),
+            execute: () =>
+              generateTextResult(transportRequest.messages, {
+                role: "website_extraction",
+                maxCompletionTokens: transportRequest.maxCompletionTokens,
+                reasoningEffort:
+                  transportRequest.reasoningClass === "standard"
+                    ? "medium"
+                    : transportRequest.reasoningClass,
+                taskName: "Company Research evidence extraction",
+                ...(transportRequest.output.mode === "json_schema"
+                  ? { jsonSchema: transportRequest.output }
+                  : { jsonMode: true }),
+              }),
           });
           return {
             output: call.data,
@@ -196,7 +220,7 @@ export async function executeCandidateResearchMember(input: {
     }
   }
 
-  const persisted = preparePersistedResearch(member, extraction);
+  const persisted = preparePersistedResearch(member, extraction, sources);
   const completed = await completeCandidateResearchMember({
     memberId: member.memberId,
     workspaceId: input.workspaceId,
@@ -218,6 +242,7 @@ export async function executeCandidateResearchMember(input: {
 function preparePersistedResearch(
   member: CandidateResearchMemberContext,
   extraction: CandidateEvidenceExtraction,
+  sources: CandidateResearchMemberContext["persistedSources"],
 ) {
   const questionByKey = new Map(
     member.plan.questions.map((question) => [question.key, question] as const),
@@ -238,11 +263,24 @@ function preparePersistedResearch(
       };
     }),
   );
+  const sourceByEvidenceId = new Map(
+    sources.map((source) => [source.evidenceId, source] as const),
+  );
   const claims = compiledClaims.map((claim) => {
     const question = requiredQuestion(questionByKey, claim.key);
+    const observedAt =
+      question.purpose === "freshness"
+        ? latestPublishedAt(
+            claim.evidenceIds.flatMap((id) => {
+              const source = sourceByEvidenceId.get(id);
+              return source?.publishedAt ? [source.publishedAt] : [];
+            }),
+          )
+        : undefined;
     return {
       id: randomUUID(),
       ...claim,
+      ...(observedAt ? { observedAt } : {}),
       reusableScope: question.reusableScope,
     };
   });
@@ -257,6 +295,10 @@ function preparePersistedResearch(
     ].sort(),
   }));
   return { claims, questionFindings };
+}
+
+function latestPublishedAt(values: string[]) {
+  return [...values].sort().at(-1);
 }
 
 function requiredQuestion(values: Map<string, CandidateResearchQuestion>, key: string) {

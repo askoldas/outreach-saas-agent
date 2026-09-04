@@ -11,13 +11,13 @@ const providerRepository = source("src/server/discovery-v2/provider-repository.t
 const workflowStage = source("src/server/workflow-v2/stage-service.ts");
 const targetedStage = source("src/server/discovery-v2/targeted-discovery-stage.ts");
 
-test("initial V2 discovery is bounded globally and preserves priority breadth", () => {
-  assert.match(stage, /maximumInitialProviderCalls = 12/);
-  assert.match(stage, /maximumInitialSegments = 6/);
-  assert.match(stage, /maximumResultsPerSegment = 25/);
-  assert.match(stage, /\.slice\(0, maximumInitialSegments\)/);
+test("initial V2 discovery sizes a bounded reservoir from the requested outcome", () => {
+  assert.match(stage, /sizeDiscoveryReservoir/);
+  assert.match(stage, /requestedCompanyCount: context\.requestedCompanyCount/);
+  assert.match(stage, /targetUniqueCandidates/);
+  assert.doesNotMatch(stage, /maximumInitialProviderCalls = 12/);
   assert.match(stage, /mapWithConcurrency\(\s*executionRequests,\s*2/);
-  assert.match(stage, /Math\.floor\(\s*input\.maximumCalls/);
+  assert.match(stage, /Math\.floor\(\s*input\.maximumCalls \/ input\.segments\.length/);
 });
 
 test("worker context uses the run's exact confirmed strategy and internal Campaign ID", () => {
@@ -62,10 +62,11 @@ test("initial breadth durably attaches semantic audit and remains partial", () =
   assert.match(stage, /cachedExecutionCount/);
 });
 
-test("coverage keeps omitted segments visible without a requested-volume stop", () => {
+test("coverage keeps omitted segments visible and propagates lane targets", () => {
   assert.match(stage, /const coverageResults = plan\.segments\.map/);
   assert.doesNotMatch(stage, /currentPlausibleCandidateCount/);
   assert.match(stage, /plausibleCandidateIdentityHints/);
   assert.match(stage, /omittedInitialBreadthSegmentCount/);
+  assert.match(stage, /targetUniqueCandidates: reservoir\.targets/);
   assert.match(targetedStage, /globalPlausibleCandidateHints/);
 });

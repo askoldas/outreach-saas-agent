@@ -23,10 +23,8 @@ export function compileDiscoveryPlanFromMarketResearchPlan(input: {
   const capabilityBySnapshotId = new Map(
     input.providerCapabilities.map((item) => [item.snapshotId, item.capabilities]),
   );
-  const segmentInputs = input.strategy.discoverySegments.map((segment) => {
-    const researchRoutes = input.researchPlan.discoveryRoutes.filter(({ archetypeIds }) =>
-      archetypeIds.includes(segment.archetypeId),
-    );
+  const segmentInputs = compileOpportunitySegments(input).map((segment) => {
+    const researchRoutes = routesForSegment(input.researchPlan, segment);
     if (!researchRoutes.length) {
       throw new Error(`Market Research Plan has no route for Segment ${segment.id}.`);
     }
@@ -45,9 +43,7 @@ export function compileDiscoveryPlanFromMarketResearchPlan(input: {
     };
   });
   const routes: SegmentProviderRouteV2[] = segmentInputs.map((segment) => {
-    const researchRoutes = input.researchPlan.discoveryRoutes.filter(({ archetypeIds }) =>
-      archetypeIds.includes(segment.archetypeId),
-    );
+    const researchRoutes = routesForSegment(input.researchPlan, segment);
     const providerCandidates = researchRoutes.flatMap((route) =>
       route.providerCapabilitySnapshotIds.flatMap((snapshotId) => {
         const capability = capabilityBySnapshotId.get(snapshotId);
@@ -113,6 +109,10 @@ export function compileDiscoveryPlanFromMarketResearchPlan(input: {
     routes,
     providerCapabilities: capabilities,
     versionNumber: input.versionNumber,
+    marketBreadth: input.researchPlan.marketBreadth,
+    ...(input.researchPlan.estimatedCandidateRange
+      ? { estimatedCandidateRange: input.researchPlan.estimatedCandidateRange }
+      : {}),
     maximumProviderCalls: input.maximumProviderCalls,
     ...(input.maximumEstimatedCostMinor === undefined
       ? {}
@@ -120,6 +120,110 @@ export function compileDiscoveryPlanFromMarketResearchPlan(input: {
     ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
     compiledAt: input.compiledAt,
   });
+}
+
+function compileOpportunitySegments(
+  input: Parameters<typeof compileDiscoveryPlanFromMarketResearchPlan>[0],
+) {
+  if (!input.researchPlan.opportunityLanes.length) {
+    return input.strategy.discoverySegments;
+  }
+  const template = input.strategy.discoverySegments[0]!;
+  return input.researchPlan.opportunityLanes.filter(isRoutableLane).flatMap((lane) => {
+    const existing = lane.sourceArchetypeId
+      ? input.strategy.discoverySegments.filter(
+          ({ archetypeId }) => archetypeId === lane.sourceArchetypeId,
+        )
+      : [];
+    if (existing.length) {
+      return existing.map((segment) => ({
+        ...segment,
+        opportunityLaneId: lane.id,
+        label: lane.label,
+        rationale: lane.rationale,
+        businessCharacteristics: {
+          ...segment.businessCharacteristics,
+          businessModels: uniqueSorted([
+            ...segment.businessCharacteristics.businessModels,
+            ...lane.businessModels,
+          ]),
+          industries: uniqueSorted([
+            ...segment.businessCharacteristics.industries,
+            ...lane.industries,
+          ]),
+          keywords: uniqueSorted([
+            ...segment.businessCharacteristics.keywords,
+            ...lane.vocabulary,
+            ...lane.scaleDrivers,
+            ...lane.buyingTriggers,
+          ]),
+        },
+        priority: lanePriority(lane.disposition),
+        explorationBudgetClass: laneBudget(lane.disposition),
+      }));
+    }
+    return [
+      {
+        id: `segment.${lane.id}`,
+        strategyVersionId: input.strategy.id,
+        // Compatibility field for downstream records; opportunityLaneId is canonical.
+        archetypeId: lane.id,
+        opportunityLaneId: lane.id,
+        label: lane.label,
+        rationale: lane.rationale,
+        geography: input.strategy.geography,
+        businessCharacteristics: {
+          organizationRoles: [lane.organizationType],
+          businessModels: lane.businessModels,
+          industries: lane.industries,
+          keywords: uniqueSorted([
+            ...lane.vocabulary,
+            ...lane.scaleDrivers,
+            ...lane.buyingTriggers,
+          ]),
+        },
+        relationshipType: input.strategy.objective.targetRelationshipTypes[0]!,
+        useModes: template.useModes,
+        positiveSignals: [],
+        negativeSignals: [],
+        exclusionRules: template.exclusionRules,
+        priority: lanePriority(lane.disposition),
+        explorationBudgetClass: laneBudget(lane.disposition),
+      },
+    ];
+  });
+}
+
+function isRoutableLane(
+  lane: MarketResearchPlan["opportunityLanes"][number],
+): lane is MarketResearchPlan["opportunityLanes"][number] & {
+  disposition: "priority" | "secondary" | "exploratory";
+} {
+  return ["priority", "secondary", "exploratory"].includes(lane.disposition);
+}
+
+function routesForSegment(
+  plan: MarketResearchPlan,
+  segment: { archetypeId: string; opportunityLaneId?: string },
+) {
+  return plan.discoveryRoutes.filter(
+    ({ archetypeIds, opportunityLaneIds }) =>
+      (segment.opportunityLaneId &&
+        opportunityLaneIds.includes(segment.opportunityLaneId)) ||
+      archetypeIds.includes(segment.archetypeId),
+  );
+}
+
+function lanePriority(disposition: "priority" | "secondary" | "exploratory") {
+  return disposition === "priority" ? 1 : disposition === "secondary" ? 35 : 70;
+}
+
+function laneBudget(disposition: "priority" | "secondary" | "exploratory") {
+  return disposition === "priority"
+    ? ("high" as const)
+    : disposition === "secondary"
+      ? ("medium" as const)
+      : ("low" as const);
 }
 
 function assertIdentity(

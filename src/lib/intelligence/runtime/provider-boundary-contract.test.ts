@@ -22,8 +22,7 @@ const budgetedProviderBoundaries = [
 
 const legacyOrInactiveCallers = [] as const;
 
-const providerCallPattern =
-  /generateText(?:Result)?\(|generateTextResult\)\s*\(/;
+const providerCallPattern = /generateText(?:Result)?\(|generateTextResult\)\s*\(/;
 
 test("migrated V2 provider adapters execute through the shared runtime", () => {
   for (const file of migratedV2Adapters) {
@@ -56,15 +55,18 @@ test("every Company Research Tavily path has an explicit credit boundary", () =>
     "src/server/candidate-research-v2/source-service.ts",
     "utf8",
   );
-  const contact = readFileSync("src/server/contact-enrichment/service.ts", "utf8");
-  const contactHelper = readFileSync(
-    "src/lib/providers/contact-enrichment.ts",
+  const marketResearch = readFileSync(
+    "src/server/market-analysis-v2/market-reconnaissance.ts",
     "utf8",
   );
+  const contact = readFileSync("src/server/contact-enrichment/service.ts", "utf8");
+  const contactHelper = readFileSync("src/lib/providers/contact-enrichment.ts", "utf8");
   assert.match(discovery, /runBudgetedTavilyCall/);
   assert.match(research, /runBudgetedTavilyCall/);
   assert.match(research, /searchWebResult/);
   assert.match(research, /extractWebPagesResult/);
+  assert.match(marketResearch, /runBudgetedTavilyCall/);
+  assert.match(marketResearch, /searchWebResult/);
   assert.match(contact, /contactCreditAuthorizationId/);
   assert.match(contact, /settleContactEnrichmentCredits/);
   assert.doesNotMatch(contactHelper, /search:\s*ContactSearch\s*=/);

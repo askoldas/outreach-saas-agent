@@ -33,7 +33,7 @@ export async function generateCampaignMarketContext(input: {
     contract: campaignV2TaskContracts.marketContext,
     input,
     instruction:
-      "Interpret only the supplied market for the exact frozen objective and offering. Distinguish commercial relationship types. Evidence-backed facts require supplied evidence IDs; unsupported statements remain hypotheses. Return only bounded market observations, terminology, source categories, limitations, and undercoverage risks.",
+      "Synthesize an open Market Opportunity Map for the exact frozen offering, geography, objective, relationship types, and hard constraints. Treat supplied target archetypes as initial hypotheses, not a closed market universe. Use supplied market evidence to support, downgrade, or reject them and to add commercially justified opportunity lanes that were absent from the initial target. A new lane must remain inside the frozen commercial objective. Priority lanes require supplied evidence IDs; unsupported plausible lanes remain secondary, exploratory, or weak hypotheses. Preserve counter-evidence, scale drivers, buying triggers, local vocabulary, source categories, limitations, and undercoverage risks.",
     maxCompletionTokens: 2_500,
     taskName: "campaign market context",
   });
@@ -116,6 +116,8 @@ async function executeStrategyTask<T>(options: {
       ? { recordAttempt: options.input.runtime.recordAttempt }
       : {}),
     transport: async (transport) => {
+      // Keep the explicit wrapper visible to the provider-boundary contract scanner.
+      // prettier-ignore
       const call = await (options.input.runtime?.generateTextResult ?? generateTextResult)(transport.messages, {
         role: "campaign_strategy_compilation",
         maxCompletionTokens: transport.maxCompletionTokens,
@@ -189,6 +191,11 @@ export function normalizeUntrustedMarketClaims(value: unknown) {
       output[field] = output[field].map(downgradeUnsupportedClaim);
     }
   }
+  if (Array.isArray(output.opportunityLanes)) {
+    output.opportunityLanes = output.opportunityLanes.map(
+      downgradeUnsupportedOpportunityLane,
+    );
+  }
   return output;
 }
 
@@ -261,4 +268,15 @@ function downgradeUnsupportedClaim(candidate: unknown) {
       claim.epistemicStatus === "evidence_backed_inference")
     ? { ...claim, epistemicStatus: "hypothesis" }
     : claim;
+}
+
+function downgradeUnsupportedOpportunityLane(candidate: unknown) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return candidate;
+  }
+  const lane = candidate as Record<string, unknown>;
+  const hasEvidence = Array.isArray(lane.evidenceIds) && lane.evidenceIds.length > 0;
+  return lane.disposition === "priority" && !hasEvidence
+    ? { ...lane, disposition: "exploratory" }
+    : lane;
 }

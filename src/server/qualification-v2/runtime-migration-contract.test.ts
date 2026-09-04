@@ -54,6 +54,8 @@ test("Qualification persists relationship-first deterministic decisions atomical
   assert.match(migration, /candidate_review_lane_assignments/);
   assert.match(worker, /calculateFit/);
   assert.match(worker, /calculatePotential/);
+  assert.match(worker, /calculateOpportunityTiming/);
+  assert.match(worker, /opportunityTiming/);
   assert.match(worker, /decideEligibility/);
   assert.match(worker, /assignReviewLane/);
 });

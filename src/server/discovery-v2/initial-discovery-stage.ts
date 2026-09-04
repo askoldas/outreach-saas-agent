@@ -9,6 +9,7 @@ import {
   type DiscoveryCoverageMetrics,
   type DiscoveryPlanV2,
   type ProviderDiscoveryRequest,
+  sizeDiscoveryReservoir,
 } from "@/lib/discovery-v2";
 import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
 import type { StageResult } from "@/lib/workflow-v2";
@@ -36,9 +37,6 @@ import { executeAndPersistDiscoveryProvider } from "./provider-service";
 import { prepareSemanticDiscoveryContext } from "./semantic-context";
 import { loadEnabledDiscoveryProviderIds } from "./stage-context";
 
-const maximumInitialProviderCalls = 12;
-const maximumInitialSegments = 6;
-const maximumResultsPerSegment = 25;
 const normalizationVersion = "web-search-normalization-v3.1-source-expansion";
 const initialPassNumber = 1;
 
@@ -163,11 +161,29 @@ export async function executeInitialDiscoveryStage(input: {
   const segmentRunByKey = new Map(
     segmentRuns.map(({ segmentKey, segmentRun }) => [segmentKey, segmentRun]),
   );
+  const reservoir = sizeDiscoveryReservoir({
+    requestedCompanyCount: context.requestedCompanyCount,
+    maximumProviderCalls: plan.budgetPolicy.maximumProviderCalls,
+    marketBreadth: plan.marketBreadth,
+    ...(plan.estimatedCandidateRange
+      ? { estimatedCandidateRange: plan.estimatedCandidateRange }
+      : {}),
+    lanes: plan.segments.map((segment) => ({
+      id: segment.id,
+      priority:
+        segment.priority <= 20
+          ? "priority"
+          : segment.priority <= 50
+            ? "secondary"
+            : "exploratory",
+    })),
+  });
+  const selectedLaneIds = new Set(reservoir.selectedLaneIds);
   const selectedSegments = [...plan.segments]
     .sort(
       (left, right) => left.priority - right.priority || compareText(left.id, right.id),
     )
-    .slice(0, maximumInitialSegments);
+    .filter(({ id }) => selectedLaneIds.has(id));
   if (!selectedSegments.length)
     throw new Error("Semantic Discovery Plan contains no executable segments.");
   const executionRequests = buildRequests({
@@ -175,7 +191,8 @@ export async function executeInitialDiscoveryStage(input: {
     campaignId: context.campaignInternalId,
     discoveryPlanId: planRecord.id,
     segments: selectedSegments,
-    maximumCalls: maximumInitialProviderCalls,
+    maximumCalls: reservoir.maximumInitialProviderCalls,
+    maximumResultsPerSegment: reservoir.maximumResultsPerLane,
     ...(plan.budgetPolicy.deadlineAt ? { deadlineAt: plan.budgetPolicy.deadlineAt } : {}),
   });
   const routeBySegment = new Map(
@@ -281,6 +298,9 @@ export async function executeInitialDiscoveryStage(input: {
       segment,
       outcome,
       updatedAt: outcome?.completedAt ?? context.campaignRunCreatedAt,
+      targetUniqueCandidates: reservoir.targets.find(
+        ({ laneId }) => laneId === segment.id,
+      )?.targetUniqueCandidates,
     });
     const coverage = calculateDiscoveryCoverage(metrics);
     const gaps = analyzeDiscoveryGaps({
@@ -409,6 +429,7 @@ export async function executeInitialDiscoveryStage(input: {
       uniqueCandidateHintCount: uniquePlausibleCandidateHintCount,
       continuationDecision: decision,
       stageScope: "initial_semantic_breadth",
+      reservoirPolicy: reservoir,
     },
     progressDelta: {
       discoverySegmentsAttempted: outcomes.length,
@@ -426,14 +447,13 @@ function buildRequests(input: {
   discoveryPlanId: string;
   segments: ProviderDiscoveryRequest["segment"][];
   maximumCalls: number;
+  maximumResultsPerSegment: number;
   deadlineAt?: string;
 }): ProviderDiscoveryRequest[] {
   if (!input.segments.length) return [];
   const callsPerSegment = Math.max(
     1,
-    Math.floor(
-      input.maximumCalls / Math.min(input.segments.length, maximumInitialSegments),
-    ),
+    Math.floor(input.maximumCalls / input.segments.length),
   );
   return input.segments.map((segment) => ({
     workspaceId: input.workspaceId,
@@ -448,7 +468,7 @@ function buildRequests(input: {
     },
     budget: {
       maxCalls: callsPerSegment,
-      maxResults: maximumResultsPerSegment,
+      maxResults: input.maximumResultsPerSegment,
       ...(input.deadlineAt ? { deadlineAt: input.deadlineAt } : {}),
     },
   }));
@@ -465,6 +485,7 @@ export function buildCoverageMetrics(input: {
       }
     | undefined;
   updatedAt: string;
+  targetUniqueCandidates?: number;
 }): DiscoveryCoverageMetrics {
   const facts = input.outcome?.coverageFacts ?? {
     candidateIdentityHints: [],
@@ -503,7 +524,7 @@ export function buildCoverageMetrics(input: {
   return {
     campaignId: input.campaignId,
     discoverySegmentId: input.segment.id,
-    archetypeId: input.segment.archetypeId,
+    archetypeId: input.segment.opportunityLaneId ?? input.segment.archetypeId,
     geographyKey: [...input.segment.geography.countryCodes].sort().join("+"),
     providerCalls: facts.providerCalls,
     queriesExecuted: facts.queriesExecuted,
@@ -528,6 +549,9 @@ export function buildCoverageMetrics(input: {
         .filter(({ family }) => family === "local_language")
         .map(({ language }) => language),
     ),
+    ...(input.targetUniqueCandidates
+      ? { targetUniqueCandidates: input.targetUniqueCandidates }
+      : {}),
     providerFailureCount: facts.providerFailureCount,
     providerExhausted: facts.providerExhausted,
     updatedAt: input.updatedAt,

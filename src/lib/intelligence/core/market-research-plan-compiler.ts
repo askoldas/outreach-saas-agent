@@ -12,9 +12,10 @@ import {
   type MarketResearchPlan,
 } from "./market-intelligence.ts";
 
-export const MARKET_RESEARCH_PLAN_SCHEMA_VERSION = "market-research-plan/v1";
+export const MARKET_RESEARCH_PLAN_SCHEMA_VERSION =
+  "market-research-plan/v2-opportunity-lanes";
 export const MARKET_RESEARCH_PLAN_COMPILER_VERSION =
-  "confirmed-market-provider-route-compiler/v1";
+  "confirmed-market-provider-route-compiler/v2-opportunity-lanes";
 
 export type FrozenProviderCapability = {
   snapshotId: string;
@@ -48,6 +49,11 @@ export function compileMarketResearchPlan(input: {
     marketAnalysisVersionId: input.analysis.id,
     campaignTargetModelVersionId: input.target.id,
     providerCapabilitySnapshotIds: capabilities.map(({ snapshotId }) => snapshotId),
+    marketBreadth: input.analysis.marketBreadth,
+    ...(input.analysis.estimatedCandidateRange
+      ? { estimatedCandidateRange: input.analysis.estimatedCandidateRange }
+      : {}),
+    opportunityLanes: input.analysis.opportunityLanes.filter(isRoutableLane),
     discoveryRoutes: routes,
     verificationRoutes,
     expectedCoverageRisks: input.analysis.coverageRisks,
@@ -100,14 +106,15 @@ function assertInputs(input: Parameters<typeof compileMarketResearchPlan>[0]) {
 
 function buildRoutes(analysis: MarketAnalysis, capabilities: FrozenProviderCapability[]) {
   const routes: DiscoveryRoute[] = [];
-  for (const archetype of analysis.targetArchetypes) {
+  for (const lane of routableLanes(analysis)) {
     for (const sourceFamily of analysis.majorSourceFamilies) {
       const sourceTypes = providerSourceTypes(sourceFamily);
       const compatible = compatibleCapabilities(analysis, capabilities, sourceTypes);
       if (!compatible.length) continue;
       routes.push({
-        id: `route.${archetype.archetypeId}.${sourceFamily}`,
-        archetypeIds: [archetype.archetypeId],
+        id: `route.${lane.id}.${sourceFamily}`,
+        archetypeIds: lane.sourceArchetypeId ? [lane.sourceArchetypeId] : [],
+        opportunityLaneIds: [lane.id],
         providerCapabilitySnapshotIds: compatible.map(({ snapshotId }) => snapshotId),
         sourceFamily,
         providerSourceTypes: uniqueSorted(
@@ -115,26 +122,28 @@ function buildRoutes(analysis: MarketAnalysis, capabilities: FrozenProviderCapab
             item.sourceTypes.filter((sourceType) => sourceTypes.includes(sourceType)),
           ),
         ),
-        role: archetype.priority === "priority" ? "primary" : "supporting",
-        priority: routePriority(archetype.priority, routes.length),
+        role: lane.disposition === "priority" ? "primary" : "supporting",
+        priority: routePriority(lane.disposition, routes.length),
         rationale: boundedText(
-          `${sourceFamily.replaceAll("_", " ")} coverage for ${archetype.rationale}`,
+          `${sourceFamily.replaceAll("_", " ")} coverage for ${lane.rationale}`,
           800,
         ),
         languages: routeLanguages(analysis, compatible),
-        vocabulary: uniqueSorted(
-          analysis.localTerminology
+        vocabulary: uniqueSorted([
+          ...lane.vocabulary,
+          ...analysis.localTerminology
             .filter(
               ({ archetypeIds }) =>
-                !archetypeIds.length || archetypeIds.includes(archetype.archetypeId),
+                !archetypeIds.length ||
+                (lane.sourceArchetypeId && archetypeIds.includes(lane.sourceArchetypeId)),
             )
             .map(({ term }) => term),
-        ),
+        ]),
         sourceHints: analysis.importantMarketSources
           .filter((source) => source.sourceFamily === sourceFamily)
           .map(({ url, name }) => url ?? name),
         expansionMode: sourceFamily === "web_search" ? "resumable" : "bounded",
-        expectedCoverage: expectedCoverage(archetype.priority, compatible.length),
+        expectedCoverage: expectedCoverage(lane.disposition, compatible.length),
       });
     }
   }
@@ -150,7 +159,10 @@ function buildVerificationRoutes(
   return [
     {
       id: "route.verification.official-website",
-      archetypeIds: analysis.targetArchetypes.map(({ archetypeId }) => archetypeId),
+      archetypeIds: routableLanes(analysis).flatMap(({ sourceArchetypeId }) =>
+        sourceArchetypeId ? [sourceArchetypeId] : [],
+      ),
+      opportunityLaneIds: routableLanes(analysis).map(({ id }) => id),
       providerCapabilitySnapshotIds: compatible.map(({ snapshotId }) => snapshotId),
       sourceFamily: "official_website" as const,
       providerSourceTypes: ["web_search" as const],
@@ -240,6 +252,38 @@ function expectedCoverage(
 ) {
   if (priority === "exploratory") return "low" as const;
   return providerCount > 1 ? ("high" as const) : ("medium" as const);
+}
+
+function routableLanes(analysis: MarketAnalysis) {
+  if (analysis.opportunityLanes.length) {
+    return analysis.opportunityLanes.filter(isRoutableLane);
+  }
+  return analysis.targetArchetypes.map((archetype) => ({
+    id: `lane.legacy.${archetype.archetypeId}`,
+    sourceArchetypeId: archetype.archetypeId,
+    label: archetype.archetypeId,
+    organizationType: archetype.archetypeId,
+    businessModels: [],
+    industries: [],
+    origin: "initial_target" as const,
+    disposition: archetype.priority,
+    rationale: archetype.rationale,
+    relationships: [],
+    evidenceIds: [],
+    counterEvidenceIds: [],
+    scaleDrivers: [],
+    buyingTriggers: [],
+    vocabulary: [],
+    confidence: analysis.confidence,
+  }));
+}
+
+function isRoutableLane(
+  lane: MarketAnalysis["opportunityLanes"][number],
+): lane is MarketAnalysis["opportunityLanes"][number] & {
+  disposition: "priority" | "secondary" | "exploratory";
+} {
+  return ["priority", "secondary", "exploratory"].includes(lane.disposition);
 }
 
 function boundedText(value: string, maximum: number) {

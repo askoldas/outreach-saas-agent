@@ -19,6 +19,14 @@ test("target compilation is offering-specific and preserves non-exclusive relati
     "manufacturer",
   ]);
   assert.deepEqual(
+    packaging.requiredSignals.map(({ statement }) => statement),
+    ["Operates relevant facilities"],
+  );
+  assert.deepEqual(
+    packaging.archetypes[0]?.scaleSignals.map(({ statement }) => statement),
+    ["Multiple operating locations"],
+  );
+  assert.deepEqual(
     software.archetypes.map(({ id }) => id),
     ["operator"],
   );
@@ -159,6 +167,14 @@ function commercial() {
     possibleRelationships: input.relationships,
     positiveSignals: [],
     negativeSignals: [],
+    scaleSignals: [
+      {
+        key: `${input.id}.locations`,
+        statement: "Multiple operating locations",
+        evidenceIds: ["evidence-1"],
+        confidence: 0.8,
+      },
+    ],
     evidenceIds: ["evidence-1"],
     confidence: 0.8,
   });
@@ -171,6 +187,7 @@ function commercial() {
     useCases: [],
     customerProblems: [],
     operationalUseCases: ["Run the relevant operation"],
+    requiredBuyerConditions: ["Operates relevant facilities"],
     possibleCustomerArchetypes: [candidate],
     possibleRelationships: candidate.possibleRelationships,
     positiveSignals: [],

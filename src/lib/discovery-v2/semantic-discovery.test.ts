@@ -55,6 +55,7 @@ test("coverage confidence is derived from explicit metrics", () => {
     }),
   );
   assert.equal(sufficient.status, "sufficient");
+  assert.equal(sufficient.targetUniqueCandidates, 10);
   assert.ok(sufficient.confidence >= 0.65);
   assert.equal(sufficient.duplicateRate, 0.1667);
 

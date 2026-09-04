@@ -10,10 +10,18 @@ export type CampaignPlanningArchetype = {
   priority: "priority" | "conditional" | "low_priority" | "avoid";
   status: "proposed" | "user_confirmed" | "user_rejected" | "superseded";
   description: string;
+  businessRoles?: string[];
+  businessModels?: string[];
+  industries?: string[];
   whyCompatible: string[];
+  requiredConditions?: string[];
+  preferredConditions?: string[];
+  incompatibleConditions?: string[];
   requiredEvidence: string[];
   positiveSignals: string[];
   negativeSignals: string[];
+  scaleSignals?: string[];
+  buyingTriggers?: string[];
   likelyDecisionRoles: string[];
   confidence: number;
   evidenceIds: string[];

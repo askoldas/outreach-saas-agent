@@ -37,6 +37,16 @@ export const discoveryPlanV2Schema = z
     marketResearchPlanVersionId: z.string().min(1).optional(),
     memorySnapshotId: z.string().min(1),
     versionNumber: z.number().int().positive(),
+    marketBreadth: z
+      .enum(["very_narrow", "narrow", "medium", "broad", "very_broad"])
+      .default("medium"),
+    estimatedCandidateRange: z
+      .object({
+        min: z.number().int().nonnegative().optional(),
+        max: z.number().int().nonnegative().optional(),
+      })
+      .strict()
+      .optional(),
     status: z.enum(["draft", "ready", "running", "completed", "superseded"]),
     segments: z.array(discoverySegmentRequestV2Schema).min(1),
     routes: z.array(segmentProviderRouteSchema).min(1),
@@ -113,6 +123,8 @@ export function compileDiscoveryPlanV2(input: {
   routes: SegmentProviderRouteV2[];
   providerCapabilities: Array<z.infer<typeof discoveryProviderCapabilitiesSchema>>;
   versionNumber: number;
+  marketBreadth?: DiscoveryPlanV2["marketBreadth"];
+  estimatedCandidateRange?: DiscoveryPlanV2["estimatedCandidateRange"];
   maximumProviderCalls: number;
   maximumEstimatedCostMinor?: number;
   deadlineAt?: string;
@@ -133,6 +145,10 @@ export function compileDiscoveryPlanV2(input: {
       : {}),
     memorySnapshotId: strategy.memorySnapshotId,
     versionNumber: input.versionNumber,
+    marketBreadth: input.marketBreadth ?? "medium",
+    ...(input.estimatedCandidateRange
+      ? { estimatedCandidateRange: input.estimatedCandidateRange }
+      : {}),
     status: "ready" as const,
     segments: [...(input.segments ?? strategy.discoverySegments)].sort(
       (left, right) => left.priority - right.priority || compareText(left.id, right.id),

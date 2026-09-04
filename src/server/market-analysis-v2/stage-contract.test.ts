@@ -27,8 +27,7 @@ test("market context bootstraps Company Research without a standalone stage", ()
   assert.match(workflow, /input\.stage === "initialize"/);
   assert.doesNotMatch(workflow, /executeCompanyResearchBootstrap/);
   assert.match(bootstrapTask, /executeCompanyResearchBootstrap/);
-  assert.match(executionTask, /bootstrapCompanyResearchContextV2Task\.trigger/);
-  assert.doesNotMatch(executionTask, /bootstrapCompanyResearchContextV2Task\.triggerAndWait/);
+  assert.match(executionTask, /bootstrapCompanyResearchContextV2Task\.triggerAndWait/);
   assert.match(discoveryStage, /compileAndPersistStrategyDiscoveryPlan/);
 });
 

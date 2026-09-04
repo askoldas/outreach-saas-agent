@@ -14,7 +14,7 @@ import {
 import type { ResearchBlueprint } from "../intelligence/core/research-blueprint.ts";
 
 export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION =
-  "candidate-research-v2.4-blueprints";
+  "candidate-research-v2.5-supporting-sources";
 
 export type CandidateResearchClaimState = {
   key: string;
@@ -43,6 +43,17 @@ export type CampaignResearchCandidateInput = {
   unresolvedQuestionKeys: string[];
   conflictKeys: string[];
   claimStates: CandidateResearchClaimState[];
+  triageEvidence?: {
+    employeeCount?: number;
+    industries: string[];
+    keywords: string[];
+    matchedSignals: string[];
+    preliminaryQuality: Array<{
+      likelyOperatingOrganization: boolean | null;
+      likelyTargetGeography: boolean | null;
+      confidence: number;
+    }>;
+  };
 };
 
 export type PreparedCampaignResearchPlan = {
@@ -59,6 +70,8 @@ export type PreparedCampaignResearchPlan = {
     preferredPages: CandidateResearchPlan["preferredPages"];
     maximumDiscoverySources: number;
     maximumFirstPartyFetches: number;
+    maximumSupportingSources: number;
+    supportingQueries: string[];
     deferredQuestionKeys: string[];
     deferredReusableQuestionKeys: string[];
     prioritization: CandidatePrioritization;
@@ -71,6 +84,12 @@ export function prepareCampaignResearchPlans(input: {
   strategyVersionId: string;
   strategy: CampaignStrategyV2;
   researchBlueprints?: ResearchBlueprint[];
+  opportunityLanes?: Array<{
+    id: string;
+    disposition: "priority" | "secondary" | "exploratory" | "weak" | "rejected";
+    scaleDrivers: string[];
+    buyingTriggers: string[];
+  }>;
   candidates: CampaignResearchCandidateInput[];
 }): PreparedCampaignResearchPlan[] {
   const archetypeById = new Map(
@@ -81,22 +100,42 @@ export function prepareCampaignResearchPlans(input: {
       (blueprint) => [blueprint.targetArchetypeId, blueprint] as const,
     ),
   );
+  const opportunityLaneById = new Map(
+    (input.opportunityLanes ?? []).map((lane) => [lane.id, lane] as const),
+  );
   return [...input.candidates]
     .map((candidate) => {
-      const matchedArchetypes = candidate.matchedArchetypeIds.map((id) => {
+      const matchedArchetypes = candidate.matchedArchetypeIds.flatMap((id) => {
         const archetype = archetypeById.get(id);
-        if (!archetype) {
+        if (!archetype && !opportunityLaneById.has(id)) {
           throw new Error(
-            `Campaign Candidate references unknown frozen archetype "${id}".`,
+            `Campaign Candidate references unknown frozen opportunity lane "${id}".`,
           );
         }
-        return archetype;
+        return archetype ? [archetype] : [];
       });
+      const matchedOpportunityLanes = candidate.matchedArchetypeIds.flatMap((id) => {
+        const lane = opportunityLaneById.get(id);
+        return lane && !["weak", "rejected"].includes(lane.disposition) ? [lane] : [];
+      });
+      const matchedOpportunityLanePriorities = matchedOpportunityLanes.flatMap(
+        ({ disposition }) =>
+          disposition === "priority" ||
+          disposition === "secondary" ||
+          disposition === "exploratory"
+            ? [disposition]
+            : [],
+      );
       const matchedBlueprints = candidate.matchedArchetypeIds.flatMap((id) => {
         const blueprint = blueprintByArchetypeId.get(id);
         return blueprint ? [blueprint] : [];
       });
-      const required = new Set(["business_model", "products_services"]);
+      const required = new Set([
+        "business_model",
+        "products_services",
+        "commercial_scale",
+        "opportunity_timing",
+      ]);
       const optional = new Set(["operating_markets"]);
       const requiresTargetGeography =
         !input.strategy.geography.countryCodes.includes("WORLDWIDE");
@@ -105,6 +144,8 @@ export function prepareCampaignResearchPlans(input: {
         "business_model",
         "products_services",
         "operating_markets",
+        "commercial_scale",
+        "opportunity_timing",
         ...candidate.unresolvedQuestionKeys,
         ...candidate.conflictKeys,
       ]);
@@ -209,7 +250,25 @@ export function prepareCampaignResearchPlans(input: {
           ? ["procurement_authority"]
           : []),
       ]);
-      const prioritization = prioritizeResearchCandidate(candidate);
+      const prioritization = prioritizeResearchCandidate(candidate, {
+        matchedLanePriorities: [
+          ...matchedArchetypes.flatMap(({ priority }) =>
+            priority === "incompatible" ? [] : [priority],
+          ),
+          ...matchedOpportunityLanePriorities,
+        ],
+        expectedScaleSignals: matchedOpportunityLanes.flatMap(
+          ({ scaleDrivers }) => scaleDrivers,
+        ),
+        expectedBuyingSignals: [
+          ...matchedOpportunityLanes.flatMap(({ buyingTriggers }) => buyingTriggers),
+          ...matchedArchetypes.flatMap(({ positiveSignals }) =>
+            positiveSignals
+              .filter(({ class: signalClass }) => signalClass === "trigger")
+              .flatMap(({ key, label, description }) => [key, label, description]),
+          ),
+        ],
+      });
       const sourcePlan = {
         canonicalDomain: candidate.canonicalDomain,
         canonicalUrl: candidate.canonicalUrl,
@@ -217,6 +276,26 @@ export function prepareCampaignResearchPlans(input: {
         preferredPages: plan.preferredPages,
         maximumDiscoverySources: 3,
         maximumFirstPartyFetches: plan.pageBudget,
+        maximumSupportingSources: Math.min(
+          6,
+          Math.max(
+            2,
+            ...matchedBlueprints.map(
+              ({ stoppingCriteria }) => stoppingCriteria.maximumSupportingSources,
+            ),
+          ),
+        ),
+        supportingQueries: supportingQueries({
+          organizationName: candidate.organizationName,
+          buyingTriggers: [
+            ...matchedOpportunityLanes.flatMap(({ buyingTriggers }) => buyingTriggers),
+            ...matchedArchetypes.flatMap(({ positiveSignals }) =>
+              positiveSignals
+                .filter(({ class: signalClass }) => signalClass === "trigger")
+                .flatMap(({ label, description }) => [label, description]),
+            ),
+          ],
+        }),
         deferredQuestionKeys: [...requestedQuestionKeys]
           .filter((key) => !frozenQuestionKeys.has(key))
           .sort(compareText),
@@ -248,6 +327,7 @@ export function prepareCampaignResearchPlans(input: {
           plan.questions.length === 0 ? candidate.currentIntelligenceVersionId : null,
       };
     })
+    .filter(({ sourcePlan }) => sourcePlan.prioritization.lane === "deep_research")
     .sort(
       (left, right) =>
         right.priority - left.priority ||
@@ -328,6 +408,31 @@ function buildQuestionOverrides(
   const overrides: NonNullable<
     Parameters<typeof compileCandidateResearchPlan>[0]["questionOverrides"]
   > = {};
+  overrides.commercial_scale = {
+    question:
+      "What current public evidence indicates this organization's commercially relevant operating scale?",
+    purpose: "commercial_potential",
+    reusableScope: "organization",
+    expectedEvidenceTypes: [
+      "official_web_page",
+      "official_document",
+      "company_database",
+      "directory_profile",
+      "news_article",
+    ],
+  };
+  overrides.opportunity_timing = {
+    question:
+      "What dated public evidence supports or contradicts a current buying trigger or commercially relevant change?",
+    purpose: "freshness",
+    reusableScope: "organization",
+    expectedEvidenceTypes: [
+      "news_article",
+      "job_posting",
+      "official_document",
+      "official_web_page",
+    ],
+  };
   for (const archetype of strategy.archetypes) {
     for (const question of archetype.requiredEvidenceQuestions) {
       overrides[question.questionKey] = {
@@ -376,4 +481,18 @@ function buildQuestionOverrides(
     };
   }
   return overrides;
+}
+
+function supportingQueries(input: {
+  organizationName: string;
+  buyingTriggers: string[];
+}) {
+  const organization = `"${input.organizationName.replaceAll('"', "").trim()}"`;
+  const triggerTerms = [...new Set(input.buyingTriggers.map((value) => value.trim()))]
+    .filter(Boolean)
+    .slice(0, 6);
+  return [
+    `${organization} ${triggerTerms.length ? `(${triggerTerms.join(" OR ")})` : "news expansion investment"}`,
+    `${organization} (procurement OR tender OR supplier OR hiring OR appointment)`,
+  ].map((query) => query.slice(0, 500));
 }

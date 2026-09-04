@@ -18,6 +18,7 @@ test("Tavily search requests and prefers extracted raw website content", async (
           title: "About",
           content: "short snippet",
           raw_content: "Complete extracted website content",
+          published_date: "2026-08-01",
         },
       ],
     });
@@ -29,6 +30,7 @@ test("Tavily search requests and prefers extracted raw website content", async (
       country: "Lithuania",
     });
     assert.equal(results[0]?.content, "Complete extracted website content");
+    assert.equal(results[0]?.publishedAt, "2026-08-01T00:00:00.000Z");
   } finally {
     globalThis.fetch = originalFetch;
   }

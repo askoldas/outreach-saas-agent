@@ -3,7 +3,7 @@ import type { CandidateResearchPlan, CandidateResearchQuestion } from "./contrac
 import type { PromptDefinition } from "../intelligence/runtime/task-registry.ts";
 
 export const candidateEvidenceExtractionPromptVersion =
-  "candidate-evidence-extraction-v2.4-shared-runtime";
+  "candidate-evidence-extraction-v2.5-supporting-sources-shared-runtime";
 export const candidateEvidenceExtractionSchemaVersion =
   "candidate-evidence-extraction-v2.2";
 
@@ -61,6 +61,7 @@ export type CandidateResearchEvidenceContext = {
   sourceUrl: string;
   pageKind: string;
   retrievedAt: string;
+  publishedAt?: string;
   content: string;
 };
 
@@ -87,10 +88,7 @@ export function normalizeCandidateEvidenceExtraction(input: {
       discardedUnknownQuestion = true;
       return [];
     }
-    const evidenceIds = retainAllowedEvidenceIds(
-      claim.evidenceIds,
-      allowedEvidenceIds,
-    );
+    const evidenceIds = retainAllowedEvidenceIds(claim.evidenceIds, allowedEvidenceIds);
     if (evidenceIds.length !== claim.evidenceIds.length) {
       discardedInvalidCitation = true;
     }
@@ -116,18 +114,15 @@ export function normalizeCandidateEvidenceExtraction(input: {
         `Candidate research extraction returned duplicate finding "${finding.questionKey}".`,
       );
     }
-    const evidenceIds = retainAllowedEvidenceIds(
-      finding.evidenceIds,
-      allowedEvidenceIds,
-    );
+    const evidenceIds = retainAllowedEvidenceIds(finding.evidenceIds, allowedEvidenceIds);
     if (evidenceIds.length !== finding.evidenceIds.length) {
       discardedInvalidCitation = true;
     }
-    if (
-      finding.state !== "unknown" &&
-      evidenceIds.length === 0
-    ) {
-      findingByKey.set(finding.questionKey, unknownFinding(questions.get(finding.questionKey)!));
+    if (finding.state !== "unknown" && evidenceIds.length === 0) {
+      findingByKey.set(
+        finding.questionKey,
+        unknownFinding(questions.get(finding.questionKey)!),
+      );
       continue;
     }
     findingByKey.set(finding.questionKey, {
@@ -193,6 +188,7 @@ export function buildCandidateEvidenceExtractionMessages(input: {
         "Absence of a statement is not proof of a negative.",
         "Do not assign relationship, eligibility, fit, potential, rank, or score.",
         "Every non-unknown claim and answered finding must cite supplied evidence IDs.",
+        "For timing claims, distinguish the source publication/observation date from the retrieval date and do not describe undated evidence as current.",
         "Copy evidence IDs exactly from the supplied evidence array; never invent, shorten, or transform an evidence ID.",
         "Set questionFindings.claimKeys to an empty array; the application derives those links from the frozen question keys.",
         "Keep each claim statement within 1200 characters, each concise answer within 600 characters, and each missing-evidence item within 300 characters.",
@@ -242,7 +238,7 @@ export const candidateEvidenceExtractionTaskDefinition: PromptDefinition<
   taskId: "candidate.evidence_extraction",
   promptVersion: candidateEvidenceExtractionPromptVersion,
   schemaVersion: candidateEvidenceExtractionSchemaVersion,
-  contextCompilerVersion: "candidate-research-context/v2.3-multipage",
+  contextCompilerVersion: "candidate-research-context/v2.4-source-dates",
   modelRole: "candidate_evidence_extraction",
   title: "Candidate evidence extraction",
   description: "Extract bounded evidence-grounded answers for one frozen candidate plan.",
@@ -263,9 +259,7 @@ function boundCandidateEvidenceProse(raw: unknown): unknown {
   return {
     ...record,
     claims: Array.isArray(record.claims)
-      ? record.claims.map((claim) =>
-          boundObjectTextField(claim, "statement", 1_200),
-        )
+      ? record.claims.map((claim) => boundObjectTextField(claim, "statement", 1_200))
       : record.claims,
     questionFindings: Array.isArray(record.questionFindings)
       ? record.questionFindings.map((finding) =>
@@ -282,11 +276,7 @@ function boundCandidateEvidenceProse(raw: unknown): unknown {
   };
 }
 
-function boundObjectTextField(
-  value: unknown,
-  field: string,
-  maximum: number,
-): unknown {
+function boundObjectTextField(value: unknown, field: string, maximum: number): unknown {
   if (!value || typeof value !== "object" || Array.isArray(value)) return value;
   const record = value as Record<string, unknown>;
   return {

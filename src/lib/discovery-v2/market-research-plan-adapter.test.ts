@@ -39,9 +39,56 @@ test("adapter is deterministic and retains Strategy identity for compatibility",
   assert.equal(first.segments[0]?.strategyVersionId, "strategy-1");
 });
 
+test("market-discovered lanes become first-class discovery segments", () => {
+  const strategy = confirmedStrategy();
+  const archetypeId = strategy.discoverySegments[0]!.archetypeId;
+  const plan = researchPlan(archetypeId);
+  plan.opportunityLanes = [
+    {
+      id: "lane.market.event-venues",
+      label: "Conference and event venues",
+      organizationType: "Venue operator",
+      businessModels: ["events and banqueting"],
+      industries: ["hospitality"],
+      origin: "market_research",
+      disposition: "priority",
+      rationale: "Banquet operations create recurring demand.",
+      relationships: ["buyer"],
+      evidenceIds: ["market-evidence-1"],
+      counterEvidenceIds: [],
+      scaleDrivers: ["banquet capacity"],
+      buyingTriggers: ["venue renovation"],
+      vocabulary: ["conference centre"],
+      confidence: 0.82,
+    },
+  ];
+  plan.discoveryRoutes = [
+    {
+      ...plan.discoveryRoutes[0]!,
+      id: "research.route.event-venues",
+      archetypeIds: [],
+      opportunityLaneIds: ["lane.market.event-venues"],
+      vocabulary: ["conference centre"],
+    },
+  ];
+  const result = compile(["web_search"], { researchPlan: plan });
+  assert.equal(result.segments.length, 1);
+  assert.equal(result.segments[0]?.opportunityLaneId, "lane.market.event-venues");
+  assert.equal(result.segments[0]?.archetypeId, "lane.market.event-venues");
+  assert.deepEqual(result.segments[0]?.businessCharacteristics.industries, [
+    "hospitality",
+  ]);
+  assert.ok(
+    result.segments[0]?.businessCharacteristics.keywords.includes("venue renovation"),
+  );
+});
+
 function compile(
   enabledProviderIds = ["web_search"],
-  overrides: { providerCapabilities?: [] } = {},
+  overrides: {
+    providerCapabilities?: [];
+    researchPlan?: ReturnType<typeof researchPlan>;
+  } = {},
 ) {
   const strategy = confirmedStrategy();
   const archetypeId = strategy.discoverySegments[0]!.archetypeId;
@@ -49,7 +96,7 @@ function compile(
     id: "discovery-plan-1",
     workspaceId: "workspace-1",
     strategy,
-    researchPlan: researchPlan(archetypeId),
+    researchPlan: overrides.researchPlan ?? researchPlan(archetypeId),
     providerCapabilities: overrides.providerCapabilities ?? [
       { snapshotId: "snapshot-1", capabilities: webSearchProviderCapabilities },
     ],

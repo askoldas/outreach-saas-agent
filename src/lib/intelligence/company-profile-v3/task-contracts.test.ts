@@ -95,12 +95,14 @@ test("commercial synthesis is compact and has enough completion headroom", () =>
 
 test("commercial synthesis compacts verbose role descriptions into bounded labels", () => {
   const parsed = profileCommercialSynthesisOutputSchema.parse({
-    primaryRoles: [{
-      role: `Manufacturer and supplier of specialized chemical intermediates, active pharmaceutical ingredients, and custom synthesis services for regulated pharmaceutical customers across multiple international markets`,
-      importance: "primary",
-      confidence: 0.8,
-      evidenceIds: ["evidence-1"],
-    }],
+    primaryRoles: [
+      {
+        role: `Manufacturer and supplier of specialized chemical intermediates, active pharmaceutical ingredients, and custom synthesis services for regulated pharmaceutical customers across multiple international markets`,
+        importance: "primary",
+        confidence: 0.8,
+        evidenceIds: ["evidence-1"],
+      },
+    ],
     valueChainPosition: [],
     revenueMechanics: [],
     transactionModels: [],
@@ -123,15 +125,18 @@ test("profile buyer rules expose only durable, compact profile scopes", () => {
   assert.ok(definition);
   assert.equal(
     definition.schemaVersion,
-    "profile-buyer-logic-schema-v7-compact-sharded",
+    "profile-buyer-logic-schema-v8-commercial-opportunity",
   );
-  assert.match(definition.promptVersion, /-v8$/);
+  assert.match(definition.promptVersion, /-v9$/);
   const schema = JSON.stringify(z.toJSONSchema(definition.outputSchema));
   assert.match(schema, /"scope":\{"type":"string","enum":\["workspace","offering"\]\}/);
   assert.doesNotMatch(schema, /"scope"[\s\S]*?"candidate"/);
   assert.match(definition.description, /never campaign or candidate scope/i);
   assert.match(definition.description, /one exact supplied offeringKey/i);
-  assert.match(definition.description, /at most two distinct high-value archetypes/i);
+  assert.match(
+    definition.description,
+    /at most two distinct high-value opportunity hypotheses/i,
+  );
   assert.match(definition.description, /at most one rule/i);
   assert.match(definition.description, /prefer an empty array over speculation/i);
   assert.match(schema, /"offeringBuyerLogic"/);

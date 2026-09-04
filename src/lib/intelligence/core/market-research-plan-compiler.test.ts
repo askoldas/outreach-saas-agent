@@ -61,9 +61,36 @@ test("route rationales remain within the persisted contract at maximum archetype
   assert.match(plan.discoveryRoutes[0]?.rationale ?? "", /…$/);
 });
 
+test("research planning routes active market lanes and excludes rejected lanes", () => {
+  const plan = compile(true, {
+    ...analysis(),
+    opportunityLanes: [
+      lane("lane.initial.archetype-1", "secondary", "archetype-1"),
+      lane("lane.market.event-venues", "priority"),
+      lane("lane.market.weak-segment", "rejected"),
+    ],
+  });
+  assert.deepEqual(
+    plan.opportunityLanes.map(({ id }) => id),
+    ["lane.initial.archetype-1", "lane.market.event-venues"],
+  );
+  const discovered = plan.discoveryRoutes.find(({ opportunityLaneIds }) =>
+    opportunityLaneIds.includes("lane.market.event-venues"),
+  );
+  assert.ok(discovered);
+  assert.deepEqual(discovered.archetypeIds, []);
+  assert.ok(discovered.vocabulary.includes("conference centre"));
+  assert.equal(
+    plan.discoveryRoutes.some(({ opportunityLaneIds }) =>
+      opportunityLaneIds.includes("lane.market.weak-segment"),
+    ),
+    false,
+  );
+});
+
 function compile(
   userConfirmed = true,
-  market = analysis(),
+  market: unknown = analysis(),
   providerCapabilities = [
     capability("snapshot-1", ["industry_directory", "web_search"], ["LV"]),
   ],
@@ -173,6 +200,33 @@ function target() {
     confidence: 0.8,
     version: version("target"),
   });
+}
+
+function lane(
+  id: string,
+  disposition: "priority" | "secondary" | "rejected",
+  sourceArchetypeId?: string,
+) {
+  return {
+    id,
+    ...(sourceArchetypeId ? { sourceArchetypeId } : {}),
+    label: id.includes("event") ? "Conference and event venues" : "Operators",
+    organizationType: "Operating organization",
+    businessModels: ["venue operations"],
+    industries: ["hospitality"],
+    origin: sourceArchetypeId
+      ? ("initial_target" as const)
+      : ("market_research" as const),
+    disposition,
+    rationale: "The lane can need the selected offering.",
+    relationships: ["buyer" as const],
+    evidenceIds: [],
+    counterEvidenceIds: [],
+    scaleDrivers: ["site capacity"],
+    buyingTriggers: ["renovation"],
+    vocabulary: ["conference centre"],
+    confidence: 0.7,
+  };
 }
 
 function capability(snapshotId: string, sourceTypes: string[], countries: string[]) {

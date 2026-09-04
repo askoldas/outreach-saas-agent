@@ -70,6 +70,7 @@ export function compileCommercialIntelligence(input: {
         offeringVersionId: offering.id,
         name: offering.name,
         summary: offering.shortDescription,
+        valueProposition: uniqueSorted(offering.promisedOutcomes),
         capabilities: uniqueSorted([
           ...offering.buyerLogic.requiredCapabilities.map(({ statement }) => statement),
           ...offering.buyerLogic.preferredCharacteristics.map(
@@ -77,21 +78,52 @@ export function compileCommercialIntelligence(input: {
           ),
         ]),
         useCases: uniqueSorted(offering.useCases),
+        expectedOutcomes: uniqueSorted(offering.promisedOutcomes),
         customerProblems: uniqueSorted(offering.customerProblem),
         operationalUseCases: uniqueSorted(offering.useCases),
+        requiredBuyerConditions: uniqueSorted(
+          offering.buyerLogic.requiredCapabilities.map(({ statement }) => statement),
+        ),
+        preferredBuyerConditions: uniqueSorted(
+          offering.buyerLogic.preferredCharacteristics.map(({ statement }) => statement),
+        ),
+        negativeBuyerConditions: uniqueSorted(
+          offering.buyerLogic.incompatibleCharacteristics.map(
+            ({ statement }) => statement,
+          ),
+        ),
+        likelyBuyerRoles: uniqueSorted(
+          offering.buyerLogic.buyerRoles.flatMap(({ jobFunctions }) => jobFunctions),
+        ),
+        procurementPatterns: uniqueSorted([
+          offering.buyerLogic.procurementModel.motion,
+          ...offering.buyerLogic.procurementModel.participants,
+        ]).filter((value) => value !== "unknown"),
         possibleCustomerArchetypes: archetypes.map((archetype) => ({
           id: archetype.id,
           label: archetype.name,
           organizationType: archetype.description,
-          businessRoles: uniqueSorted(archetype.businessRoles),
-          businessModels: uniqueSorted(archetype.businessModels),
-          industries: uniqueSorted(archetype.industries),
+          businessRoles: uniqueSorted(archetype.businessRoles ?? []),
+          businessModels: uniqueSorted(archetype.businessModels ?? []),
+          industries: uniqueSorted(archetype.industries ?? []),
           sourcePriority: archetype.priority,
           rationale: joinRationale(archetype.whyCompatible, archetype.description),
           operationalUseCases: uniqueSorted([
             ...archetype.commercialNeed,
             ...archetype.whyCompatible,
           ]),
+          requiredConditions: uniqueSorted(
+            archetype.requiredConditions.map(({ statement }) => statement),
+          ),
+          preferredConditions: uniqueSorted(
+            archetype.preferredConditions.map(({ statement }) => statement),
+          ),
+          negativeConditions: uniqueSorted(
+            archetype.incompatibleConditions.map(({ statement }) => statement),
+          ),
+          likelyBuyerRoles: uniqueSorted(
+            archetype.likelyBuyerRoles.flatMap(({ jobFunctions }) => jobFunctions),
+          ),
           possibleRelationships: uniqueRelationships([
             archetype.relationshipType,
             ...offering.relationshipOptions
@@ -108,6 +140,22 @@ export function compileCommercialIntelligence(input: {
             archetype.confidence,
             archetype.evidenceIds,
           ),
+          scaleSignals: compileConditionScaleSignals({
+            conditions: [
+              ...archetype.requiredConditions,
+              ...archetype.preferredConditions,
+            ],
+            keyPrefix: `archetype.${archetype.id}.scale`,
+            confidence: archetype.confidence,
+            evidenceIds: archetype.evidenceIds,
+          }),
+          buyingSignals: compileSignals(
+            offering.buyerLogic.buyingTriggers,
+            archetype.confidence,
+            archetype.evidenceIds,
+          ),
+          origin: "company_profile" as const,
+          status: "hypothesis" as const,
           evidenceIds: uniqueSorted(archetype.evidenceIds),
           confidence: archetype.confidence,
         })),
@@ -118,6 +166,20 @@ export function compileCommercialIntelligence(input: {
         ),
         positiveSignals,
         negativeSignals,
+        scaleDrivers: compileConditionScaleSignals({
+          conditions: [
+            ...offering.buyerLogic.requiredCapabilities,
+            ...offering.buyerLogic.preferredCharacteristics,
+          ],
+          keyPrefix: `offering.${offering.id}.scale`,
+          confidence: offering.confidence,
+          evidenceIds: offering.evidenceIds,
+        }),
+        buyingTriggers: compileSignals(
+          offering.buyerLogic.buyingTriggers,
+          offering.confidence,
+          offering.evidenceIds,
+        ),
         ruleKeys: uniqueSorted(
           input.profile.rules
             .filter(
@@ -191,14 +253,26 @@ export function compileCommercialIntelligenceFromPlanningProfile(input: {
       offeringVersionId: offering.offeringVersionId,
       name: offering.name,
       summary: offering.shortDescription,
+      valueProposition: uniqueSorted(offering.commercialMechanics.valueProposition),
       capabilities: uniqueSorted([
         ...offering.commercialMechanics.valueProposition,
         ...offering.buyerLogic.requiredConditions,
         ...offering.buyerLogic.preferredConditions,
       ]),
       useCases: uniqueSorted(offering.commercialMechanics.expectedOutcomes),
+      expectedOutcomes: uniqueSorted(offering.commercialMechanics.expectedOutcomes),
       customerProblems: uniqueSorted(offering.commercialMechanics.customerProblems),
       operationalUseCases: uniqueSorted(offering.commercialMechanics.expectedOutcomes),
+      requiredBuyerConditions: uniqueSorted(offering.buyerLogic.requiredConditions),
+      preferredBuyerConditions: uniqueSorted(offering.buyerLogic.preferredConditions),
+      negativeBuyerConditions: uniqueSorted(offering.buyerLogic.incompatibleConditions),
+      likelyBuyerRoles: uniqueSorted(offering.buyerLogic.likelyDecisionRoles),
+      procurementPatterns: uniqueSorted([
+        ...(offering.buyerLogic.procurementPattern
+          ? [offering.buyerLogic.procurementPattern]
+          : []),
+        ...offering.commercialMechanics.transactionModels,
+      ]),
       possibleCustomerArchetypes: offering.archetypes
         .filter(
           ({ priority, status }) =>
@@ -208,15 +282,19 @@ export function compileCommercialIntelligenceFromPlanningProfile(input: {
           id: archetype.key,
           label: archetype.name,
           organizationType: archetype.description,
-          businessRoles: [],
-          businessModels: [],
-          industries: [],
+          businessRoles: uniqueSorted(archetype.businessRoles ?? []),
+          businessModels: uniqueSorted(archetype.businessModels ?? []),
+          industries: uniqueSorted(archetype.industries ?? []),
           sourcePriority: archetype.priority,
           rationale: joinRationale(archetype.whyCompatible, archetype.description),
           operationalUseCases: uniqueSorted([
             ...archetype.requiredEvidence,
             ...archetype.whyCompatible,
           ]),
+          requiredConditions: uniqueSorted(archetype.requiredConditions ?? []),
+          preferredConditions: uniqueSorted(archetype.preferredConditions ?? []),
+          negativeConditions: uniqueSorted(archetype.incompatibleConditions ?? []),
+          likelyBuyerRoles: uniqueSorted(archetype.likelyDecisionRoles),
           possibleRelationships: uniqueRelationships([
             archetype.relationshipType,
             ...offering.relationshipOptions
@@ -235,6 +313,23 @@ export function compileCommercialIntelligenceFromPlanningProfile(input: {
             archetype.confidence,
             archetype.evidenceIds,
           ),
+          scaleSignals: compileTextSignals(
+            archetype.scaleSignals ?? [],
+            `archetype.${archetype.key}.scale`,
+            archetype.confidence,
+            archetype.evidenceIds,
+          ),
+          buyingSignals: compileTextSignals(
+            uniqueSorted([
+              ...(archetype.buyingTriggers ?? []),
+              ...offering.buyerLogic.likelyTriggers,
+            ]),
+            `archetype.${archetype.key}.buying`,
+            archetype.confidence,
+            archetype.evidenceIds,
+          ),
+          origin: "company_profile" as const,
+          status: "hypothesis" as const,
           evidenceIds: uniqueSorted(archetype.evidenceIds),
           confidence: archetype.confidence,
         })),
@@ -252,6 +347,18 @@ export function compileCommercialIntelligenceFromPlanningProfile(input: {
       negativeSignals: compileTextSignals(
         offering.buyerLogic.negativeEvidenceSignals,
         `offering.${offering.offeringId}.negative`,
+        offering.buyerLogic.confidence,
+        offering.buyerLogic.evidenceIds,
+      ),
+      scaleDrivers: compileTextSignals(
+        offering.archetypes.flatMap(({ scaleSignals }) => scaleSignals ?? []),
+        `offering.${offering.offeringId}.scale`,
+        offering.buyerLogic.confidence,
+        offering.buyerLogic.evidenceIds,
+      ),
+      buyingTriggers: compileTextSignals(
+        offering.buyerLogic.likelyTriggers,
+        `offering.${offering.offeringId}.buying`,
         offering.buyerLogic.confidence,
         offering.buyerLogic.evidenceIds,
       ),
@@ -315,15 +422,20 @@ export function compileCommercialIntelligenceFromPlanningProfile(input: {
 }
 
 function compileSignals(
-  signals: Array<{ key: string; description: string }>,
+  signals: Array<{
+    key: string;
+    description: string;
+    confidence?: number;
+    evidenceIds?: string[];
+  }>,
   confidence: number,
   evidenceIds: string[],
 ) {
   return signals.map((signal) => ({
     key: signal.key,
     statement: signal.description,
-    evidenceIds: uniqueSorted(evidenceIds),
-    confidence,
+    evidenceIds: uniqueSorted([...(signal.evidenceIds ?? []), ...evidenceIds]),
+    confidence: signal.confidence ?? confidence,
   }));
 }
 
@@ -339,6 +451,24 @@ function compileTextSignals(
     evidenceIds: uniqueSorted(evidenceIds),
     confidence,
   }));
+}
+
+function compileConditionScaleSignals(input: {
+  conditions: Array<{ key: string; statement: string; evidenceIds: string[] }>;
+  keyPrefix: string;
+  confidence: number;
+  evidenceIds: string[];
+}) {
+  const scalePattern =
+    /\b(?:scale|size|employee|revenue|turnover|location|site|branch|facility|capacity|volume|throughput|room|bed|unit|fleet|production|multi[- ]?site|business unit)\b/i;
+  return input.conditions
+    .filter(({ key, statement }) => scalePattern.test(`${key} ${statement}`))
+    .map((condition, index) => ({
+      key: `${input.keyPrefix}.${index + 1}`,
+      statement: condition.statement,
+      evidenceIds: uniqueSorted([...input.evidenceIds, ...condition.evidenceIds]),
+      confidence: input.confidence,
+    }));
 }
 
 function normalizeRelationship(value: string): CommercialRelationshipType {

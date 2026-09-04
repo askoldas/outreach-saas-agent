@@ -80,6 +80,7 @@ export type CandidateClaimInput = {
     | "conflicting";
   confidence: number;
   evidenceIds: string[];
+  observedAt?: string;
   freshnessClass: FreshnessClass;
   sourceScope: "system_public" | "workspace_private";
 };

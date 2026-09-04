@@ -129,13 +129,35 @@ export const executeCampaignV2Task = task({
     const stages = cycleStages.filter((stage) => !completedStages.includes(stage));
 
     if (cycleNumber === 1 && !payload.requestedAction) {
-      await bootstrapCompanyResearchContextV2Task.trigger(payload, {
-        idempotencyKey: `bootstrap-company-research-context-v2:${payload.campaignRunId}`,
-        tags: [
-          `workspace:${payload.workspaceId}`,
-          `campaign_run:${payload.campaignRunId}`,
-        ],
-      });
+      const marketBootstrap = await bootstrapCompanyResearchContextV2Task.triggerAndWait(
+        payload,
+        {
+          idempotencyKey: `bootstrap-company-research-context-v2:${payload.campaignRunId}`,
+          tags: [
+            `workspace:${payload.workspaceId}`,
+            `campaign_run:${payload.campaignRunId}`,
+          ],
+        },
+      );
+      if (!marketBootstrap.ok) {
+        throw new Error(
+          `Market opportunity bootstrap failed: ${errorMessage(marketBootstrap.error)}`,
+        );
+      }
+      if (marketBootstrap.output.status === "blocked") {
+        const outcome = await settleTerminalOutcome(payload, "internal_cost_guard");
+        await updateCampaignWorkflow({
+          outputReference: {
+            blockedStage: "market_research",
+            stageOutput: marketBootstrap.output.outputReferences,
+            ...(outcome ? { outcome } : {}),
+          } as unknown as Json,
+          status: "completed_partial",
+          workflowRunId,
+          workspaceId: payload.workspaceId,
+        });
+        return { status: "completed_partial", stage: "market_research", workflowRunId };
+      }
     }
 
     for (const stage of stages) {

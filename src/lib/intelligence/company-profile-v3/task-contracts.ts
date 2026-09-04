@@ -171,10 +171,18 @@ const buyerArchetypeSchema = z.object({
   relationshipType: z.string().min(1).max(100),
   priority: z.enum(["priority", "conditional", "exclude_by_default"]),
   description: z.string().min(1).max(320),
+  businessRoles: z.array(z.string().min(1).max(120)).max(6).default([]),
+  businessModels: z.array(z.string().min(1).max(160)).max(6).default([]),
+  industries: z.array(z.string().min(1).max(160)).max(8).default([]),
   whyCompatible: z.array(z.string().min(1).max(220)).max(4),
+  requiredConditions: z.array(z.string().min(1).max(220)).max(6).default([]),
+  preferredConditions: z.array(z.string().min(1).max(220)).max(6).default([]),
+  incompatibleConditions: z.array(z.string().min(1).max(220)).max(6).default([]),
   requiredEvidence: z.array(z.string().min(1).max(220)).max(4),
   positiveSignals: z.array(z.string().min(1).max(220)).max(5),
   negativeSignals: z.array(z.string().min(1).max(220)).max(5),
+  scaleSignals: z.array(z.string().min(1).max(220)).max(6).default([]),
+  buyingTriggers: z.array(z.string().min(1).max(220)).max(6).default([]),
   likelyDecisionRoles: z.array(z.string().min(1).max(120)).max(6),
   evidenceIds: z.array(z.string().min(1).max(160)).max(12),
   epistemicStatus: z.enum(["evidence_backed_inference", "hypothesis"]),
@@ -366,10 +374,10 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
   ),
   definition(
     "profile.buyer_logic",
-    "profile-buyer-logic-schema-v7-compact-sharded",
+    "profile-buyer-logic-schema-v8-commercial-opportunity",
     "profile_commercial_reasoning",
     profileBuyerLogicOutputSchema,
-    "Build compact buyer logic for the one exact supplied offeringKey. Return exactly one offeringBuyerLogic record and never reference another offering. Include at most two distinct high-value archetypes and at most one rule, only when that rule materially changes qualification. Keep lists to the strongest few items, keep each sentence concise, and prefer an empty array over speculation. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
+    "Build compact buyer logic for the one exact supplied offeringKey. Return exactly one offeringBuyerLogic record and never reference another offering. Include at most two distinct high-value opportunity hypotheses and at most one rule, only when that rule materially changes qualification. For each hypothesis preserve observable organization roles, business models, industries, required/preferred/incompatible conditions, offering-specific scale or account-value drivers, buying triggers, decision roles, and evidence IDs when supported. These are initial hypotheses, not a closed final market universe. Keep lists to the strongest few items, keep each sentence concise, and prefer an empty array over speculation. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
   ),
   definition(
     "profile.clarification",
@@ -397,7 +405,7 @@ function definition(
   const outputJsonSchema = z.toJSONSchema(outputSchema) as Record<string, unknown>;
   const promptRevision =
     taskId === "profile.buyer_logic"
-      ? "v8"
+      ? "v9"
       : taskId === "profile.commercial_synthesis"
         ? "v4"
         : taskId === "profile.clarification"

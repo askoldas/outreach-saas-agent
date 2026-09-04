@@ -45,8 +45,13 @@ test("profile task prompts include evidence, uncertainty, and injection boundari
     assert.match(prompt, /untrusted data/i);
     assert.match(prompt, /never invent/i);
     assert.match(prompt, /schema-valid JSON/i);
-    assert.match(prompt, /Exact output JSON Schema/i);
-    assert.match(prompt, /additionalProperties/);
+    if (definition.taskId === "profile.whole_company_analysis") {
+      assert.doesNotMatch(prompt, /Exact output JSON Schema/i);
+      assert.doesNotMatch(prompt, /additionalProperties/);
+    } else {
+      assert.match(prompt, /Exact output JSON Schema/i);
+      assert.match(prompt, /additionalProperties/);
+    }
   }
 });
 

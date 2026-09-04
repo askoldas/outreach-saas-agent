@@ -1,5 +1,8 @@
 import { createHash } from "node:crypto";
 import { compileProfileV3Draft } from "@/lib/intelligence/company-profile-v3/draft-compiler";
+import { adaptCompanyAnalystResult } from "@/lib/intelligence/company-profile-v3/company-analyst-adapter";
+import { assertAnalystEvidenceBoundary, companyAnalystResultSchema, type CompanyAnalystResult } from "@/lib/intelligence/company-profile-v3/company-analyst";
+import { runBoundedCompanyAnalyst } from "@/lib/intelligence/company-profile-v3/bounded-analyst";
 import { normalizeProfileStageProviderOutput } from "@/lib/intelligence/company-profile-v3/output-normalization";
 import { normalizeLegacyProfileBuyerRuleScopes } from "@/lib/intelligence/company-profile-v3/profile-rule-scopes";
 import {
@@ -8,7 +11,6 @@ import {
   profileCommercialSynthesisOutputSchema,
   profileConsistencyOutputSchema,
   profileOfferingDecompositionOutputSchema,
-  profileWholeCompanyAnalysisOutputSchema,
   profileV3TaskDefinitions,
 } from "@/lib/intelligence/company-profile-v3/task-contracts";
 import {
@@ -23,6 +25,9 @@ import { IntelligenceTaskRegistry } from "@/lib/intelligence/runtime/task-regist
 import { IntelligenceSchemaRegistry } from "@/lib/intelligence/runtime/schema-registry";
 import { createIntelligenceAttemptRecorder } from "@/server/intelligence-runtime/attempt-repository";
 import { generateTextResult, type AiCallResult } from "@/lib/providers/openrouter";
+import { searchWeb, type SearchResult } from "@/lib/providers/tavily";
+import { nativeCompanyProfileForceRefresh, nativeCompanyProfileId, readNativeCompanyProfileSourceSet } from "@/lib/intelligence/company-profile-v3/native-source";
+import { randomUUID } from "node:crypto";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
 import { ensureNativeCompanyProfileEvidence } from "./source-service";
@@ -68,7 +73,7 @@ export async function executeProfileV3Stage(input: {
     await Promise.all([
       supabase
         .from("company_profile_drafts")
-        .select("id,workspace_id,base_version_id,input_hash,compiled_snapshot_json")
+        .select("id,workspace_id,base_version_id,input_hash,compiled_snapshot_json,created_at")
         .eq("workspace_id", input.workspaceId)
         .eq("id", input.profileDraftId)
         .single(),
@@ -141,6 +146,9 @@ export async function executeProfileV3Stage(input: {
         }
       : {}),
   };
+  const analystCacheKey = input.taskId === "profile.whole_company_analysis"
+    ? hash({companyProfileId:nativeCompanyProfileId(draft.compiled_snapshot_json),evidence:(evidence??[]).map(item=>item.content_hash).sort(),promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,contextCompilerVersion:definition.contextCompilerVersion,analystVersion:"bounded-company-analyst/v1"})
+    : null;
   const inputHash = hash({
     context,
     contextCompilerVersion: definition.contextCompilerVersion,
@@ -197,9 +205,18 @@ export async function executeProfileV3Stage(input: {
     error_message: null,
   });
 
+  if (analystCacheKey && !nativeCompanyProfileForceRefresh(draft.compiled_snapshot_json)) {
+    const cached = await loadCompanyAnalystCache(input.workspaceId, analystCacheKey, evidence ?? []);
+    if (cached) {
+      const completedAt = new Date().toISOString();
+      await updateTaskRun(taskRunId, {status:"completed",output_json:cached as Json,output_hash:hash(cached),completed_at:completedAt,warnings_json:{analystCacheHit:true}});
+      return { cached: true, output: cached, taskRunId };
+    }
+  }
+
   try {
     assertIntelligenceExternalCallsAllowed("model");
-    const generation = await generateValidatedProfileStageOutput({
+    let generation = await generateValidatedProfileStageOutput({
       context,
       definition,
       taskId: input.taskId,
@@ -208,10 +225,31 @@ export async function executeProfileV3Stage(input: {
       inputHash,
       taskRunId,
     });
-    const output = generation.output;
+    let output = generation.output;
+    let analystTrace: Record<string, unknown> = {};
+    if (input.taskId === "profile.whole_company_analysis") {
+      const generations = [generation];
+      let researchDurationMs = 0;
+      const run = await runBoundedCompanyAnalyst<CompanyAnalystFollowUp>({
+        analyze: async (round, roundContext) => {
+          if (round === 1) return companyAnalystResultSchema.parse(generation.output);
+          const next = await generateValidatedProfileStageOutput({context:{...context,analystRound:2,roundOneResult:roundContext!.roundOne,researchRequests:roundContext!.roundOne.researchRequests,followUpEvidence:roundContext!.followUp.evidence,finalRoundInstruction:"This is the final analyst round. Return status complete. Preserve unresolved material gaps in uncertainties and request no more research."},definition,taskId:input.taskId,workspaceId:input.workspaceId,profileDraftId:input.profileDraftId,inputHash:hash({inputHash,round:2,followUpEvidence:roundContext!.followUp.evidence}),taskRunId});
+          generations.push(next); return companyAnalystResultSchema.parse(next.output);
+        },
+        research: async (requests) => { const began=Date.now(); const result=await collectCompanyAnalystFollowUp({workspaceId:input.workspaceId,profileDraftId:input.profileDraftId,draftSnapshot:draft.compiled_snapshot_json,requests,existingUrls:new Set((evidence??[]).map(item=>stringFromLocation(item.structured_value_json,"url")))}); researchDurationMs=Date.now()-began; return result; },
+        validate: (result,round,followUp) => {
+          const visible=[...(evidence??[]).map(item=>({id:item.id,text:`${item.excerpt??""} ${JSON.stringify(item.structured_value_json)}`})),...(round===2&&followUp?followUp.evidence.map(item=>({id:item.id,text:item.excerpt})):[])];
+          assertAnalystEvidenceBoundary(result,new Set(visible.map(({id})=>id)),new Map(visible.map(item=>[item.id,item.text])));
+        },
+      });
+      output=run.result;
+      generation={...generations.at(-1)!,calls:generations.flatMap(item=>item.calls)};
+      analystTrace={roundOneStatus:companyAnalystResultSchema.parse(generations[0]!.output).status,analystRounds:run.rounds,followUpResearchUsed:run.rounds===2,researchRequestCount:run.rounds===2?companyAnalystResultSchema.parse(generations[0]!.output).researchRequests.length:0,providerCallCount:run.followUp?.providerCallCount??0,pagesAdded:run.followUp?.evidence.length??0,followUpResearchDurationMs:researchDurationMs};
+    }
     const modelCall = generation.calls.at(-1);
     if (!modelCall) throw new Error("Company Intelligence model call was not recorded.");
     const outputHash = hash(output);
+    if (analystCacheKey) await persistCompanyAnalystCache({workspaceId:input.workspaceId,companyProfileId:nativeCompanyProfileId(draft.compiled_snapshot_json),cacheKey:analystCacheKey,result:companyAnalystResultSchema.parse(output),evidence:(await loadProfileEvidence({workspaceId:input.workspaceId,subjectId:input.profileDraftId,nativeDraft:true})).data??[]});
     const completedAt = new Date().toISOString();
     const { data: audit, error: auditError } = await supabase
       .from("ai_requests")
@@ -252,6 +290,8 @@ export async function executeProfileV3Stage(input: {
           structuredOutputFallbackUsed: generation.structuredOutputFallbackUsed,
           taskRunId,
           truncationRetryUsed: generation.truncationRetryUsed,
+          ...analystTrace,
+          totalElapsedMs: Date.now() - new Date(draft.created_at).valueOf(),
         },
         started_at: startedAt,
         completed_at: completedAt,
@@ -289,7 +329,7 @@ async function loadProfileEvidence(input: {
   let query = supabase
     .from("evidence_items")
     .select(
-      "id,evidence_type,excerpt,structured_value_json,directness,source_reliability,freshness_state,retrieved_at",
+      "id,evidence_type,excerpt,structured_value_json,directness,source_reliability,freshness_state,retrieved_at,content_hash",
     )
     .eq("workspace_id", input.workspaceId)
     .eq("subject_id", input.subjectId);
@@ -299,16 +339,103 @@ async function loadProfileEvidence(input: {
   return query.order("retrieved_at", { ascending: false }).limit(40);
 }
 
+async function collectCompanyAnalystFollowUp(input: {
+  workspaceId: string;
+  profileDraftId: string;
+  draftSnapshot: Json;
+  requests: CompanyAnalystResult["researchRequests"];
+  existingUrls: Set<string>;
+}) {
+  const sourceSet = readNativeCompanyProfileSourceSet(input.draftSnapshot);
+  const requests = input.requests.slice(0, 3);
+  const responses = await Promise.all(requests.map((request) => {
+    const terms = request.suggestedSearchTerms.join(" ").trim();
+    const query = `${request.question} ${terms}`.trim();
+    return searchWeb(query, 4, {
+      includeRawContent: true,
+      ...(request.preferredSourceType === "web_search"
+        ? {}
+        : { includeDomains: sourceSet.allowedDomains }),
+    });
+  }));
+  const pages = deduplicateFollowUpPages(responses.flat(), input.existingUrls).slice(0, 4);
+  const rows = pages.map((page) => ({
+    id: randomUUID(), workspace_id: input.workspaceId,
+    subject_type: "company_profile_draft", subject_id: input.profileDraftId,
+    evidence_type: "targeted_company_research", excerpt: page.content.replace(/\s+/g," ").trim().slice(0,800),
+    structured_value_json: {url:page.url,title:page.title,content:page.content.slice(0,8_000)},
+    location_json:{url:page.url,title:page.title}, directness:"direct", source_reliability:"first_party",
+    freshness_state:"current", retrieved_at:new Date().toISOString(), content_hash:hash(`${page.url}\n${page.content}`), visibility:"workspace_private",
+  }));
+  if (rows.length) {
+    const { error } = await createServiceRoleClient().from("evidence_items").insert(rows);
+    if (error) throw new Error(`Could not persist targeted Company Analyst evidence: ${error.message}`);
+  }
+  return { providerCallCount: requests.length, evidence: rows.map(row => ({id:row.id,url:(row.structured_value_json as {url:string}).url,title:(row.structured_value_json as {title:string}).title,excerpt:row.excerpt,structured_value_json:row.structured_value_json})) };
+}
+
+type CompanyAnalystFollowUp = {
+  providerCallCount: number;
+  evidence: Array<{id:string;url:string;title:string;excerpt:string;structured_value_json:Json}>;
+};
+
+function deduplicateFollowUpPages(pages: SearchResult[], existingUrls: Set<string>) {
+  const seenUrls = new Set([...existingUrls].filter(Boolean));
+  const seenContent = new Set<string>();
+  return pages.filter((page) => {
+    if (!page.content.trim() || seenUrls.has(page.url)) return false;
+    const contentHash = hash(page.content.replace(/\s+/g," ").trim());
+    if (seenContent.has(contentHash)) return false;
+    seenUrls.add(page.url); seenContent.add(contentHash); return true;
+  });
+}
+
+function stringFromLocation(value: Json, key: string) {
+  return value && typeof value === "object" && !Array.isArray(value) && typeof value[key] === "string" ? value[key] : "";
+}
+
+async function loadCompanyAnalystCache(workspaceId:string, cacheKey:string, evidence:Array<{id:string;content_hash:string}>) {
+  const database=createServiceRoleClient() as unknown as {from(table:string):{select(columns:string):{eq(column:string,value:string):{eq(column:string,value:string):{maybeSingle():PromiseLike<{data:{result_json:Json;evidence_manifest_json:Json}|null;error:{message:string}|null}>}}}}};
+  const {data,error}=await database.from("company_analyst_cache_v2").select("result_json,evidence_manifest_json").eq("workspace_id",workspaceId).eq("cache_key",cacheKey).maybeSingle();
+  if(error) throw new Error(`Could not read Company Analyst cache: ${error.message}`);
+  if(!data) return null;
+  const oldManifest=objectValue(data.evidence_manifest_json);
+  const currentByHash=new Map(evidence.map(item=>[item.content_hash,item.id]));
+  const remap=new Map(Object.entries(oldManifest).map(([oldId,contentHash])=>[oldId,currentByHash.get(String(contentHash))]));
+  const mapped=remapEvidenceIds(data.result_json,remap);
+  const parsed=companyAnalystResultSchema.parse(mapped);
+  try { assertAnalystEvidenceBoundary(parsed,new Set(evidence.map(({id})=>id))); return parsed; } catch { return null; }
+}
+
+async function persistCompanyAnalystCache(input:{workspaceId:string;companyProfileId:string;cacheKey:string;result:CompanyAnalystResult;evidence:Array<{id:string;content_hash:string}>}) {
+  const manifest=Object.fromEntries(input.evidence.map(item=>[item.id,item.content_hash]));
+  const database=createServiceRoleClient() as unknown as {from(table:string):{upsert(value:Record<string,unknown>,options:Record<string,unknown>):PromiseLike<{error:{message:string}|null}>}};
+  const {error}=await database.from("company_analyst_cache_v2").upsert({workspace_id:input.workspaceId,company_profile_id:input.companyProfileId,cache_key:input.cacheKey,result_json:input.result,evidence_manifest_json:manifest},{onConflict:"workspace_id,cache_key"});
+  if(error) throw new Error(`Could not persist Company Analyst cache: ${error.message}`);
+}
+
+function remapEvidenceIds(value:Json, remap:Map<string,string|undefined>):Json {
+  if(Array.isArray(value)) return value.map(item=>remapEvidenceIds(item,remap));
+  if(!value||typeof value!=="object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key,item])=>[
+    key,
+    key==="evidenceIds"&&Array.isArray(item)
+      ? item.map(id=>remap.get(String(id))).filter((id):id is string=>Boolean(id))
+      : remapEvidenceIds(item as Json,remap),
+  ])) as Json;
+}
+
 export async function finalizeProfileV3Draft(input: {
   workspaceId: string;
   profileDraftId: string;
 }) {
+  const compilationStartedAt = Date.now();
   const supabase = createServiceRoleClient();
   const [{ data: draft, error: draftError }, { data: stages, error: stagesError }] =
     await Promise.all([
       supabase
         .from("company_profile_drafts")
-        .select("id,company_profile_id,compiled_snapshot_json")
+        .select("id,company_profile_id,compiled_snapshot_json,created_at")
         .eq("workspace_id", input.workspaceId)
         .eq("id", input.profileDraftId)
         .single(),
@@ -338,11 +465,12 @@ export async function finalizeProfileV3Draft(input: {
   const wholeCompanyOutput = outputs.get("profile.whole_company_analysis");
   const wholeCompany = wholeCompanyOutput === undefined
     ? null
-    : profileWholeCompanyAnalysisOutputSchema.parse(wholeCompanyOutput);
-  const commercial = wholeCompany?.commercial ?? profileCommercialSynthesisOutputSchema.parse(
+    : companyAnalystResultSchema.parse(wholeCompanyOutput);
+  const adapted = wholeCompany ? adaptCompanyAnalystResult(wholeCompany) : null;
+  const commercial = adapted?.commercial ?? profileCommercialSynthesisOutputSchema.parse(
     requiredOutput(outputs, "profile.commercial_synthesis"),
   );
-  const offerings = wholeCompany?.offerings ?? profileOfferingDecompositionOutputSchema.parse(
+  const offerings = adapted?.offerings ?? profileOfferingDecompositionOutputSchema.parse(
     requiredOutput(outputs, "profile.offering_decomposition"),
   );
   const offeringKeys = new Set(
@@ -350,11 +478,11 @@ export async function finalizeProfileV3Draft(input: {
   );
   const buyerLogic = profileBuyerLogicOutputSchema.parse(
     normalizeLegacyProfileBuyerRuleScopes(
-      wholeCompany?.buyerLogic ?? requiredOutput(outputs, "profile.buyer_logic"),
+      adapted?.buyerLogic ?? requiredOutput(outputs, "profile.buyer_logic"),
       offeringKeys,
     ),
   );
-  const clarification = wholeCompany?.clarification ?? profileClarificationOutputSchema.parse(
+  const clarification = adapted?.clarification ?? profileClarificationOutputSchema.parse(
     requiredOutput(outputs, "profile.clarification"),
   );
   const consistency = wholeCompany
@@ -376,6 +504,7 @@ export async function finalizeProfileV3Draft(input: {
     buyerLogic,
     clarification,
     consistency,
+    ...(wholeCompany ? { analystResult: wholeCompany } : {}),
   });
   const { error: compileError } = await supabase.rpc("compile_company_profile_v3_draft", {
     target_workspace_id: input.workspaceId,
@@ -407,6 +536,7 @@ export async function finalizeProfileV3Draft(input: {
     .eq("workspace_id", input.workspaceId)
     .eq("id", input.profileDraftId);
   if (error) throw new Error(`Could not finalize profile draft: ${error.message}`);
+  await supabase.from("profile_task_runs").update({warnings_json:{validationCompilationDurationMs:Date.now()-compilationStartedAt,profileReadyTotalMs:Date.now()-new Date(draft.created_at).valueOf()}}).eq("workspace_id",input.workspaceId).eq("profile_draft_id",input.profileDraftId).eq("task_id","profile.whole_company_analysis");
   return { state };
 }
 

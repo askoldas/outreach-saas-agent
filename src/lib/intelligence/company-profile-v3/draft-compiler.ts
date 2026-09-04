@@ -7,6 +7,7 @@ import {
   profileConsistencyOutputSchema,
   profileOfferingDecompositionOutputSchema,
 } from "./task-contracts.ts";
+import type { CompanyAnalystResult } from "./company-analyst.ts";
 
 type Commercial = z.infer<typeof profileCommercialSynthesisOutputSchema>;
 type Offerings = z.infer<typeof profileOfferingDecompositionOutputSchema>;
@@ -24,6 +25,7 @@ export type ProfileV3CompilationInput = {
   buyerLogic: BuyerLogic;
   clarification: Clarification;
   consistency: Consistency;
+  analystResult?: CompanyAnalystResult;
 };
 
 export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
@@ -173,7 +175,13 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     consistency: input.consistency,
   };
 
-  const targetRoles = uniqueTargetRoles(offerings);
+  const targetRoles = input.analystResult?.targetRoles.length
+    ? input.analystResult.targetRoles.map((role) => ({
+        roleKey: role.key, label: role.label, offeringKeys: role.relevantOfferingKeys,
+        archetypeKeys: role.relevantTargetOrganisationKeys, confidence: role.confidence,
+        evidenceIds: validUuids(role.evidenceIds), origin: "company_analyst",
+      }))
+    : uniqueTargetRoles(offerings);
   const knownRelationships = input.commercial.knownRelationships.map((relationship) => ({
     ...relationship,
     evidenceIds: validUuids(relationship.evidenceIds),
@@ -204,7 +212,9 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     targetRoles,
     knownRelationships,
     questions: input.clarification.questions,
-    compiledSnapshot,
+    compiledSnapshot: input.analystResult
+      ? { ...compiledSnapshot, analystResult: input.analystResult }
+      : compiledSnapshot,
     compiledSnapshotHash: hash(compiledSnapshot),
   };
 }

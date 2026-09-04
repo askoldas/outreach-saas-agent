@@ -2,9 +2,10 @@ import { z } from "zod";
 import { intelligenceClaimSchema } from "../contracts/claims.ts";
 import { profileIntelligenceRuleSchema } from "../contracts/rules.ts";
 import type { PromptDefinition } from "../runtime/task-registry.ts";
+import { companyAnalystResultSchema } from "./company-analyst.ts";
 
 const versions = {
-  contextCompilerVersion: "profile-v3-context-v2",
+  contextCompilerVersion: "profile-v3-context-v3-bounded-analyst",
 } as const;
 
 export const profileFactExtractionOutputSchema = z
@@ -385,10 +386,10 @@ const sharedSystemInstruction =
 export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>> = [
   definition(
     "profile.whole_company_analysis",
-    "profile-whole-company-analysis-schema-v1",
+    "profile-whole-company-analysis-schema-v2-compact",
     "profile_commercial_reasoning",
-    profileWholeCompanyAnalysisOutputSchema,
-    "Analyze the supplied first-party website evidence as one coherent company. Produce the complete Company Intelligence profile in one response: grounded facts, concise commercial overview, campaign-worthy offerings, exactly one buyer-logic record for every offering, reusable target-organisation archetypes and buying roles, supported known relationships, and only genuinely useful optional clarification questions. Reason across the whole company rather than treating pages or offerings as separate tasks. Keep the profile compact and commercially actionable. Do not invent missing facts. A relationship mention is not a confirmed customer. Every material hypothesis must preserve supplied evidence IDs.",
+    companyAnalystResultSchema,
+    "Analyze the supplied evidence as one coherent company and return one compact commercial model: high-value facts, overview, 3-8 campaign-worthy offerings, 4-10 reusable target organisations, 3-8 practical buying roles, commercial mechanics, supported relationships, constraints and material uncertainties. Reason jointly across the whole company; do not imitate sequential extraction stages or fictional personas. Prefer status complete whenever the evidence supports a usable commercial profile. Use needs_research only when resolving a gap could materially change an offering, target organisation, business model, major relationship classification, or hard constraint. Then request at most three precise questions explaining the commercial consequence; never ask to generally research, explore, find more information, or search for customers. On analystRound 2 always return complete and preserve remaining gaps as uncertainties. A logo, mention, or association is never a confirmed customer; confirmation requires explicit high-confidence relationship evidence. Evidence-backed commercial inference is allowed, but every cited evidence ID must come from supplied evidence.",
   ),
   definition(
     "profile.fact_extraction",
@@ -444,7 +445,7 @@ function definition(
   const outputJsonSchema = z.toJSONSchema(outputSchema) as Record<string, unknown>;
   const promptRevision =
     taskId === "profile.whole_company_analysis"
-      ? "v1"
+      ? "v2"
       : taskId === "profile.buyer_logic"
       ? "v10"
       : taskId === "profile.commercial_synthesis"
@@ -467,7 +468,9 @@ function definition(
     buildMessages: (input) => [
       {
         role: "system",
-        content: `${sharedSystemInstruction} ${instruction} Exact output JSON Schema: ${JSON.stringify(outputJsonSchema)}`,
+        content: taskId === "profile.whole_company_analysis"
+          ? `${sharedSystemInstruction} ${instruction}`
+          : `${sharedSystemInstruction} ${instruction} Exact output JSON Schema: ${JSON.stringify(outputJsonSchema)}`,
       },
       { role: "user", content: JSON.stringify(input) },
     ],
@@ -495,7 +498,7 @@ function compactRoleLabel(value: string) {
 }
 
 function completionBudget(taskId: string) {
-  if (taskId === "profile.whole_company_analysis") return 10_000;
+  if (taskId === "profile.whole_company_analysis") return 4_500;
   if (taskId === "profile.commercial_synthesis") return 7_000;
   if (
     taskId === "profile.fact_extraction" ||

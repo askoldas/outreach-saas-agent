@@ -23,6 +23,11 @@ export const signalSchema = z
   })
   .strict();
 
+export const typedCommercialSignalSchema = signalSchema.extend({
+  type: z.enum(["scale_driver", "buying_trigger", "need_signal"]),
+  label: z.string().min(1).max(400),
+});
+
 export const unknownSchema = z
   .object({
     key: referenceIdSchema,

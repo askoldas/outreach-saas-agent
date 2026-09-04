@@ -8,6 +8,17 @@ export const marketResearchQuestionSchema = z
     purpose: z.enum(["buyer_landscape", "market_structure", "scale_and_timing"]),
     query: z.string().min(1).max(500),
     rationale: z.string().min(1).max(500),
+    waveNumber: z.number().int().min(1).max(3).default(1),
+    direction: z
+      .enum([
+        "initial",
+        "lane_validation",
+        "terminology",
+        "source_investigation",
+        "priority_gap",
+      ])
+      .default("initial"),
+    derivedFromEvidenceIds: z.array(referenceIdSchema).default([]),
   })
   .strict();
 
@@ -31,8 +42,31 @@ export const marketEvidenceCorpusSchema = z
     campaignId: referenceIdSchema,
     campaignRunId: referenceIdSchema,
     campaignTargetModelVersionId: referenceIdSchema,
-    questions: z.array(marketResearchQuestionSchema).min(1).max(6),
-    evidence: z.array(marketEvidenceItemSchema).max(30),
+    questions: z.array(marketResearchQuestionSchema).min(1).max(18),
+    evidence: z.array(marketEvidenceItemSchema).max(72),
+    waves: z
+      .array(
+        z
+          .object({
+            waveNumber: z.number().int().min(1).max(3),
+            questionIds: z.array(referenceIdSchema),
+            evidenceIds: z.array(referenceIdSchema),
+            priorityGapKeys: z.array(z.string().min(1).max(200)),
+          })
+          .strict(),
+      )
+      .max(3)
+      .default([]),
+    policy: z
+      .object({
+        maxMarketResearchWaves: z.number().int().min(1).max(3),
+        maxQueriesPerWave: z.number().int().positive(),
+        maxProviderCalls: z.number().int().positive(),
+        maxEvidenceItems: z.number().int().positive(),
+        maxRuntimeMs: z.number().int().positive(),
+      })
+      .strict()
+      .optional(),
     provider: z.literal("tavily"),
     providerRequestIds: z.array(z.string().min(1)).default([]),
     providerCredits: z.number().nonnegative(),

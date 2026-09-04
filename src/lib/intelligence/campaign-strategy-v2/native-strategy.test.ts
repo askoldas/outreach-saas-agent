@@ -6,11 +6,13 @@ import { buildNativeCampaignStrategyV2 } from "./native-strategy.ts";
 import { compileCampaignStrategyV2 } from "./strategy-compiler.ts";
 
 test("native strategy creation compiles confirmed campaign intent without a V1 import", () => {
+  const selectedOffering = offering();
+  selectedOffering.archetypes[0]!.evidenceIds = ["profile-evidence-1"];
   const strategy = buildNativeCampaignStrategyV2({
     campaignId: "campaign-1",
     strategyDraftId: "draft-1",
     profileVersionId: "profile-version-1",
-    offering: offering(),
+    offering: selectedOffering,
     confirmedBrief: brief(),
     objectiveCode: "direct_buyer",
     geography: {
@@ -32,6 +34,7 @@ test("native strategy creation compiles confirmed campaign intent without a V1 i
   assert.equal(strategy.legacyImport, undefined);
   assert.equal(strategy.offeringReferences[0]?.offeringVersionId, "offering-version-1");
   assert.equal(strategy.archetypes[0]?.label, "Hospital procurement teams");
+  assert.deepEqual(strategy.archetypes[0]?.evidenceIds, ["profile-evidence-1"]);
   assert.equal(strategy.discoverySegments[0]?.relationshipType, "direct_buyer");
   assert.equal(strategy.qualificationPolicy.factorDefinitions.length, 4);
   assert.equal(

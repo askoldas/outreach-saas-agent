@@ -74,6 +74,28 @@ test("known customers are suppressed before expensive research", () => {
   assert.equal(result.score, 0);
 });
 
+test("stale or non-evidentiary relationship claims do not suppress research", () => {
+  for (const claimState of [
+    {
+      key: "relationship.existing_customer",
+      epistemicStatus: "hypothesis",
+      freshnessState: "current",
+      reusableStatus: "active",
+      reusableScope: "organization",
+    },
+    {
+      key: "relationship.competitor",
+      epistemicStatus: "explicit_fact",
+      freshnessState: "stale",
+      reusableStatus: "active",
+      reusableScope: "organization",
+    },
+  ] as CampaignResearchCandidateInput["claimStates"]) {
+    const result = prioritizeResearchCandidate({ ...base, claimStates: [claimState] });
+    assert.notEqual(result.lane, "suppress");
+  }
+});
+
 test("cheap discovery evidence raises potential and timing without rewarding website quality", () => {
   const result = prioritizeResearchCandidate(
     {

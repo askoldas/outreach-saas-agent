@@ -26,3 +26,13 @@ test("Market Analysis receives the persisted evidence corpus and its allowed IDs
       stage.indexOf("compileAndPersistMarketAnalysis({"),
   );
 });
+
+test("adaptive reconnaissance enforces bounded waves, calls, evidence, and runtime", () => {
+  assert.match(service, /maxMarketResearchWaves/);
+  assert.match(service, /maxQueriesPerWave/);
+  assert.match(service, /policy\.maxProviderCalls - responses\.length/);
+  assert.match(service, /Date\.now\(\) - startedAt >= policy\.maxRuntimeMs/);
+  assert.match(service, /slice\(0, policy\.maxEvidenceItems\)/);
+  assert.match(service, /priorityGaps\.length > 0/);
+  assert.match(service, /compileMarketResearchFollowUpQuestions/);
+});

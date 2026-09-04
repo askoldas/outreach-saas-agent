@@ -9,10 +9,16 @@ const migrationUrl = new URL(
 
 test("volatile Candidate claims preserve cited observation time", async () => {
   const migration = await readFile(migrationUrl, "utf8");
-  assert.match(migration, /complete_candidate_research_member_v2/);
-  assert.match(migration, /claim_item \? ''observedAt''/);
+  assert.match(
+    migration,
+    /create or replace function public\.complete_candidate_research_member_v2/,
+  );
+  assert.match(migration, /claim_item \? 'observedAt'/);
   assert.match(migration, /nullif\(claim_item->>'observedAt'/);
   assert.match(migration, /freshnessClass' = 'volatile' then null/);
   assert.match(migration, /then 'unknown'/);
-  assert.match(migration, /completion function is missing/);
+  assert.match(migration, /case when claim_status = 'unknown' then null/);
+  assert.match(migration, /saved_intelligence_version/);
+  assert.match(migration, /set search_path = public, extensions/);
+  assert.doesNotMatch(migration, /pg_proc|regexp_replace|execute format/i);
 });

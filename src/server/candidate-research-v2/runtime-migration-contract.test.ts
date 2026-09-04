@@ -68,11 +68,11 @@ test("Paid extraction and candidate completion are separately replay safe", () =
   assert.doesNotMatch(worker, /parseCompleteJsonObject/);
 });
 
-test("Stage retries reuse the frozen batch before reading mutable candidate state", () => {
+test("Stage retries backfill immutable triage before reusing the frozen batch", () => {
   assert.match(stageService, /findCandidateResearchBatch\(input\)/);
   assert.match(
     stageService,
-    /if \(frozenBatch\) return frozenBatch;[\s\S]*loadCampaignResearchContext\(input\)/,
+    /loadCampaignResearchContext\(input\)[\s\S]*persistCandidateTriageDecisions\(\{[\s\S]*if \(frozenBatch\) return \{ \.\.\.frozenBatch, triageSummary \};/,
   );
 });
 

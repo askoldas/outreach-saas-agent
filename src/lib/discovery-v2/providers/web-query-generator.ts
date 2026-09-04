@@ -34,6 +34,7 @@ export const webDiscoveryQuerySchema = z
       "local_language",
       "known_entity_expansion",
       "gap_targeted",
+      "source_hint",
     ]),
     sourceFamily: z.enum([
       "company_website",
@@ -97,6 +98,7 @@ export function generateWebDiscoveryQueries(
     > & {
       expectedGapId?: string;
       country?: string;
+      domains?: string[];
     }
   > = [];
   const targetedActions = request.executionContext.targetedActions ?? [];
@@ -111,6 +113,33 @@ export function generateWebDiscoveryQueries(
       );
     }
   } else {
+    for (const sourceHint of segment.businessCharacteristics.sourceHints.slice(0, 2)) {
+      const sourceDomain = domainFromHint(sourceHint);
+      candidates.push({
+        query: join([
+          segment.label,
+          geography,
+          sourceDomain ? "members companies directory" : sourceHint,
+        ]),
+        family: "source_hint",
+        sourceFamily: "member_directory",
+        language: segment.geography.workingLanguages[0] ?? "English",
+        ...(sourceDomain ? { domains: [sourceDomain] } : {}),
+        purpose: `Use the named market source for candidate discovery: ${sourceHint}.`,
+      });
+    }
+    for (const signal of segment.businessCharacteristics.commercialSignals.slice(0, 3)) {
+      candidates.push({
+        query: join([quoted(signal.label), segment.label, geography, roleTerms[0]]),
+        family: signal.type === "buying_trigger" ? "positive_signal" : "use_context",
+        sourceFamily:
+          signal.type === "buying_trigger"
+            ? "company_website"
+            : "public_business_directory",
+        language: segment.geography.workingLanguages[0] ?? "English",
+        purpose: `Find ${signal.type.replaceAll("_", " ")} evidence for ${signal.key}.`,
+      });
+    }
     const contextualLabel = expandContextualAcronyms(segment.label, [
       ...segment.businessCharacteristics.industries,
       ...segment.businessCharacteristics.keywords,
@@ -337,6 +366,7 @@ export function generateWebDiscoveryQueries(
         sourceFamily: candidate.sourceFamily,
         language: candidate.language,
         ...(country ? { country } : {}),
+        ...(candidate.domains?.length ? { domains: candidate.domains } : {}),
         ...(excludedDomains.length ? { excludedDomains } : {}),
         purpose: candidate.purpose,
         expectedInformationGain:
@@ -587,4 +617,8 @@ function domainFromCanonicalKey(value: string) {
   return normalized && /^[a-z0-9.-]+\.[a-z]{2,}$/.test(normalized)
     ? normalized
     : undefined;
+}
+
+function domainFromHint(value: string) {
+  return domainFromCanonicalKey(value);
 }

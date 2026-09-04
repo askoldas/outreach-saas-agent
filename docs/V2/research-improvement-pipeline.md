@@ -182,3 +182,88 @@ jump into the recommended lane.
 This pass only extends existing versioned rubric and final-snapshot JSON. It does not
 require a Supabase migration. The three migrations listed above can be applied before a
 single final Trigger.dev deployment; no per-pass deployment is required.
+
+## Adaptive market-research waves
+
+The follow-up refactor upgrades the run-scoped reconnaissance corpus from one fixed
+query batch to two normal evidence-linked waves, with an optional third gap-recovery
+wave. Wave 1 establishes buyer landscape, market structure, sources, scale, and timing.
+Wave 2 derives source-specific and terminology-bearing searches from the strongest
+Wave 1 evidence rather than replaying the initial templates. Wave 3 is created only when
+a priority initial hypothesis still has no corpus coverage.
+
+The frozen policy caps waves, queries per wave, total provider calls, retained evidence,
+and elapsed runtime. Every question records its wave, direction, and parent evidence
+IDs; every wave records its questions, evidence, and explicit priority gaps. The exact
+policy participates in the retry cache hash. These additions use the existing
+`market_research_executions_v2.corpus_json` artifact and require no Supabase migration.
+
+## Named market sources and typed commercial signals
+
+Market synthesis can now return evidence-backed named sources with a stable source ID,
+family, URL, intended use, applicable opportunity lanes, confidence, and supporting
+evidence IDs. Unsupported source evidence fails compilation. Candidate-discovery
+sources are copied into the immutable Market Research Plan and create lane-specific
+routes and domain-constrained web queries; sources intended only for validation or
+timing are retained without being misused as candidate directories.
+
+Opportunity lanes now retain typed `scale_driver`, `buying_trigger`, and `need_signal`
+objects alongside their backward-compatible text fields. Discovery segments keep these
+objects separate from generic keywords, and query generation translates them into
+purpose-labelled searches without discarding the original key or type. Candidate
+triage consumes typed scale and trigger signals, and the selected Candidate Research
+source plan freezes them for its evidence-extraction context. Qualification continues
+to map scale and timing findings into deterministic potential and trigger factors. All
+additions are stored in existing versioned JSON artifacts, so this pass requires no
+Supabase migration.
+
+## Pre-research relationship suppression
+
+Candidate Research now loads workspace-scoped relationship memory before admitting a
+candidate to deep research. Exact organization IDs and canonical domains are preferred;
+normalized-name matching is exact and limited to high-confidence, evidenced aliases.
+Confirmed existing customers, competitors, and explicit user exclusions are suppressed.
+Probable or ambiguous relationships, former customers, and partners are held for review
+instead of being silently excluded. Fuzzy name similarity never suppresses a candidate.
+
+The service-role loader only uses finalized or manual-review qualification assessments,
+requires evidence for a confirmed stored relationship, and rejects cross-workspace
+campaign access. Legacy relationship claims must also be active, non-stale facts or
+evidence-backed inferences before they can suppress research. This pass requires
+`20260904000400_pre_research_relationship_suppression.sql`.
+
+## Durable candidate triage
+
+Every resolved Campaign Candidate now receives an immutable, cycle-scoped triage row
+before the deep-research subset is selected. The row preserves the commercial score,
+component contributions and explanations, suppression reasons, relationship status,
+research difficulty, supporting evidence IDs, policy version, and deterministic input
+hash. Deep-research, hold, and suppress outcomes therefore remain queryable even when a
+candidate never enters a Candidate Research batch.
+
+Persistence validates complete coverage of the resolved candidate pool and the frozen
+campaign identity, is retry-safe, and rejects changed inputs for an existing cycle. A
+pool containing only held or suppressed candidates can freeze an empty research batch
+and complete without spending research budget. This pass requires
+`20260904000500_candidate_triage_decisions.sql`.
+
+## Provenance and fail-closed discovery
+
+Native Strategy archetypes now retain the evidence IDs of the matched Company Profile
+buyer archetype. The Strategy projection carries those IDs into Target Model archetypes
+and Market Analysis combines this genuine upstream hypothesis support with its own
+validating or counter evidence. Derived signals do not inherit evidence unless that
+evidence specifically supports the signal; unsupported links are not synthesized.
+
+Normal V2 initial Discovery now requires its frozen Market Research Plan and throws a
+domain-specific `MissingMarketOpportunityPlanError` when that prerequisite is absent.
+The Strategy-only compiler remains available solely through the explicit
+`allowLegacyStrategyDiscovery` option, which the production V2 workflow does not set.
+
+The observation-date migration now declares the entire Candidate Research completion
+function explicitly. It no longer reads or modifies `pg_proc` source text. The complete
+definition retains tenancy checks, replay behavior, evidence/AI provenance validation,
+claim persistence, snapshot hashing, and service-role permissions while preserving a
+cited `observedAt`; undated volatile claims receive SQL `NULL` and freshness `unknown`.
+Because the intended observation-date function was already applied, this repository
+cleanup requires no additional migration on an existing environment.

@@ -123,6 +123,7 @@ export async function executeCandidateResearchMember(input: {
           canonicalDomain: member.canonicalDomain,
         },
         campaign: member.strategyContext,
+        commercialSignals: member.sourcePlan.commercialSignals,
         plan: member.plan,
         evidence: evidenceContext,
       };

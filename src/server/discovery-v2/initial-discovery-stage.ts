@@ -43,6 +43,7 @@ const initialPassNumber = 1;
 export async function executeInitialDiscoveryStage(input: {
   campaignRunId: string;
   workspaceId: string;
+  allowLegacyStrategyDiscovery?: boolean;
 }): Promise<StageResult> {
   const context = await prepareSemanticDiscoveryContext(input);
   const registry = createConfiguredDiscoveryProviderRegistry();
@@ -72,6 +73,9 @@ export async function executeInitialDiscoveryStage(input: {
       campaignId: context.campaignInternalId,
       campaignRunId: input.campaignRunId,
     });
+    if (!marketResearchPlan && !input.allowLegacyStrategyDiscovery) {
+      throw new MissingMarketOpportunityPlanError(input.campaignRunId);
+    }
     const maximumPlanProviderCalls =
       DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS.maxProviderCalls;
     const sharedPlanInput = {
@@ -428,6 +432,15 @@ export async function executeInitialDiscoveryStage(input: {
       normalizedCandidateCount,
       uniqueCandidateHintCount: uniquePlausibleCandidateHintCount,
       continuationDecision: decision,
+      laneSummaries: coverageResults.map(({ coverage, segment }) => ({
+        laneId: segment.opportunityLaneId ?? segment.archetypeId,
+        segmentId: segment.id,
+        label: segment.label,
+        rawRecords: coverage.rawRecords,
+        normalizedCandidates: coverage.normalizedCandidates,
+        plausibleCandidates: coverage.plausibleCandidateCount,
+        uniquePlausibleCandidates: coverage.uniquePlausibleCandidateHints,
+      })),
       stageScope: "initial_semantic_breadth",
       reservoirPolicy: reservoir,
     },
@@ -439,6 +452,15 @@ export async function executeInitialDiscoveryStage(input: {
     },
     usageEventIds: [],
   };
+}
+
+export class MissingMarketOpportunityPlanError extends Error {
+  constructor(campaignRunId: string) {
+    super(
+      `V2 Discovery requires a frozen Market Research Plan for Campaign Run ${campaignRunId}.`,
+    );
+    this.name = "MissingMarketOpportunityPlanError";
+  }
 }
 
 function buildRequests(input: {

@@ -51,7 +51,7 @@ test("discovery settles provider failure evidence and checks worker configuratio
 test("initial breadth durably attaches semantic audit and remains partial", () => {
   assert.match(stage, /prepareSemanticDiscoveryContext/);
   assert.match(stage, /compileAndPersistDiscoveryPlanFromMarketResearch/);
-  assert.match(stage, /compileAndPersistStrategyDiscoveryPlan/);
+  assert.match(stage, /MissingMarketOpportunityPlanError/);
   assert.match(stage, /startCampaignDiscoveryRun/);
   assert.match(stage, /startDiscoverySegmentPassOnce/);
   assert.match(stage, /recordDiscoveryQueryAudit/);
@@ -60,6 +60,19 @@ test("initial breadth durably attaches semantic audit and remains partial", () =
   assert.match(stage, /status: "partial"/);
   assert.match(stage, /stageScope: "initial_semantic_breadth"/);
   assert.match(stage, /cachedExecutionCount/);
+});
+
+test("normal V2 discovery fails closed without Market Intelligence", () => {
+  assert.match(
+    stage,
+    /if \(!marketResearchPlan && !input\.allowLegacyStrategyDiscovery\)/,
+  );
+  assert.match(stage, /throw new MissingMarketOpportunityPlanError/);
+  assert.match(
+    stage,
+    /marketResearchPlan[\s\S]*compileAndPersistDiscoveryPlanFromMarketResearch[\s\S]*compileAndPersistStrategyDiscoveryPlan/,
+  );
+  assert.doesNotMatch(workflowStage, /allowLegacyStrategyDiscovery:\s*true/);
 });
 
 test("coverage keeps omitted segments visible and propagates lane targets", () => {

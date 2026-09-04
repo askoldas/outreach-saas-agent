@@ -34,10 +34,11 @@ export function compileDiscoveryPlanFromMarketResearchPlan(input: {
         ...segment.businessCharacteristics,
         keywords: uniqueSorted([
           ...segment.businessCharacteristics.keywords,
-          ...researchRoutes.flatMap(({ vocabulary, sourceHints }) => [
-            ...vocabulary,
-            ...sourceHints,
-          ]),
+          ...researchRoutes.flatMap(({ vocabulary }) => vocabulary),
+        ]),
+        sourceHints: uniqueSorted([
+          ...segment.businessCharacteristics.sourceHints,
+          ...researchRoutes.flatMap(({ sourceHints }) => sourceHints),
         ]),
       },
     };
@@ -154,9 +155,9 @@ function compileOpportunitySegments(
           keywords: uniqueSorted([
             ...segment.businessCharacteristics.keywords,
             ...lane.vocabulary,
-            ...lane.scaleDrivers,
-            ...lane.buyingTriggers,
           ]),
+          sourceHints: [],
+          commercialSignals: lane.commercialSignals,
         },
         priority: lanePriority(lane.disposition),
         explorationBudgetClass: laneBudget(lane.disposition),
@@ -176,11 +177,9 @@ function compileOpportunitySegments(
           organizationRoles: [lane.organizationType],
           businessModels: lane.businessModels,
           industries: lane.industries,
-          keywords: uniqueSorted([
-            ...lane.vocabulary,
-            ...lane.scaleDrivers,
-            ...lane.buyingTriggers,
-          ]),
+          keywords: uniqueSorted([...lane.vocabulary]),
+          sourceHints: [],
+          commercialSignals: lane.commercialSignals,
         },
         relationshipType: input.strategy.objective.targetRelationshipTypes[0]!,
         useModes: template.useModes,

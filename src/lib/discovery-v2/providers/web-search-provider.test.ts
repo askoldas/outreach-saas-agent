@@ -49,6 +49,35 @@ test("V2 web queries are semantic, bounded, localized, and deterministic", () =>
   assert.ok(broadQueries.every((query) => query.expectedInformationGain));
 });
 
+test("named sources and typed commercial signals create intentional queries", () => {
+  const input = request();
+  input.budget.maxCalls = 12;
+  input.segment.businessCharacteristics.sourceHints = [
+    "https://hospitality-association.example/members",
+  ];
+  input.segment.businessCharacteristics.commercialSignals = [
+    {
+      type: "buying_trigger",
+      key: "venue.new-opening",
+      label: "new venue opening",
+      statement: "A new venue is opening.",
+      evidenceIds: ["market-evidence-1"],
+      confidence: 0.85,
+    },
+  ];
+  const queries = generateWebDiscoveryQueries(input);
+  const sourceQuery = queries.find(({ family }) => family === "source_hint");
+  assert.deepEqual(sourceQuery?.domains, ["hospitality-association.example"]);
+  assert.match(sourceQuery?.purpose ?? "", /named market source/i);
+  assert.equal(
+    queries.some(
+      ({ family, purpose }) =>
+        family === "positive_signal" && purpose.includes("venue.new-opening"),
+    ),
+    true,
+  );
+});
+
 test("relationship vocabulary changes materially by Campaign objective", () => {
   const buyer = request();
   buyer.budget.maxCalls = 10;

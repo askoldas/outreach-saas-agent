@@ -121,12 +121,19 @@ export async function executeCandidateResearchFanOut(input: {
         status: "blocked" as const,
         outputReferences: {
           ...result.outputReferences,
+          triageSummary: batch.triageSummary,
           reason: "research_budget",
           pauseReason: budgetPause.reason,
           message: budgetPause.message,
         },
       }
-    : result;
+    : {
+        ...result,
+        outputReferences: {
+          ...result.outputReferences,
+          triageSummary: batch.triageSummary,
+        },
+      };
 }
 
 function targetReachedResult(outcome: {

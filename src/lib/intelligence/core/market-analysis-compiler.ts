@@ -10,7 +10,7 @@ import {
 
 export const MARKET_ANALYSIS_SCHEMA_VERSION = "market-analysis/v2-opportunity-map";
 export const MARKET_ANALYSIS_COMPILER_VERSION =
-  "target-market-analysis-compiler/v2-opportunity-map";
+  "target-market-analysis-compiler/v2.1-sources-typed-signals";
 
 export type MarketAnalysisModelProvenance = {
   promptVersion: string;
@@ -35,6 +35,11 @@ export function compileMarketAnalysis(input: {
   const opportunityLanes = compileOpportunityLanes({
     target: input.target,
     marketContext: input.marketContext,
+    allowedEvidenceIds,
+  });
+  const importantMarketSources = compileImportantMarketSources({
+    marketContext: input.marketContext,
+    opportunityLanes,
     allowedEvidenceIds,
   });
   for (const claim of marketStructure)
@@ -78,7 +83,7 @@ export function compileMarketAnalysis(input: {
     })),
     localLanguages: input.target.geography.localLanguages,
     majorSourceFamilies: sourceFamilies(input.marketContext.likelySourceTypes),
-    importantMarketSources: [],
+    importantMarketSources,
     qualificationSignals: input.target.positiveSignals,
     misleadingSignals: input.target.negativeSignals,
     coverageRisks: input.marketContext.underCoverageRisks.map((question, index) => ({
@@ -171,6 +176,19 @@ function compileOpportunityLanes(input: {
           archetype.scaleSignals.map(({ statement }) => statement),
       ),
       buyingTriggers: uniqueSorted(proposal?.buyingTriggers ?? []),
+      commercialSignals: compileTypedSignals({
+        laneKey: archetype.id,
+        scaleDrivers:
+          proposal?.scaleDrivers ??
+          archetype.scaleSignals.map(({ statement }) => statement),
+        buyingTriggers: proposal?.buyingTriggers ?? [],
+        needSignals: input.target.positiveSignals,
+        evidenceIds: uniqueSorted([
+          ...(proposal?.evidenceIds ?? []),
+          ...archetype.evidenceIds,
+        ]),
+        confidence: proposal?.confidence ?? archetype.confidence,
+      }),
       vocabulary: uniqueSorted(proposal?.vocabulary ?? []),
       confidence: proposal?.confidence ?? archetype.confidence,
     };
@@ -191,6 +209,14 @@ function compileOpportunityLanes(input: {
       counterEvidenceIds: uniqueSorted(proposal.counterEvidenceIds),
       scaleDrivers: uniqueSorted(proposal.scaleDrivers),
       buyingTriggers: uniqueSorted(proposal.buyingTriggers),
+      commercialSignals: compileTypedSignals({
+        laneKey: proposal.laneKey,
+        scaleDrivers: proposal.scaleDrivers,
+        buyingTriggers: proposal.buyingTriggers,
+        needSignals: input.target.positiveSignals,
+        evidenceIds: proposal.evidenceIds,
+        confidence: proposal.confidence,
+      }),
       vocabulary: uniqueSorted(proposal.vocabulary),
       confidence: proposal.confidence,
     }));
@@ -204,6 +230,96 @@ function compileOpportunityLanes(input: {
     throw new Error("Market Opportunity Map requires at least one priority lane.");
   }
   return lanes;
+}
+
+function compileImportantMarketSources(input: {
+  marketContext: MarketContextOutput;
+  opportunityLanes: ReturnType<typeof compileOpportunityLanes>;
+  allowedEvidenceIds: Set<string>;
+}) {
+  const laneIdByKey = new Map<string, string>();
+  for (const lane of input.opportunityLanes) {
+    laneIdByKey.set(lane.id, lane.id);
+    if ("sourceArchetypeId" in lane && lane.sourceArchetypeId) {
+      laneIdByKey.set(lane.sourceArchetypeId, lane.id);
+    }
+  }
+  for (const proposal of input.marketContext.opportunityLanes) {
+    const id = proposal.sourceArchetypeId
+      ? `lane.initial.${proposal.sourceArchetypeId}`
+      : `lane.market.${stableLaneKey(proposal.laneKey)}`;
+    laneIdByKey.set(proposal.laneKey, id);
+  }
+  return input.marketContext.importantMarketSources.map((source) => {
+    assertEvidenceIdsInScope(source.evidenceIds, input.allowedEvidenceIds);
+    const applicableOpportunityLaneIds = uniqueSorted(
+      source.applicableOpportunityLaneKeys.flatMap((key) => {
+        const id = laneIdByKey.get(key);
+        return id ? [id] : [];
+      }),
+    );
+    return {
+      id: `market-source.${stableLaneKey(source.sourceKey)}`,
+      name: source.name,
+      ...(source.url ? { url: source.url } : {}),
+      sourceFamily: sourceFamily(source.sourceFamily),
+      relevance: source.whyUseful,
+      applicableOpportunityLaneIds,
+      useFor: source.useFor,
+      evidenceIds: uniqueSorted(source.evidenceIds),
+      confidence: source.confidence,
+    };
+  });
+}
+
+function compileTypedSignals(input: {
+  laneKey: string;
+  scaleDrivers: string[];
+  buyingTriggers: string[];
+  needSignals: CampaignTargetModel["positiveSignals"];
+  evidenceIds: string[];
+  confidence: number;
+}) {
+  const textSignals = (values: string[], type: "scale_driver" | "buying_trigger") =>
+    values.map((statement) => ({
+      type,
+      key: `${input.laneKey}.${type}.${hashCanonical(statement).slice(0, 12)}`,
+      label: statement,
+      statement,
+      evidenceIds: uniqueSorted(input.evidenceIds),
+      confidence: input.confidence,
+    }));
+  return [
+    ...textSignals(input.scaleDrivers, "scale_driver"),
+    ...textSignals(input.buyingTriggers, "buying_trigger"),
+    ...input.needSignals.map((signal) => ({
+      type: "need_signal" as const,
+      key: signal.key,
+      label: signal.statement,
+      statement: signal.statement,
+      evidenceIds: uniqueSorted(signal.evidenceIds),
+      confidence: signal.confidence,
+    })),
+  ];
+}
+
+function sourceFamily(
+  value: MarketContextOutput["importantMarketSources"][number]["sourceFamily"],
+) {
+  const mapping = {
+    industry_association: "association",
+    member_directory: "industry_directory",
+    trade_event: "trade_event",
+    exhibitor_directory: "industry_directory",
+    business_directory: "industry_directory",
+    ranking: "web_search",
+    registry: "registry",
+    government: "registry",
+    trade_publication: "news",
+    marketplace: "marketplace",
+    other: "other",
+  } as const;
+  return mapping[value];
 }
 
 function assertEvidenceIdsInScope(values: string[], allowed: Set<string>) {

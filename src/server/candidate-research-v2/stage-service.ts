@@ -1,6 +1,6 @@
 import {
   CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION,
-  prepareCampaignResearchPlans,
+  prepareCampaignTriagePlans,
 } from "@/lib/candidate-intelligence-v2";
 import {
   campaignStrategyV2Schema,
@@ -14,11 +14,16 @@ import {
   initializeCandidateResearchBatch,
   loadCandidateTriageEvidence,
   loadCampaignResearchContext,
+  persistCandidateTriageDecisions,
 } from "./repository";
 import { prepareSemanticDiscoveryContext } from "@/server/discovery-v2/semantic-context";
 import { DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS } from "@/lib/research-budget-v2/contracts";
 import { loadLatestResearchBlueprints } from "@/server/core-intelligence-v2/repository";
 import { loadMarketResearchPlanForDiscovery } from "@/server/discovery-v2/plan-discovery";
+import {
+  loadPreResearchSuppressionContext,
+  matchRelationshipSuppression,
+} from "./suppression-context";
 
 export async function prepareCandidateResearchStage(input: {
   campaignRunId: string;
@@ -26,7 +31,6 @@ export async function prepareCandidateResearchStage(input: {
   cycleNumber?: number;
 }) {
   const frozenBatch = await findCandidateResearchBatch(input);
-  if (frozenBatch) return frozenBatch;
 
   const [context, semanticContext] = await Promise.all([
     loadCampaignResearchContext(input),
@@ -56,7 +60,12 @@ export async function prepareCandidateResearchStage(input: {
       ({ campaignCandidateId }) => campaignCandidateId,
     ),
   });
-  const prioritizedPlans = prepareCampaignResearchPlans({
+  const suppressionContext = await loadPreResearchSuppressionContext({
+    workspaceId: input.workspaceId,
+    campaignId: context.campaignId,
+    rules: strategy.campaignRules,
+  });
+  const triagePlans = prepareCampaignTriagePlans({
     campaignRunId: context.campaignRunId,
     strategyVersionId: context.strategyVersionId,
     strategy,
@@ -65,25 +74,58 @@ export async function prepareCandidateResearchStage(input: {
     candidates: context.candidates.map((candidate) => ({
       ...candidate,
       triageEvidence: triageEvidence.get(candidate.campaignCandidateId),
+      relationshipSuppression: matchRelationshipSuppression({
+        candidate,
+        entries: suppressionContext,
+      }),
     })),
   });
-  const plans = prioritizedPlans.slice(
-    0,
-    DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS.maxDeepResearchCandidates,
-  );
+  const triageSummary = await persistCandidateTriageDecisions({
+    workspaceId: input.workspaceId,
+    campaignRunId: context.campaignRunId,
+    cycleNumber: input.cycleNumber ?? 1,
+    decisions: triagePlans.map((candidatePlan) => ({
+      campaignCandidateId: candidatePlan.campaignCandidateId,
+      organizationId: candidatePlan.organizationId,
+      decision: candidatePlan.sourcePlan.prioritization.lane,
+      commercialOpportunityScore: candidatePlan.sourcePlan.prioritization.score,
+      components: candidatePlan.sourcePlan.prioritization.signals,
+      suppressionReasons: candidatePlan.sourcePlan.prioritization.suppressedReason
+        ? [candidatePlan.sourcePlan.prioritization.suppressedReason]
+        : [],
+      relationshipStatus:
+        candidatePlan.sourcePlan.prioritization.relationshipSuppression?.relationship,
+      researchDifficulty:
+        candidatePlan.sourcePlan.prioritization.researchability.difficulty,
+      evidenceIds: [
+        ...(candidatePlan.sourcePlan.prioritization.relationshipSuppression
+          ?.evidenceIds ?? []),
+        ...candidatePlan.sourcePlan.commercialSignals.flatMap(
+          ({ evidenceIds }) => evidenceIds,
+        ),
+      ],
+      policyVersion: candidatePlan.sourcePlan.prioritization.version,
+      inputHash: candidatePlan.inputHash,
+    })),
+  });
+  if (frozenBatch) return { ...frozenBatch, triageSummary };
+  const plans = triagePlans
+    .filter(({ sourcePlan }) => sourcePlan.prioritization.lane === "deep_research")
+    .slice(0, DEFAULT_CAMPAIGN_RESEARCH_SAFETY_LIMITS.maxDeepResearchCandidates);
   const inputHash = hashCanonical({
     campaignRunId: context.campaignRunId,
     strategyVersionId: context.strategyVersionId,
     contractVersion: CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION,
     plans,
   });
-  return initializeCandidateResearchBatch({
+  const batch = await initializeCandidateResearchBatch({
     campaignRunId: context.campaignRunId,
     workspaceId: input.workspaceId,
     contractVersion: CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION,
     inputHash,
     plans: plans as unknown as Json,
   });
+  return { ...batch, triageSummary };
 }
 
 export async function finalizeCandidateResearchStage(input: {

@@ -12,6 +12,7 @@ import {
   type CandidatePrioritization,
 } from "./candidate-prioritization.ts";
 import type { ResearchBlueprint } from "../intelligence/core/research-blueprint.ts";
+import type { RelationshipSuppressionMatch } from "./relationship-suppression.ts";
 
 export const CANDIDATE_RESEARCH_RUNTIME_CONTRACT_VERSION =
   "candidate-research-v2.5-supporting-sources";
@@ -54,6 +55,7 @@ export type CampaignResearchCandidateInput = {
       confidence: number;
     }>;
   };
+  relationshipSuppression?: RelationshipSuppressionMatch;
 };
 
 export type PreparedCampaignResearchPlan = {
@@ -72,6 +74,14 @@ export type PreparedCampaignResearchPlan = {
     maximumFirstPartyFetches: number;
     maximumSupportingSources: number;
     supportingQueries: string[];
+    commercialSignals: Array<{
+      type: "scale_driver" | "buying_trigger" | "need_signal";
+      key: string;
+      label: string;
+      statement: string;
+      evidenceIds: string[];
+      confidence: number;
+    }>;
     deferredQuestionKeys: string[];
     deferredReusableQuestionKeys: string[];
     prioritization: CandidatePrioritization;
@@ -89,6 +99,40 @@ export function prepareCampaignResearchPlans(input: {
     disposition: "priority" | "secondary" | "exploratory" | "weak" | "rejected";
     scaleDrivers: string[];
     buyingTriggers: string[];
+    commercialSignals: Array<{
+      type: "scale_driver" | "buying_trigger" | "need_signal";
+      key: string;
+      label: string;
+      statement: string;
+      evidenceIds: string[];
+      confidence: number;
+    }>;
+  }>;
+  candidates: CampaignResearchCandidateInput[];
+}): PreparedCampaignResearchPlan[] {
+  return prepareCampaignTriagePlans(input)
+    .filter(({ sourcePlan }) => sourcePlan.prioritization.lane === "deep_research")
+    .sort(comparePreparedPlans);
+}
+
+export function prepareCampaignTriagePlans(input: {
+  campaignRunId: string;
+  strategyVersionId: string;
+  strategy: CampaignStrategyV2;
+  researchBlueprints?: ResearchBlueprint[];
+  opportunityLanes?: Array<{
+    id: string;
+    disposition: "priority" | "secondary" | "exploratory" | "weak" | "rejected";
+    scaleDrivers: string[];
+    buyingTriggers: string[];
+    commercialSignals: Array<{
+      type: "scale_driver" | "buying_trigger" | "need_signal";
+      key: string;
+      label: string;
+      statement: string;
+      evidenceIds: string[];
+      confidence: number;
+    }>;
   }>;
   candidates: CampaignResearchCandidateInput[];
 }): PreparedCampaignResearchPlan[] {
@@ -258,10 +302,20 @@ export function prepareCampaignResearchPlans(input: {
           ...matchedOpportunityLanePriorities,
         ],
         expectedScaleSignals: matchedOpportunityLanes.flatMap(
-          ({ scaleDrivers }) => scaleDrivers,
+          ({ scaleDrivers, commercialSignals }) => [
+            ...scaleDrivers,
+            ...commercialSignals
+              .filter(({ type }) => type === "scale_driver")
+              .flatMap(({ key, label, statement }) => [key, label, statement]),
+          ],
         ),
         expectedBuyingSignals: [
           ...matchedOpportunityLanes.flatMap(({ buyingTriggers }) => buyingTriggers),
+          ...matchedOpportunityLanes.flatMap(({ commercialSignals }) =>
+            commercialSignals
+              .filter(({ type }) => type === "buying_trigger")
+              .flatMap(({ key, label, statement }) => [key, label, statement]),
+          ),
           ...matchedArchetypes.flatMap(({ positiveSignals }) =>
             positiveSignals
               .filter(({ class: signalClass }) => signalClass === "trigger")
@@ -296,6 +350,9 @@ export function prepareCampaignResearchPlans(input: {
             ),
           ],
         }),
+        commercialSignals: matchedOpportunityLanes.flatMap(
+          ({ commercialSignals }) => commercialSignals,
+        ),
         deferredQuestionKeys: [...requestedQuestionKeys]
           .filter((key) => !frozenQuestionKeys.has(key))
           .sort(compareText),
@@ -327,12 +384,17 @@ export function prepareCampaignResearchPlans(input: {
           plan.questions.length === 0 ? candidate.currentIntelligenceVersionId : null,
       };
     })
-    .filter(({ sourcePlan }) => sourcePlan.prioritization.lane === "deep_research")
-    .sort(
-      (left, right) =>
-        right.priority - left.priority ||
-        left.campaignCandidateId.localeCompare(right.campaignCandidateId),
-    );
+    .sort(comparePreparedPlans);
+}
+
+function comparePreparedPlans(
+  left: PreparedCampaignResearchPlan,
+  right: PreparedCampaignResearchPlan,
+) {
+  return (
+    right.priority - left.priority ||
+    left.campaignCandidateId.localeCompare(right.campaignCandidateId)
+  );
 }
 
 function buildBlueprintQuestionOverrides(

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { intelligenceClaimSchema } from "../contracts/claims.ts";
 import { intelligenceRuleSchema } from "../contracts/rules.ts";
+import { typedCommercialSignalSchema } from "../core/shared.ts";
 
 const keySchema = z
   .string()
@@ -184,6 +185,7 @@ export const campaignArchetypeV2Schema = z
     positiveSignals: z.array(campaignSignalDefinitionSchema),
     negativeSignals: z.array(campaignSignalDefinitionSchema),
     requiredEvidenceQuestions: z.array(campaignResearchQuestionSchema),
+    evidenceIds: z.array(z.string().min(1)).max(100).default([]),
     confidence: confidenceSchema,
     userConfirmed: z.boolean(),
   })
@@ -341,6 +343,8 @@ export const discoverySegmentRequestV2Schema = z
         businessModels: z.array(z.string()),
         industries: z.array(z.string()).default([]),
         keywords: z.array(z.string()).default([]),
+        sourceHints: z.array(z.string().min(1).max(500)).default([]),
+        commercialSignals: z.array(typedCommercialSignalSchema).default([]),
         sizeRange: z
           .object({
             minEmployees: z.number().int().positive().optional(),

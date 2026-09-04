@@ -36,6 +36,7 @@ test("Market Analysis projects frozen targeting and bounded market interpretatio
       counterEvidenceIds: [],
       scaleDrivers: [],
       buyingTriggers: [],
+      commercialSignals: [],
       vocabulary: [],
       confidence: 0.8,
     },
@@ -87,6 +88,61 @@ test("market evidence can reject an initial hypothesis and add a supported lane"
   assert.equal(analysis.opportunityLanes[1]?.disposition, "priority");
   assert.deepEqual(analysis.opportunityLanes[1]?.relationships, ["buyer"]);
   assert.ok(analysis.evidenceIds.includes("evidence-1"));
+  assert.deepEqual(
+    analysis.opportunityLanes[1]?.commercialSignals.map(({ type, label }) => [
+      type,
+      label,
+    ]),
+    [
+      ["scale_driver", "venue and banquet capacity"],
+      ["buying_trigger", "renovation or new venue opening"],
+    ],
+  );
+});
+
+test("named evidence-backed market sources bind to opportunity lanes", () => {
+  const analysis = compile({
+    ...marketContext(),
+    opportunityLanes: [
+      {
+        laneKey: "event-venues",
+        label: "Conference venues",
+        organizationType: "Venue operator",
+        rationale: "Banquet kitchens create demand.",
+        disposition: "priority",
+        evidenceIds: ["evidence-1"],
+        counterEvidenceIds: [],
+        scaleDrivers: ["banquet capacity"],
+        buyingTriggers: ["renovation"],
+        vocabulary: [],
+        confidence: 0.8,
+      },
+    ],
+    importantMarketSources: [
+      {
+        sourceKey: "hospitality-association",
+        name: "Hospitality Association",
+        sourceFamily: "member_directory",
+        url: "https://association.example/members",
+        applicableOpportunityLaneKeys: ["event-venues"],
+        whyUseful: "Its directory lists venue operators.",
+        useFor: "candidate_discovery",
+        confidence: 0.9,
+        evidenceIds: ["evidence-1"],
+      },
+    ],
+  });
+  assert.deepEqual(analysis.importantMarketSources[0], {
+    id: "market-source.hospitality-association",
+    name: "Hospitality Association",
+    sourceFamily: "industry_directory",
+    url: "https://association.example/members",
+    relevance: "Its directory lists venue operators.",
+    applicableOpportunityLaneIds: ["lane.market.event-venues"],
+    useFor: "candidate_discovery",
+    confidence: 0.9,
+    evidenceIds: ["evidence-1"],
+  });
 });
 
 test("market opportunity expansion cannot cite evidence outside the frozen scope", () => {
@@ -107,6 +163,28 @@ test("market opportunity expansion cannot cite evidence outside the frozen scope
             buyingTriggers: [],
             vocabulary: [],
             confidence: 0.4,
+          },
+        ],
+      }),
+    /references unknown evidence outside-scope/,
+  );
+});
+
+test("unsupported market-source evidence is rejected", () => {
+  assert.throws(
+    () =>
+      compile({
+        ...marketContext(),
+        importantMarketSources: [
+          {
+            sourceKey: "unsupported-directory",
+            name: "Unsupported directory",
+            sourceFamily: "business_directory",
+            applicableOpportunityLaneKeys: [],
+            whyUseful: "Claims to list companies.",
+            useFor: "candidate_discovery",
+            confidence: 0.8,
+            evidenceIds: ["outside-scope"],
           },
         ],
       }),
@@ -219,6 +297,7 @@ function marketContext(): MarketContextOutput {
     ],
     procurementPatterns: [],
     opportunityLanes: [],
+    importantMarketSources: [],
     likelySourceTypes: ["registry", "industry directory"],
     dataChallenges: ["Private procurement data is sparse."],
     underCoverageRisks: ["Small regional operators may be absent."],

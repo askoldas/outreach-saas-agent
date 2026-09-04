@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { CampaignStrategyV2 } from "../campaign-strategy-v2/schemas.ts";
+import { createNativeCampaignStrategyFixture } from "../campaign-strategy-v2/test-fixture.ts";
 import {
   assertCampaignTargetStrategyProjection,
   compileCampaignTargetModel,
@@ -64,6 +65,20 @@ test("compiler is deterministic and requires confirmed Campaign inputs", () => {
   );
 });
 
+test("strategy-projected archetypes retain genuine upstream evidence", () => {
+  const strategy = createNativeCampaignStrategyFixture();
+  strategy.archetypes[0]!.evidenceIds = ["profile-evidence-1"];
+  const target = compile(
+    "offering-packaging",
+    "target-provenance",
+    "2026-08-24T00:00:00.000Z",
+    true,
+    strategy,
+  );
+  assert.deepEqual(target.archetypes[0]?.evidenceIds, ["profile-evidence-1"]);
+  assert.deepEqual(target.archetypes[0]?.positiveSignals[0]?.evidenceIds, []);
+});
+
 test("Campaign Strategy compatibility projection rejects divergent archetypes", () => {
   const target = compile("offering-packaging");
   const base = {
@@ -106,6 +121,7 @@ function compile(
   artifactId = "target-1",
   createdAt = "2026-08-24T00:00:00.000Z",
   confirmed = true,
+  strategyProjection?: CampaignStrategyV2,
 ) {
   return compileCampaignTargetModel({
     artifactId,
@@ -118,6 +134,7 @@ function compile(
     objective: { ...objective(), userConfirmed: confirmed },
     geography: geography(),
     confirmedConstraints: ["Procurement evidence required"],
+    strategyProjection,
     createdAt,
   });
 }

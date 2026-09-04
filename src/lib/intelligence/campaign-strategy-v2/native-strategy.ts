@@ -117,6 +117,7 @@ export function buildNativeCampaignStrategyV2(input: {
       positiveSignals: signals(positiveSignalValues, "positive", "positive"),
       negativeSignals: signals(negativeSignalValues, "negative", "negative"),
       requiredEvidenceQuestions: evidenceQuestions(requiredEvidence, index),
+      evidenceIds: unique(matchedProfileArchetype?.evidenceIds ?? []),
       confidence: confidenceNumber(segment.confidence),
       userConfirmed: true,
     };

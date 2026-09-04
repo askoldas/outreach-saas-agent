@@ -53,6 +53,11 @@ export async function executeCompanyResearchBootstrap(input: {
       ...(resumed.corpus ? { marketResearchExecutionId: resumed.corpus.id } : {}),
       providerCapabilitySnapshotIds,
       cached: true,
+      observability: marketObservability({
+        analysis: resumed.analysis,
+        plan: resumed.plan,
+        corpus: resumed.corpus,
+      }),
       resultStage: input.resultStage,
     });
   }
@@ -151,6 +156,15 @@ export async function executeCompanyResearchBootstrap(input: {
     marketResearchExecutionId: reconnaissance.corpus.id,
     providerCapabilitySnapshotIds,
     cached: commercial.cached && target.cached && analysis.cached && researchPlan.cached,
+    observability: marketObservability({
+      initialHypotheses: target.artifact.archetypes.map(({ id, label }) => ({
+        id,
+        label,
+      })),
+      analysis: analysis.artifact,
+      plan: researchPlan.artifact,
+      corpus: reconnaissance.corpus,
+    }),
     resultStage: input.resultStage,
   });
 }
@@ -170,6 +184,7 @@ function completedResult(input: {
   marketResearchExecutionId?: string;
   providerCapabilitySnapshotIds: string[];
   cached: boolean;
+  observability?: ReturnType<typeof marketObservability>;
   resultStage?: "initialize" | "market_analysis";
 }): StageResult {
   return {
@@ -180,6 +195,61 @@ function completedResult(input: {
     },
     progressDelta: { marketAnalyses: 1, marketResearchPlans: 1 },
     usageEventIds: [],
+  };
+}
+
+function marketObservability(input: {
+  initialHypotheses?: Array<{ id: string; label: string }>;
+  analysis?: ReturnType<typeof marketAnalysisSchema.parse>;
+  plan?: ReturnType<typeof marketResearchPlanSchema.parse>;
+  corpus?: ReturnType<typeof marketEvidenceCorpusSchema.parse>;
+}) {
+  const lanes = input.analysis?.opportunityLanes ?? [];
+  return {
+    initialHypotheses:
+      input.initialHypotheses ??
+      input.analysis?.targetArchetypes.map(({ archetypeId }) => ({
+        id: archetypeId,
+        label: archetypeId,
+      })) ??
+      [],
+    opportunityLanes: lanes.map(({ id, label, origin, disposition, evidenceIds }) => ({
+      id,
+      label,
+      origin,
+      disposition,
+      evidenceIds,
+    })),
+    weakOrRejectedLaneIds: lanes
+      .filter(({ disposition }) => disposition === "weak" || disposition === "rejected")
+      .map(({ id }) => id),
+    importantMarketSources:
+      input.analysis?.importantMarketSources.map(
+        ({ id, name, sourceFamily, useFor, evidenceIds }) => ({
+          id,
+          name,
+          sourceFamily,
+          useFor,
+          evidenceIds,
+        }),
+      ) ?? [],
+    researchWaves:
+      input.corpus?.waves.map(
+        ({ waveNumber, questionIds, evidenceIds, priorityGapKeys }) => ({
+          waveNumber,
+          questionIds,
+          evidenceIds,
+          priorityGapKeys,
+        }),
+      ) ?? [],
+    executedQueries:
+      input.corpus?.questions.map(({ id, waveNumber, direction, query }) => ({
+        id,
+        waveNumber,
+        direction,
+        query,
+      })) ?? [],
+    discoveryRouteCount: input.plan?.discoveryRoutes.length ?? 0,
   };
 }
 

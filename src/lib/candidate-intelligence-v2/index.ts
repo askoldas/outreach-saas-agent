@@ -5,4 +5,5 @@ export * from "./freshness.ts";
 export * from "./first-party-fetch.ts";
 export * from "./research-plan.ts";
 export * from "./research-runtime.ts";
+export * from "./relationship-suppression.ts";
 export * from "./snapshot.ts";

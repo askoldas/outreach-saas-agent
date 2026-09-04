@@ -16,6 +16,13 @@ test("confirmed Market Analysis compiles provider-bound discovery and verificati
   ]);
   assert.equal(plan.verificationRoutes[0]?.sourceFamily, "official_website");
   assert.deepEqual(plan.providerCapabilitySnapshotIds, ["snapshot-1"]);
+  assert.equal(plan.importantMarketSources[0]?.id, "market-source.operator-directory");
+  assert.deepEqual(plan.discoveryRoutes[0]?.importantMarketSourceIds, [
+    "market-source.operator-directory",
+  ]);
+  assert.deepEqual(plan.discoveryRoutes[0]?.sourceHints, [
+    "https://directory.example/operators",
+  ]);
 });
 
 test("planning requires explicit confirmation and exact Target Model identity", () => {
@@ -142,7 +149,19 @@ function analysis() {
     ],
     localLanguages: ["Latvian"],
     majorSourceFamilies: ["industry_directory" as const],
-    importantMarketSources: [],
+    importantMarketSources: [
+      {
+        id: "market-source.operator-directory",
+        name: "Operator member directory",
+        url: "https://directory.example/operators",
+        sourceFamily: "industry_directory" as const,
+        relevance: "Lists operating organizations.",
+        applicableOpportunityLaneIds: [],
+        useFor: "candidate_discovery" as const,
+        evidenceIds: ["market-evidence-1"],
+        confidence: 0.9,
+      },
+    ],
     qualificationSignals: [],
     misleadingSignals: [],
     coverageRisks: [],
@@ -224,6 +243,24 @@ function lane(
     counterEvidenceIds: [],
     scaleDrivers: ["site capacity"],
     buyingTriggers: ["renovation"],
+    commercialSignals: [
+      {
+        type: "scale_driver" as const,
+        key: `${id}.capacity`,
+        label: "site capacity",
+        statement: "site capacity",
+        evidenceIds: [],
+        confidence: 0.7,
+      },
+      {
+        type: "buying_trigger" as const,
+        key: `${id}.renovation`,
+        label: "renovation",
+        statement: "renovation",
+        evidenceIds: [],
+        confidence: 0.7,
+      },
+    ],
     vocabulary: ["conference centre"],
     confidence: 0.7,
   };

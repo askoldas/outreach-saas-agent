@@ -13,10 +13,13 @@ export type CandidatePrioritization = {
   lane: "deep_research" | "hold" | "suppress";
   suppressedReason?:
     | "existing_customer"
+    | "competitor"
+    | "explicit_exclusion"
     | "excluded_relationship"
     | "outside_target_geography"
     | "not_operating_organization";
   researchability: { score: number; difficulty: "low" | "medium" | "high" };
+  relationshipSuppression?: CampaignResearchCandidateInput["relationshipSuppression"];
   signals: CandidatePrioritySignal[];
 };
 export type CandidateCommercialContext = {
@@ -32,8 +35,19 @@ export function prioritizeResearchCandidate(
   context: CandidateCommercialContext = {},
 ): CandidatePrioritization {
   const keys = candidate.claimStates.map(({ key }) => key.toLowerCase());
-  const existingCustomer = keys.some((key) => /existing[_ .-]?customer/.test(key));
-  const excludedRelationship = keys.some((key) =>
+  const reliableRelationshipKeys = candidate.claimStates
+    .filter(
+      ({ epistemicStatus, freshnessState, reusableStatus }) =>
+        (epistemicStatus === "explicit_fact" ||
+          epistemicStatus === "evidence_backed_inference") &&
+        freshnessState !== "stale" &&
+        reusableStatus === "active",
+    )
+    .map(({ key }) => key.toLowerCase());
+  const existingCustomer = reliableRelationshipKeys.some((key) =>
+    /existing[_ .-]?customer/.test(key),
+  );
+  const excludedRelationship = reliableRelationshipKeys.some((key) =>
     /(?:competitor|irrelevant[_ .-]?relationship|hard[_ .-]?exclusion)/.test(key),
   );
   const reliableQuality = candidate.triageEvidence?.preliminaryQuality.filter(
@@ -60,6 +74,16 @@ export function prioritizeResearchCandidate(
         : notOperatingOrganization
           ? ("not_operating_organization" as const)
           : undefined;
+  const relationshipSuppression = candidate.relationshipSuppression;
+  const relationshipSuppressedReason =
+    relationshipSuppression?.decision === "suppress"
+      ? relationshipSuppression.reason === "existing_customer" ||
+        relationshipSuppression.reason === "competitor" ||
+        relationshipSuppression.reason === "explicit_exclusion"
+        ? relationshipSuppression.reason
+        : "excluded_relationship"
+      : undefined;
+  const finalSuppressedReason = relationshipSuppressedReason ?? suppressedReason;
   const signals: CandidatePrioritySignal[] = [];
   const priorities = context.matchedLanePriorities ?? [];
   const laneFit = priorities.includes("priority")
@@ -167,7 +191,7 @@ export function prioritizeResearchCandidate(
     -Math.min(30, (context.negativeSignalCount ?? 0) * 8),
     "Negative commercial evidence reduces priority.",
   );
-  const score = suppressedReason
+  const score = finalSuppressedReason
     ? 0
     : Math.max(
         0,
@@ -186,8 +210,15 @@ export function prioritizeResearchCandidate(
   return {
     version: CANDIDATE_PRIORITIZATION_VERSION,
     score,
-    lane: suppressedReason ? "suppress" : score >= 45 ? "deep_research" : "hold",
-    ...(suppressedReason ? { suppressedReason } : {}),
+    lane: finalSuppressedReason
+      ? "suppress"
+      : relationshipSuppression?.decision === "hold"
+        ? "hold"
+        : score >= 45
+          ? "deep_research"
+          : "hold",
+    ...(finalSuppressedReason ? { suppressedReason: finalSuppressedReason } : {}),
+    ...(relationshipSuppression ? { relationshipSuppression } : {}),
     researchability: {
       score: researchabilityScore,
       difficulty:

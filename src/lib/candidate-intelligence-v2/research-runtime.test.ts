@@ -8,7 +8,10 @@ import {
   normalizeCandidateEvidenceExtraction,
 } from "./evidence-extraction.ts";
 import { compileCandidateResearchPlan } from "./research-plan.ts";
-import { prepareCampaignResearchPlans } from "./research-runtime.ts";
+import {
+  prepareCampaignResearchPlans,
+  prepareCampaignTriagePlans,
+} from "./research-runtime.ts";
 
 test("Campaign research plans freeze required policy questions and reusable state", () => {
   const strategy = confirmedStrategy();
@@ -153,12 +156,23 @@ test("market-discovered priority lanes can enter research without Strategy arche
         disposition: "priority",
         scaleDrivers: ["conference capacity"],
         buyingTriggers: ["renovation"],
+        commercialSignals: [
+          {
+            type: "buying_trigger",
+            key: "venue.renovation",
+            label: "renovation",
+            statement: "Venue renovation",
+            evidenceIds: ["market-evidence-1"],
+            confidence: 0.8,
+          },
+        ],
       },
     ],
     candidates: [candidate("market-lane-event-venues")],
   });
   assert.equal(plans.length, 1);
   assert.equal(plans[0]?.sourcePlan.prioritization.lane, "deep_research");
+  assert.equal(plans[0]?.sourcePlan.commercialSignals[0]?.key, "venue.renovation");
 });
 
 test("hold-lane candidates do not consume the deep-research ceiling", () => {
@@ -173,11 +187,58 @@ test("hold-lane candidates do not consume the deep-research ceiling", () => {
         disposition: "exploratory",
         scaleDrivers: [],
         buyingTriggers: [],
+        commercialSignals: [],
       },
     ],
     candidates: [candidate("market-lane-exploratory")],
   });
   assert.deepEqual(plans, []);
+});
+
+test("triage retains deep-research, hold, and suppress decisions before selection", () => {
+  const strategy = confirmedStrategy();
+  const priorityLane = strategy.archetypes[0]!.id;
+  const triage = prepareCampaignTriagePlans({
+    campaignRunId: "run-1",
+    strategyVersionId: strategy.id,
+    strategy,
+    candidates: [
+      candidate(priorityLane),
+      {
+        ...candidate(priorityLane),
+        campaignCandidateId: "candidate-2",
+        organizationId: "organization-2",
+        relationshipSuppression: {
+          decision: "hold",
+          reason: "relationship_requires_verification",
+          relationship: "partner",
+          matchedBy: "canonical_domain",
+          confidence: 0.7,
+          evidenceIds: ["evidence-hold"],
+          policyVersion: "pre-research-relationship-suppression-v1",
+        },
+      },
+      {
+        ...candidate(priorityLane),
+        campaignCandidateId: "candidate-3",
+        organizationId: "organization-3",
+        relationshipSuppression: {
+          decision: "suppress",
+          reason: "existing_customer",
+          relationship: "existing_customer",
+          matchedBy: "organization_id",
+          confidence: 0.98,
+          evidenceIds: ["evidence-suppress"],
+          policyVersion: "pre-research-relationship-suppression-v1",
+        },
+      },
+    ],
+  });
+  assert.deepEqual(
+    triage.map(({ sourcePlan }) => sourcePlan.prioritization.lane).sort(),
+    ["deep_research", "hold", "suppress"],
+  );
+  assert.ok(triage.every(({ sourcePlan }) => sourcePlan.prioritization.researchability));
 });
 
 test("Research Blueprints add reusable questions while Strategy policy remains campaign-only", () => {

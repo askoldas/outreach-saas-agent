@@ -151,6 +151,14 @@ export async function executeRankingStage(input: {
     outputReferences: {
       ...result,
       orderingPolicyVersion: RANKING_ORDERING_POLICY_VERSION,
+      laneCounts: Object.fromEntries(
+        [...new Set(stableEntries.map(({ lane }) => lane))]
+          .sort()
+          .map((lane) => [
+            lane,
+            stableEntries.filter((entry) => entry.lane === lane).length,
+          ]),
+      ),
       stageScope: "deterministic_lane_first_comparative_consistency",
     },
     progressDelta: {

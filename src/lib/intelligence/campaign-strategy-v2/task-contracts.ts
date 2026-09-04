@@ -77,6 +77,42 @@ export const campaignMarketContextOutputSchema = z
       .max(8),
     procurementPatterns: z.array(intelligenceClaimSchema).max(4),
     opportunityLanes: z.array(marketOpportunityLaneProposalSchema).max(12).default([]),
+    importantMarketSources: z
+      .array(
+        z
+          .object({
+            sourceKey: z.string().min(1).max(120),
+            name: z.string().min(1).max(240),
+            sourceFamily: z.enum([
+              "industry_association",
+              "member_directory",
+              "trade_event",
+              "exhibitor_directory",
+              "business_directory",
+              "ranking",
+              "registry",
+              "government",
+              "trade_publication",
+              "marketplace",
+              "other",
+            ]),
+            url: z.url().optional(),
+            applicableOpportunityLaneKeys: z.array(z.string().min(1).max(120)).max(12),
+            whyUseful: z.string().min(1).max(800),
+            useFor: z.enum([
+              "candidate_discovery",
+              "market_validation",
+              "scale_validation",
+              "timing_signals",
+              "relationship_validation",
+            ]),
+            confidence: z.number().min(0).max(1),
+            evidenceIds: z.array(z.string().min(1).max(200)).min(1).max(20),
+          })
+          .strict(),
+      )
+      .max(12)
+      .default([]),
     likelySourceTypes: z.array(z.string().max(120)).max(6),
     dataChallenges: z.array(z.string().max(500)).max(4),
     underCoverageRisks: z.array(z.string().max(500)).max(4),

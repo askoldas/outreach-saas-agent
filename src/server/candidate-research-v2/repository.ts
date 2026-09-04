@@ -68,6 +68,17 @@ const researchBatchSchema = z
   })
   .strict();
 
+const candidateTriageSummarySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    researchCycleId: z.string().min(1),
+    candidateCount: z.number().int().nonnegative(),
+    deepResearchCount: z.number().int().nonnegative(),
+    holdCount: z.number().int().nonnegative(),
+    suppressCount: z.number().int().nonnegative(),
+  })
+  .strict();
+
 const researchQuestionSchema = z
   .object({
     id: z.string().min(1),
@@ -152,6 +163,20 @@ const sourcePlanSchema = z
     maximumFirstPartyFetches: z.number().int().nonnegative(),
     maximumSupportingSources: z.number().int().nonnegative().default(0),
     supportingQueries: z.array(z.string().min(1).max(500)).default([]),
+    commercialSignals: z
+      .array(
+        z
+          .object({
+            type: z.enum(["scale_driver", "buying_trigger", "need_signal"]),
+            key: z.string().min(1),
+            label: z.string().min(1),
+            statement: z.string().min(1),
+            evidenceIds: z.array(z.string().min(1)),
+            confidence: z.number().min(0).max(1),
+          })
+          .strict(),
+      )
+      .default([]),
     deferredQuestionKeys: z.array(z.string().min(1)),
     deferredReusableQuestionKeys: z.array(z.string().min(1)),
     prioritization: z
@@ -162,6 +187,8 @@ const sourcePlanSchema = z
         suppressedReason: z
           .enum([
             "existing_customer",
+            "competitor",
+            "explicit_exclusion",
             "excluded_relationship",
             "outside_target_geography",
             "not_operating_organization",
@@ -173,6 +200,35 @@ const sourcePlanSchema = z
             difficulty: z.enum(["low", "medium", "high"]),
           })
           .strict(),
+        relationshipSuppression: z
+          .object({
+            decision: z.enum(["continue", "hold", "suppress"]),
+            reason: z
+              .enum([
+                "existing_customer",
+                "competitor",
+                "explicit_exclusion",
+                "relationship_requires_verification",
+              ])
+              .optional(),
+            relationship: z
+              .enum([
+                "existing_customer",
+                "former_customer",
+                "competitor",
+                "partner",
+                "excluded",
+              ])
+              .optional(),
+            matchedBy: z
+              .enum(["organization_id", "canonical_domain", "normalized_name"])
+              .optional(),
+            confidence: z.number().min(0).max(1).optional(),
+            evidenceIds: z.array(z.string().min(1)),
+            policyVersion: z.literal("pre-research-relationship-suppression-v1"),
+          })
+          .strict()
+          .optional(),
         signals: z.array(
           z
             .object({
@@ -500,6 +556,34 @@ export async function initializeCandidateResearchBatch(input: {
       target_contract_version: input.contractVersion,
       target_input_hash: input.inputHash,
       target_plans: input.plans,
+    }),
+  );
+}
+
+export async function persistCandidateTriageDecisions(input: {
+  workspaceId: string;
+  campaignRunId: string;
+  cycleNumber: number;
+  decisions: Array<{
+    campaignCandidateId: string;
+    organizationId: string;
+    decision: "deep_research" | "hold" | "suppress";
+    commercialOpportunityScore: number;
+    components: Array<{ key: string; contribution: number; explanation: string }>;
+    suppressionReasons: string[];
+    relationshipStatus?: string;
+    researchDifficulty: "low" | "medium" | "high";
+    evidenceIds: string[];
+    policyVersion: string;
+    inputHash: string;
+  }>;
+}) {
+  return candidateTriageSummarySchema.parse(
+    await rpc("persist_candidate_triage_decisions_v2", {
+      target_workspace_id: input.workspaceId,
+      target_campaign_run_id: input.campaignRunId,
+      target_cycle_number: input.cycleNumber,
+      target_decisions: input.decisions as unknown as Json,
     }),
   );
 }

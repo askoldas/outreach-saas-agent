@@ -127,7 +127,7 @@ export function compileCampaignTargetModel(input: {
               normalizeCampaignRelationship(archetype.relationshipType),
             ],
             optionalOrUnknown: [],
-            evidenceIds: [],
+            evidenceIds: uniqueSorted(archetype.evidenceIds),
             confidence: archetype.confidence,
           }),
         )

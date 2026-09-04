@@ -14,7 +14,7 @@ test("Market Research routes become frozen provider routes and query vocabulary"
     result.segments[0]?.businessCharacteristics.keywords.includes("industrial cluster"),
   );
   assert.ok(
-    result.segments[0]?.businessCharacteristics.keywords.includes(
+    result.segments[0]?.businessCharacteristics.sourceHints.includes(
       "https://directory.example/companies",
     ),
   );
@@ -58,6 +58,24 @@ test("market-discovered lanes become first-class discovery segments", () => {
       counterEvidenceIds: [],
       scaleDrivers: ["banquet capacity"],
       buyingTriggers: ["venue renovation"],
+      commercialSignals: [
+        {
+          type: "scale_driver",
+          key: "venue.capacity",
+          label: "banquet capacity",
+          statement: "banquet capacity",
+          evidenceIds: ["evidence-venue"],
+          confidence: 0.8,
+        },
+        {
+          type: "buying_trigger",
+          key: "venue.renovation",
+          label: "venue renovation",
+          statement: "venue renovation",
+          evidenceIds: ["evidence-venue"],
+          confidence: 0.8,
+        },
+      ],
       vocabulary: ["conference centre"],
       confidence: 0.82,
     },
@@ -78,8 +96,11 @@ test("market-discovered lanes become first-class discovery segments", () => {
   assert.deepEqual(result.segments[0]?.businessCharacteristics.industries, [
     "hospitality",
   ]);
-  assert.ok(
-    result.segments[0]?.businessCharacteristics.keywords.includes("venue renovation"),
+  assert.equal(
+    result.segments[0]?.businessCharacteristics.commercialSignals.find(
+      ({ key }) => key === "venue.renovation",
+    )?.type,
+    "buying_trigger",
   );
 });
 

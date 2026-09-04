@@ -13,9 +13,9 @@ import {
 } from "./market-intelligence.ts";
 
 export const MARKET_RESEARCH_PLAN_SCHEMA_VERSION =
-  "market-research-plan/v2-opportunity-lanes";
+  "market-research-plan/v2.1-sources-typed-signals";
 export const MARKET_RESEARCH_PLAN_COMPILER_VERSION =
-  "confirmed-market-provider-route-compiler/v2-opportunity-lanes";
+  "confirmed-market-provider-route-compiler/v2.1-sources-typed-signals";
 
 export type FrozenProviderCapability = {
   snapshotId: string;
@@ -54,6 +54,7 @@ export function compileMarketResearchPlan(input: {
       ? { estimatedCandidateRange: input.analysis.estimatedCandidateRange }
       : {}),
     opportunityLanes: input.analysis.opportunityLanes.filter(isRoutableLane),
+    importantMarketSources: input.analysis.importantMarketSources,
     discoveryRoutes: routes,
     verificationRoutes,
     expectedCoverageRisks: input.analysis.coverageRisks,
@@ -107,7 +108,17 @@ function assertInputs(input: Parameters<typeof compileMarketResearchPlan>[0]) {
 function buildRoutes(analysis: MarketAnalysis, capabilities: FrozenProviderCapability[]) {
   const routes: DiscoveryRoute[] = [];
   for (const lane of routableLanes(analysis)) {
-    for (const sourceFamily of analysis.majorSourceFamilies) {
+    const laneSources = analysis.importantMarketSources.filter(
+      ({ applicableOpportunityLaneIds, useFor }) =>
+        useFor === "candidate_discovery" &&
+        (!applicableOpportunityLaneIds.length ||
+          applicableOpportunityLaneIds.includes(lane.id)),
+    );
+    const sourceFamilies = uniqueSorted([
+      ...analysis.majorSourceFamilies,
+      ...laneSources.map(({ sourceFamily }) => sourceFamily),
+    ]);
+    for (const sourceFamily of sourceFamilies) {
       const sourceTypes = providerSourceTypes(sourceFamily);
       const compatible = compatibleCapabilities(analysis, capabilities, sourceTypes);
       if (!compatible.length) continue;
@@ -139,9 +150,12 @@ function buildRoutes(analysis: MarketAnalysis, capabilities: FrozenProviderCapab
             )
             .map(({ term }) => term),
         ]),
-        sourceHints: analysis.importantMarketSources
+        sourceHints: laneSources
           .filter((source) => source.sourceFamily === sourceFamily)
           .map(({ url, name }) => url ?? name),
+        importantMarketSourceIds: laneSources
+          .filter((source) => source.sourceFamily === sourceFamily)
+          .flatMap(({ id }) => (id ? [id] : [])),
         expansionMode: sourceFamily === "web_search" ? "resumable" : "bounded",
         expectedCoverage: expectedCoverage(lane.disposition, compatible.length),
       });
@@ -173,6 +187,7 @@ function buildVerificationRoutes(
       languages: routeLanguages(analysis, compatible),
       vocabulary: [],
       sourceHints: [],
+      importantMarketSourceIds: [],
       expansionMode: "bounded" as const,
       expectedCoverage: "unknown" as const,
     },
@@ -273,6 +288,7 @@ function routableLanes(analysis: MarketAnalysis) {
     counterEvidenceIds: [],
     scaleDrivers: [],
     buyingTriggers: [],
+    commercialSignals: [],
     vocabulary: [],
     confidence: analysis.confidence,
   }));

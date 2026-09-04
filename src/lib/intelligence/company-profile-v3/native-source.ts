@@ -19,6 +19,7 @@ export function createNativeCompanyProfileSeed(input: {
   websiteUrl: string;
   workspaceId: string;
   forceRefresh?: boolean;
+  confirmedUserInputs?: unknown;
 }) {
   const website = normalizePublicWebsite(input.websiteUrl);
   const canonicalDomain = website.hostname.toLowerCase().replace(/^www\./, "");
@@ -61,6 +62,7 @@ export function createNativeCompanyProfileSeed(input: {
       allowedDomains,
     }),
     refreshPolicy: { forceRefresh: input.forceRefresh === true },
+    confirmedUserInputs: input.confirmedUserInputs ?? null,
   };
 }
 

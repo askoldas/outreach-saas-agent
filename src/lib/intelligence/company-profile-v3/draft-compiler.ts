@@ -187,6 +187,7 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     evidenceIds: validUuids(relationship.evidenceIds),
     scope: "company" as const,
   })).filter(({ evidenceIds }) => evidenceIds.length > 0);
+  const finalCompiledSnapshot = finalizeCompiledSnapshot(compiledSnapshot,input.analystResult);
 
   return {
     workspaceId: input.workspaceId,
@@ -212,11 +213,13 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     targetRoles,
     knownRelationships,
     questions: input.clarification.questions,
-    compiledSnapshot: input.analystResult
-      ? { ...compiledSnapshot, analystResult: input.analystResult }
-      : compiledSnapshot,
-    compiledSnapshotHash: hash(compiledSnapshot),
+    compiledSnapshot: finalCompiledSnapshot,
+    compiledSnapshotHash: hash(finalCompiledSnapshot),
   };
+}
+
+export function finalizeCompiledSnapshot<T extends Record<string,unknown>>(snapshot:T,analystResult?:CompanyAnalystResult):T & {analystResult?:CompanyAnalystResult} {
+  return analystResult?{...snapshot,analystResult}:snapshot;
 }
 
 function uniqueTargetRoles(offerings: Array<{ stableKey: string; buyerLogic: BuyerLogic["offeringBuyerLogic"][number]; archetypes: Array<{ archetypeKey: string; details: { likelyDecisionRoles: string[] }; evidenceIds: string[]; confidence: number }> }>) {

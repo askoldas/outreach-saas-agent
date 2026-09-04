@@ -205,12 +205,14 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
     throw new Error("A company website is required for native Company Intelligence.");
 
   const profile = await ensureCompanyProfileContainer(workspaceId);
+  const confirmedUserInputs = await loadMaterialUserControlledInputs(workspaceId);
   const snapshot = createNativeCompanyProfileSeed({
     companyProfileId: profile.id,
     publicName: workspace.name,
     websiteUrl: workspace.website_url,
     workspaceId,
     forceRefresh: options.forceRefresh,
+    confirmedUserInputs,
   });
   const inputHash = createHash("sha256")
     .update(
@@ -275,6 +277,30 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
   if (linkError)
     throw new Error(`Could not link Company Intelligence run: ${linkError.message}`);
   return { profileDraftId: draft.id, triggerRunId: handle.id };
+}
+
+async function loadMaterialUserControlledInputs(workspaceId:string) {
+  const service=createServiceRoleClient();
+  const {data:container}=await service.from("company_profiles").select("current_v3_draft_id").eq("workspace_id",workspaceId).maybeSingle();
+  const draftId=container?.current_v3_draft_id;
+  if(!draftId)return null;
+  const [draft,offerings,archetypes,rules,events]=await Promise.all([
+    service.from("company_profile_drafts").select("compiled_snapshot_json").eq("workspace_id",workspaceId).eq("id",draftId).maybeSingle(),
+    service.from("company_offering_versions").select("stable_key,name,status,offering_type,short_description,commercial_mechanics_json,buyer_logic_json").eq("workspace_id",workspaceId).eq("profile_draft_id",draftId).order("stable_key"),
+    service.from("buyer_archetype_hypotheses").select("archetype_key,name,status,relationship_type,priority,details_json").eq("workspace_id",workspaceId).eq("profile_draft_id",draftId).in("status",["user_confirmed","user_rejected"]).order("archetype_key"),
+    service.from("commercial_rules").select("rule_key,status,scope,strength,description").eq("workspace_id",workspaceId).eq("profile_draft_id",draftId).in("status",["confirmed","rejected"]).order("rule_key"),
+    service.from("profile_change_events").select("event_type,affected_paths,details_json").eq("workspace_id",workspaceId).eq("profile_draft_id",draftId).eq("actor_type","user").order("created_at"),
+  ]);
+  if(draft.error||offerings.error||archetypes.error||rules.error||events.error)throw new Error("Could not load user-controlled Company Intelligence inputs.");
+  if(!(events.data??[]).length&&!(archetypes.data??[]).length&&!(rules.data??[]).length)return null;
+  return {core:materialCoreProjection(draft.data?.compiled_snapshot_json),offerings:offerings.data??[],reviewedTargetOrganisations:archetypes.data??[],reviewedRules:rules.data??[],userEvents:events.data??[]};
+}
+
+function materialCoreProjection(value:Json|undefined) {
+  if(!value||typeof value!=="object"||Array.isArray(value))return null;
+  const identity=value.identity&&typeof value.identity==="object"&&!Array.isArray(value.identity)?value.identity:{};
+  const commercial=value.commercialSynthesis&&typeof value.commercialSynthesis==="object"&&!Array.isArray(value.commercialSynthesis)?value.commercialSynthesis:{};
+  return {identity:{publicName:identity.publicName??null,canonicalDomain:identity.canonicalDomain??null},commercial:{primaryRoles:commercial.primaryRoles??[],revenueMechanics:commercial.revenueMechanics??[],transactionModels:commercial.transactionModels??[],customerConsumptionModes:commercial.customerConsumptionModes??[],commercialConstraints:commercial.commercialConstraints??[]}};
 }
 
 export function isIndeterminateTriggerDispatchError(error: unknown) {

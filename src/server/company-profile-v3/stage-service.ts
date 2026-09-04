@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { compileProfileV3Draft } from "@/lib/intelligence/company-profile-v3/draft-compiler";
 import { adaptCompanyAnalystResult } from "@/lib/intelligence/company-profile-v3/company-analyst-adapter";
-import { assertAnalystEvidenceBoundary, companyAnalystResultSchema, type CompanyAnalystResult } from "@/lib/intelligence/company-profile-v3/company-analyst";
+import { assertAnalystEvidenceBoundary, classifyFollowUpProvenance, companyAnalystCacheKey, companyAnalystConfirmedInputProjection, companyAnalystResultSchema, remapCachedAnalystEvidence, type CompanyAnalystResult } from "@/lib/intelligence/company-profile-v3/company-analyst";
 import { runBoundedCompanyAnalyst } from "@/lib/intelligence/company-profile-v3/bounded-analyst";
 import { normalizeProfileStageProviderOutput } from "@/lib/intelligence/company-profile-v3/output-normalization";
 import { normalizeLegacyProfileBuyerRuleScopes } from "@/lib/intelligence/company-profile-v3/profile-rule-scopes";
@@ -147,7 +147,7 @@ export async function executeProfileV3Stage(input: {
       : {}),
   };
   const analystCacheKey = input.taskId === "profile.whole_company_analysis"
-    ? hash({companyProfileId:nativeCompanyProfileId(draft.compiled_snapshot_json),evidence:(evidence??[]).map(item=>item.content_hash).sort(),promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,contextCompilerVersion:definition.contextCompilerVersion,analystVersion:"bounded-company-analyst/v1"})
+    ? companyAnalystCacheKey({companyProfileId:nativeCompanyProfileId(draft.compiled_snapshot_json),evidenceHashes:(evidence??[]).map(item=>item.content_hash),confirmedUserInput:companyAnalystConfirmedInputProjection(draft.compiled_snapshot_json),promptVersion:definition.promptVersion,schemaVersion:definition.schemaVersion,contextCompilerVersion:definition.contextCompilerVersion,analystVersion:"bounded-company-analyst/v1"})
     : null;
   const inputHash = hash({
     context,
@@ -359,14 +359,16 @@ async function collectCompanyAnalystFollowUp(input: {
     });
   }));
   const pages = deduplicateFollowUpPages(responses.flat(), input.existingUrls).slice(0, 4);
-  const rows = pages.map((page) => ({
+  const rows = pages.map((page) => {
+    const provenance=classifyFollowUpProvenance(page.url,sourceSet.allowedDomains);
+    return ({
     id: randomUUID(), workspace_id: input.workspaceId,
     subject_type: "company_profile_draft", subject_id: input.profileDraftId,
     evidence_type: "targeted_company_research", excerpt: page.content.replace(/\s+/g," ").trim().slice(0,800),
     structured_value_json: {url:page.url,title:page.title,content:page.content.slice(0,8_000)},
-    location_json:{url:page.url,title:page.title}, directness:"direct", source_reliability:"first_party",
+    location_json:{url:page.url,title:page.title,domain:new URL(page.url).hostname,relationshipSource:provenance.relationshipSource}, directness:provenance.directness, source_reliability:provenance.sourceReliability,
     freshness_state:"current", retrieved_at:new Date().toISOString(), content_hash:hash(`${page.url}\n${page.content}`), visibility:"workspace_private",
-  }));
+  });});
   if (rows.length) {
     const { error } = await createServiceRoleClient().from("evidence_items").insert(rows);
     if (error) throw new Error(`Could not persist targeted Company Analyst evidence: ${error.message}`);
@@ -399,10 +401,11 @@ async function loadCompanyAnalystCache(workspaceId:string, cacheKey:string, evid
   const {data,error}=await database.from("company_analyst_cache_v2").select("result_json,evidence_manifest_json").eq("workspace_id",workspaceId).eq("cache_key",cacheKey).maybeSingle();
   if(error) throw new Error(`Could not read Company Analyst cache: ${error.message}`);
   if(!data) return null;
-  const oldManifest=objectValue(data.evidence_manifest_json);
+  const oldManifest=Object.fromEntries(Object.entries(objectValue(data.evidence_manifest_json)).map(([id,value])=>[id,String(value)]));
   const currentByHash=new Map(evidence.map(item=>[item.content_hash,item.id]));
-  const remap=new Map(Object.entries(oldManifest).map(([oldId,contentHash])=>[oldId,currentByHash.get(String(contentHash))]));
-  const mapped=remapEvidenceIds(data.result_json,remap);
+  const cached=companyAnalystResultSchema.parse(data.result_json);
+  const mapped=remapCachedAnalystEvidence(cached,oldManifest,currentByHash);
+  if(!mapped) return null;
   const parsed=companyAnalystResultSchema.parse(mapped);
   try { assertAnalystEvidenceBoundary(parsed,new Set(evidence.map(({id})=>id))); return parsed; } catch { return null; }
 }
@@ -412,17 +415,6 @@ async function persistCompanyAnalystCache(input:{workspaceId:string;companyProfi
   const database=createServiceRoleClient() as unknown as {from(table:string):{upsert(value:Record<string,unknown>,options:Record<string,unknown>):PromiseLike<{error:{message:string}|null}>}};
   const {error}=await database.from("company_analyst_cache_v2").upsert({workspace_id:input.workspaceId,company_profile_id:input.companyProfileId,cache_key:input.cacheKey,result_json:input.result,evidence_manifest_json:manifest},{onConflict:"workspace_id,cache_key"});
   if(error) throw new Error(`Could not persist Company Analyst cache: ${error.message}`);
-}
-
-function remapEvidenceIds(value:Json, remap:Map<string,string|undefined>):Json {
-  if(Array.isArray(value)) return value.map(item=>remapEvidenceIds(item,remap));
-  if(!value||typeof value!=="object") return value;
-  return Object.fromEntries(Object.entries(value).map(([key,item])=>[
-    key,
-    key==="evidenceIds"&&Array.isArray(item)
-      ? item.map(id=>remap.get(String(id))).filter((id):id is string=>Boolean(id))
-      : remapEvidenceIds(item as Json,remap),
-  ])) as Json;
 }
 
 export async function finalizeProfileV3Draft(input: {

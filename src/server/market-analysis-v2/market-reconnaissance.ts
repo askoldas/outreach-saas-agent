@@ -4,6 +4,7 @@ import {
   compileMarketResearchFollowUpQuestions,
   DEFAULT_MARKET_RESEARCH_POLICY,
   marketEvidenceCorpusSchema,
+  marketResearchWaveSummarySchema,
   marketResearchRequestHash,
   type CampaignTargetModel,
   type MarketEvidenceCorpus,
@@ -17,6 +18,7 @@ import { searchWebResult, type SearchResult } from "@/lib/providers/tavily";
 import { runBudgetedTavilyCall } from "@/server/credits/budgeted-tavily-call";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { Json } from "@/types/database.types";
+import { reasonAboutWaveOne } from "./wave-reasoning";
 
 type SearchResponse = Awaited<ReturnType<typeof searchWebResult>>;
 
@@ -36,6 +38,7 @@ export type MarketReconnaissanceAdapters = {
   persist: (corpus: MarketEvidenceCorpus) => Promise<MarketEvidenceCorpus>;
   id: () => string;
   now: () => string;
+  summarizeWaveOne?: typeof reasonAboutWaveOne;
 };
 
 export async function executeMarketReconnaissance(
@@ -120,12 +123,19 @@ export async function executeMarketReconnaissance(
     });
   };
   await runWave(initialQuestions, []);
+  const waveOneSummary = await (adapters.summarizeWaveOne ?? emptyWaveOneSummary)({
+    workspaceId: input.workspaceId,
+    campaignRunId: input.campaignRunId,
+    target: input.target,
+    evidence: deduplicateEvidence(evidence),
+  });
   if (policy.maxMarketResearchWaves >= 2 && policy.normalMarketResearchWaves >= 2) {
     await runWave(
       compileMarketResearchFollowUpQuestions({
         target: input.target,
         evidence,
         waveNumber: 2,
+        waveSummary: waveOneSummary,
         maximum: policy.maxQueriesPerWave,
       }),
       [],
@@ -153,6 +163,7 @@ export async function executeMarketReconnaissance(
     questions,
     evidence: deduplicateEvidence(evidence).slice(0, policy.maxEvidenceItems),
     waves,
+    waveSummaries: [waveOneSummary],
     policy: {
       maxMarketResearchWaves: policy.maxMarketResearchWaves,
       maxQueriesPerWave: policy.maxQueriesPerWave,
@@ -197,7 +208,18 @@ const productionAdapters: MarketReconnaissanceAdapters = {
   persist: persistCorpus,
   id: randomUUID,
   now: () => new Date().toISOString(),
+  summarizeWaveOne: reasonAboutWaveOne,
 };
+
+async function emptyWaveOneSummary() {
+  return marketResearchWaveSummarySchema.parse({
+    waveNumber: 1,
+    discoveredLaneHypotheses: [], strengthenedLaneHypotheses: [], weakenedLaneHypotheses: [],
+    localTerminology: [], importantSourceLeads: [], scaleDriverFindings: [],
+    buyingSignalFindings: [], marketStructureFindings: [], evidenceGaps: [],
+    followUpQuestions: [], evidenceIds: [],
+  });
+}
 
 function evidenceItem(questionId: string, result: SearchResult, retrievedAt: string) {
   return {

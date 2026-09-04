@@ -3,6 +3,7 @@ import {
   marketAnalysisSchema,
   marketEvidenceCorpusSchema,
   marketResearchPlanSchema,
+  compileMarketEvidenceSynthesisInput,
 } from "@/lib/intelligence/core";
 import { createServiceRoleClient } from "@/lib/supabase/service";
 import type { StageResult } from "@/lib/workflow-v2";
@@ -94,13 +95,14 @@ export async function executeCompanyResearchBootstrap(input: {
     campaignRunId: input.campaignRunId,
     target: target.artifact,
   });
-  evidenceIds.push(...reconnaissance.corpus.evidence.map(({ id }) => id));
+  const synthesisEvidence = compileMarketEvidenceSynthesisInput(reconnaissance.corpus);
+  evidenceIds.push(...synthesisEvidence.selectedEvidence.map(({ id }) => id));
   const frozenInput = {
     campaignRunId: input.campaignRunId,
     strategyVersionId: context.strategyVersionId,
     strategy: context.strategy,
     target: target.artifact,
-    marketEvidenceCorpus: reconnaissance.corpus,
+    marketEvidenceSynthesis: synthesisEvidence,
   };
   let providerAttempt = 0;
   const analysis = await compileAndPersistMarketAnalysis({
@@ -205,6 +207,9 @@ function marketObservability(input: {
   corpus?: ReturnType<typeof marketEvidenceCorpusSchema.parse>;
 }) {
   const lanes = input.analysis?.opportunityLanes ?? [];
+  const synthesis = input.corpus
+    ? compileMarketEvidenceSynthesisInput(input.corpus)
+    : undefined;
   return {
     initialHypotheses:
       input.initialHypotheses ??
@@ -243,12 +248,15 @@ function marketObservability(input: {
         }),
       ) ?? [],
     executedQueries:
-      input.corpus?.questions.map(({ id, waveNumber, direction, query }) => ({
+      input.corpus?.questions.map(({ id, waveNumber, direction, query, derivedFromEvidenceIds }) => ({
         id,
         waveNumber,
         direction,
         query,
+        derivedFromEvidenceIds,
       })) ?? [],
+    waveOneSynthesis: input.corpus?.waveSummaries[0] ?? null,
+    finalSynthesisInput: synthesis?.omittedEvidenceStats ?? null,
     discoveryRouteCount: input.plan?.discoveryRoutes.length ?? 0,
   };
 }

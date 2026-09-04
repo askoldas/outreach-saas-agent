@@ -15,7 +15,7 @@ const memoryContextSchema = z
     entries: z.array(
       z
         .object({
-          organizationId: z.string().min(1),
+          organizationId: z.string().min(1).nullable().optional(),
           canonicalDomains: z.array(z.string().min(1)),
           normalizedNames: z.array(z.string().min(1)),
           relationship: z.enum([
@@ -28,11 +28,14 @@ const memoryContextSchema = z
             "integration_partner",
             "referral_partner",
             "strategic_partner",
+            "partner",
+            "excluded",
+            "unknown",
           ]),
           status: z.enum(["confirmed", "probable", "ambiguous"]),
           confidence: z.number().min(0).max(1),
           evidenceIds: z.array(z.string().min(1)),
-          source: z.literal("prior_qualification"),
+          source: z.enum(["prior_qualification", "company_profile", "seller_site", "user_confirmed", "prior_campaign", "crm", "other"]),
         })
         .strict(),
     ),
@@ -59,7 +62,13 @@ export async function loadPreResearchSuppressionContext(input: {
   return [
     ...memory.entries.map(
       (entry): RelationshipSuppressionEntry => ({
-        ...entry,
+        ...(entry.organizationId ? { organizationId: entry.organizationId } : {}),
+        canonicalDomains: entry.canonicalDomains,
+        normalizedNames: entry.normalizedNames,
+        status: entry.status,
+        confidence: entry.confidence,
+        evidenceIds: entry.evidenceIds,
+        source: entry.source === "prior_qualification" ? "prior_qualification" : "relationship_memory",
         relationship: partnerRelationship(entry.relationship),
       }),
     ),
@@ -85,7 +94,9 @@ function partnerRelationship(
         relationship === "former_customer" ||
         relationship === "competitor"
       ? relationship
-      : "partner";
+      : relationship === "excluded"
+        ? "excluded"
+        : "partner";
 }
 
 function explicitExclusionEntries(rules: IntelligenceRule[]) {

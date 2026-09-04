@@ -18,6 +18,7 @@ export function createNativeCompanyProfileSeed(input: {
   publicName: string;
   websiteUrl: string;
   workspaceId: string;
+  forceRefresh?: boolean;
 }) {
   const website = normalizePublicWebsite(input.websiteUrl);
   const canonicalDomain = website.hostname.toLowerCase().replace(/^www\./, "");
@@ -59,7 +60,25 @@ export function createNativeCompanyProfileSeed(input: {
       primaryWebsiteUrl: website.toString(),
       allowedDomains,
     }),
+    refreshPolicy: { forceRefresh: input.forceRefresh === true },
   };
+}
+
+export function nativeCompanyProfileForceRefresh(snapshot: unknown) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return false;
+  const policy = (snapshot as Record<string, unknown>).refreshPolicy;
+  return Boolean(policy && typeof policy === "object" && !Array.isArray(policy) && (policy as Record<string, unknown>).forceRefresh === true);
+}
+
+export function nativeCompanyProfileId(snapshot: unknown) {
+  if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) {
+    throw new Error("The Company Intelligence draft has no profile version.");
+  }
+  const id = (snapshot as Record<string, unknown>).profileVersionId;
+  if (typeof id !== "string" || !id) {
+    throw new Error("The Company Intelligence draft has no profile version.");
+  }
+  return id;
 }
 
 export function readNativeCompanyProfileSourceSet(

@@ -173,6 +173,13 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     consistency: input.consistency,
   };
 
+  const targetRoles = uniqueTargetRoles(offerings);
+  const knownRelationships = input.commercial.knownRelationships.map((relationship) => ({
+    ...relationship,
+    evidenceIds: validUuids(relationship.evidenceIds),
+    scope: "company" as const,
+  })).filter(({ evidenceIds }) => evidenceIds.length > 0);
+
   return {
     workspaceId: input.workspaceId,
     profileDraftId: input.profileDraftId,
@@ -194,10 +201,30 @@ export function compileProfileV3Draft(input: ProfileV3CompilationInput) {
     },
     offerings,
     rules,
+    targetRoles,
+    knownRelationships,
     questions: input.clarification.questions,
     compiledSnapshot,
     compiledSnapshotHash: hash(compiledSnapshot),
   };
+}
+
+function uniqueTargetRoles(offerings: Array<{ stableKey: string; buyerLogic: BuyerLogic["offeringBuyerLogic"][number]; archetypes: Array<{ archetypeKey: string; details: { likelyDecisionRoles: string[] }; evidenceIds: string[]; confidence: number }> }>) {
+  const roles = new Map<string, { roleKey: string; label: string; offeringKeys: string[]; archetypeKeys: string[]; confidence: number; evidenceIds: string[] }>();
+  for (const offering of offerings) {
+    for (const label of offering.buyerLogic.likelyDecisionRoles) add(label, offering.stableKey, [], offering.buyerLogic.confidence, validUuids(offering.buyerLogic.evidenceIds));
+    for (const target of offering.archetypes) for (const label of target.details.likelyDecisionRoles) add(label, offering.stableKey, [target.archetypeKey], target.confidence, target.evidenceIds);
+  }
+  return [...roles.values()];
+  function add(label: string, offeringKey: string, archetypeKeys: string[], confidence: number, evidenceIds: string[]) {
+    const roleKey = slugify(label);
+    const current = roles.get(roleKey) ?? { roleKey, label, offeringKeys: [], archetypeKeys: [], confidence: 0, evidenceIds: [] };
+    current.offeringKeys = [...new Set([...current.offeringKeys, offeringKey])];
+    current.archetypeKeys = [...new Set([...current.archetypeKeys, ...archetypeKeys])];
+    current.evidenceIds = [...new Set([...current.evidenceIds, ...evidenceIds])];
+    current.confidence = Math.max(current.confidence, confidence);
+    roles.set(roleKey, current);
+  }
 }
 
 function uniqueScopedKey(baseKey: string, offeringKey: string, used: Set<string>) {

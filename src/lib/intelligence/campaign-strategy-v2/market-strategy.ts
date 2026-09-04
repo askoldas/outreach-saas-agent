@@ -207,7 +207,7 @@ export function compileBoundedStrategyModelInput(value: unknown) {
     truncatedTextCharacters: 0,
     omittedDepthValues: 0,
   };
-  const input = boundedValue(value, budget, 0);
+  const input = boundedValue(value, budget, 0, "");
   return { input, budget };
 }
 
@@ -219,6 +219,7 @@ function boundedValue(
     omittedDepthValues: number;
   },
   depth: number,
+  key: string,
 ): unknown {
   if (depth > 6) {
     budget.omittedDepthValues += 1;
@@ -230,14 +231,15 @@ function boundedValue(
     return value.slice(0, 1_200);
   }
   if (Array.isArray(value)) {
-    budget.omittedArrayItems += Math.max(0, value.length - 12);
-    return value.slice(0, 12).map((item) => boundedValue(item, budget, depth + 1));
+    const limit = key === "selectedEvidence" ? 30 : 12;
+    budget.omittedArrayItems += Math.max(0, value.length - limit);
+    return value.slice(0, limit).map((item) => boundedValue(item, budget, depth + 1, ""));
   }
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>)
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([key, item]) => [key, boundedValue(item, budget, depth + 1)]),
+        .map(([childKey, item]) => [childKey, boundedValue(item, budget, depth + 1, childKey)]),
     );
   }
   return value;

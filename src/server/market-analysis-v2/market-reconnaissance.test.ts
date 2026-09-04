@@ -19,8 +19,9 @@ test("market reconnaissance is cached, credit bounded, and separate from candida
 
 test("Market Analysis receives the persisted evidence corpus and its allowed IDs", () => {
   assert.match(stage, /executeMarketReconnaissance/);
-  assert.match(stage, /marketEvidenceCorpus: reconnaissance\.corpus/);
-  assert.match(stage, /evidenceIds\.push\(\.\.\.reconnaissance\.corpus\.evidence\.map/);
+  assert.match(stage, /marketEvidenceSynthesis: synthesisEvidence/);
+  assert.match(stage, /selectedEvidence\.map/);
+  assert.doesNotMatch(stage, /evidenceIds\.push\(\.\.\.reconnaissance\.corpus\.evidence\.map/);
   assert.ok(
     stage.indexOf("executeMarketReconnaissance({") <
       stage.indexOf("compileAndPersistMarketAnalysis({"),

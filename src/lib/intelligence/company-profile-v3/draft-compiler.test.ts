@@ -33,6 +33,15 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
       commercialConstraints: [],
       unresolvedCommercialQuestions: [],
       conciseCommercialSummary: "Produces goods for resale.",
+      knownRelationships: [{
+        organizationName: "Example Customer",
+        canonicalDomain: "customer.example",
+        relationshipType: "existing_customer",
+        status: "confirmed",
+        confidence: 0.95,
+        source: "seller_site",
+        evidenceIds: ["00000000-0000-4000-8000-000000000010"],
+      }],
     }),
     offerings: profileOfferingDecompositionOutputSchema.parse({
       offerings: [
@@ -79,7 +88,7 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
           negativeSignals: [],
           scaleSignals: ["Location count"],
           buyingTriggers: ["New location opening"],
-          likelyDecisionRoles: [],
+          likelyDecisionRoles: ["Procurement Manager"],
           evidenceIds: [],
           epistemicStatus: "hypothesis",
           confidence: 0.7,
@@ -111,6 +120,9 @@ test("V3 compilation preserves explicit offering-to-archetype relationships", ()
     "distributor",
   );
   assert.equal(compiled.businessModel.primaryRole, "manufacturer");
+  assert.deepEqual(compiled.targetRoles[0]?.archetypeKeys, ["distributor"]);
+  assert.deepEqual(compiled.targetRoles[0]?.offeringKeys, ["core-products"]);
+  assert.equal(compiled.knownRelationships[0]?.organizationName, "Example Customer");
   assert.match(compiled.compiledSnapshotHash, /^[a-f0-9]{64}$/);
 });
 

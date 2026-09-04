@@ -18,6 +18,7 @@ const activeV2Exceptions = [] as const;
 const budgetedProviderBoundaries = [
   "src/server/discovery-v2/provider-service.ts",
   "src/server/market-analysis-v2/stage-service.ts",
+  "src/server/market-analysis-v2/wave-reasoning.ts",
 ] as const;
 
 const legacyOrInactiveCallers = [] as const;

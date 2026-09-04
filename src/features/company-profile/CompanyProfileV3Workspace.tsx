@@ -23,6 +23,14 @@ export function CompanyProfileV3Workspace({
   const reviewable = ["needs_input", "ready_for_review"].includes(review.state);
   const publishable =
     reviewable && review.offerings.some((offering) => offering.status === "active");
+  const targetOrganisations = uniqueBy(
+    review.offerings.flatMap((offering) =>
+      offering.archetypes
+        .filter(({ status, priority }) => status !== "user_rejected" && status !== "superseded" && priority !== "avoid")
+        .map((target) => ({ ...target, offeringName: offering.name })),
+    ),
+    ({ name }) => name.toLocaleLowerCase(),
+  );
   return (
     <>
       <section
@@ -44,8 +52,8 @@ export function CompanyProfileV3Workspace({
         />
         <div className={shared.cardBody}>
           <p>
-            Review the commercial model, offering-specific buyer logic, assumptions,
-            unknowns, and scoped rules before publishing this profile for campaigns.
+            Review what Opptium understands about your company, offerings, target
+            organisations, and target roles before publishing it for campaigns.
           </p>
           {pending.length ? (
             <Badge tone="warning">
@@ -72,12 +80,76 @@ export function CompanyProfileV3Workspace({
           />
           <div className={shared.cardBody}>
             <p>
-              Publishing freezes the reviewed business model, offerings, buyer archetypes,
+              Publishing freezes the reviewed business model, offerings, target organisations,
               and accepted rules for future campaign strategies.
             </p>
           </div>
         </Card>
       ) : null}
+
+      <Card>
+        <CardHeader title={review.publicName || "Company profile"} eyebrow={review.canonicalDomain} />
+        <div className={`${shared.cardBody} ${shared.stack}`}>
+          <section>
+            <h2>Overview</h2>
+            <p>{review.commercialSummary || "Commercial overview is still being compiled."}</p>
+          </section>
+          <section>
+            <h2>Target organisations</h2>
+            {targetOrganisations.length ? (
+              <div className={styles.understandingGrid}>
+                {targetOrganisations.map((target) => (
+                  <article key={target.id}>
+                    <strong>{target.name}</strong>
+                    <p>
+                      {String(
+                        path(target.structured_details_json, "description") ||
+                          stringArray(path(target.structured_details_json, "whyCompatible"))[0] ||
+                          `Relevant to ${target.offeringName}.`,
+                      )}
+                    </p>
+                  </article>
+                ))}
+              </div>
+            ) : <p className={styles.meta}>Target organisations are still being compiled.</p>}
+          </section>
+          <section>
+            <h2>Target roles</h2>
+            <p>{review.targetRoles.map(({ label }) => label).join(", ") || "Target roles are still being compiled."}</p>
+          </section>
+          <section>
+            <h2>Offerings</h2>
+            <div className={styles.understandingGrid}>
+              {review.offerings.filter(({ status }) => status === "active").map((offering) => (
+                <article key={offering.id}>
+                  <strong>{offering.name}</strong>
+                  <p>{offering.short_description}</p>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </Card>
+
+      <details className={styles.section}>
+        <summary><strong>Advanced</strong> · Company Intelligence inspector</summary>
+        <div className={shared.stack}>
+
+      <Card>
+        <CardHeader title="Known relationships" eyebrow="Canonical suppression intelligence" />
+        <div className={shared.cardBody}>
+          {review.relationships.length ? (
+            <ul className={styles.list}>
+              {review.relationships.map((relationship) => (
+                <li key={relationship.id}>
+                  <strong>{relationship.organization_name}</strong> · {label(relationship.relationship_type)} · {label(relationship.status)} · {percent(relationship.confidence)} · {label(relationship.source)} · {label(relationship.scope)}
+                  <br /><span className={styles.meta}>Evidence: {relationship.evidence_ids.join(", ") || "None"}</span>
+                </li>
+              ))}
+            </ul>
+          ) : <p className={styles.meta}>No trusted relationship memories recorded.</p>}
+        </div>
+      </Card>
 
       <Card>
         <CardHeader title="Business model" eyebrow="How the company creates value" />
@@ -358,7 +430,7 @@ export function CompanyProfileV3Workspace({
                     </form>
                   </details>
                 ) : null}
-                <strong>Buyer archetypes</strong>
+                <strong>Target organisations</strong>
                 {offering.archetypes.length ? (
                   <ul className={styles.list}>
                     {offering.archetypes.map((archetype) => (
@@ -385,7 +457,7 @@ export function CompanyProfileV3Workspace({
                     ))}
                   </ul>
                 ) : (
-                  <p className={styles.meta}>No buyer archetype was linked.</p>
+                  <p className={styles.meta}>No target organisation was linked.</p>
                 )}
                 {reviewable ? (
                   <form
@@ -479,6 +551,20 @@ export function CompanyProfileV3Workspace({
           </div>
         </Card>
       ) : null}
+      <Card>
+        <CardHeader title="Canonical artifact" eyebrow="Development provenance inspector" />
+        <div className={shared.cardBody}>
+          <pre>{JSON.stringify(review.compiledSnapshot, null, 2)}</pre>
+        </div>
+      </Card>
+      <Card>
+        <CardHeader title="Execution diagnostics" eyebrow="Stages, timing, cache and provider collection" />
+        <div className={shared.cardBody}>
+          <pre>{JSON.stringify(review.diagnostics, null, 2)}</pre>
+        </div>
+      </Card>
+        </div>
+      </details>
     </>
   );
 }
@@ -599,4 +685,18 @@ function percent(value: number) {
 
 function label(value: string) {
   return value.replaceAll("_", " ");
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function uniqueBy<T>(values: T[], key: (value: T) => string) {
+  const seen = new Set<string>();
+  return values.filter((value) => {
+    const identity = key(value);
+    if (seen.has(identity)) return false;
+    seen.add(identity);
+    return true;
+  });
 }

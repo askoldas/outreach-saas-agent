@@ -35,6 +35,29 @@ export const marketEvidenceItemSchema = z
   })
   .strict();
 
+const waveFindingSchema = z.object({
+  label: z.string().min(1).max(240),
+  relationshipType: z.string().min(1).max(80),
+  rationale: z.string().min(1).max(600),
+  confidence: z.number().min(0).max(1),
+  evidenceIds: z.array(referenceIdSchema).max(8),
+}).strict();
+
+export const marketResearchWaveSummarySchema = z.object({
+  waveNumber: z.literal(1),
+  discoveredLaneHypotheses: z.array(waveFindingSchema).max(6),
+  strengthenedLaneHypotheses: z.array(waveFindingSchema).max(6),
+  weakenedLaneHypotheses: z.array(waveFindingSchema).max(6),
+  localTerminology: z.array(waveFindingSchema).max(6),
+  importantSourceLeads: z.array(waveFindingSchema).max(6),
+  scaleDriverFindings: z.array(waveFindingSchema).max(6),
+  buyingSignalFindings: z.array(waveFindingSchema).max(6),
+  marketStructureFindings: z.array(waveFindingSchema).max(6),
+  evidenceGaps: z.array(waveFindingSchema).max(6),
+  followUpQuestions: z.array(z.string().min(1).max(500)).max(6),
+  evidenceIds: z.array(referenceIdSchema).max(24),
+}).strict();
+
 export const marketEvidenceCorpusSchema = z
   .object({
     id: referenceIdSchema,
@@ -57,6 +80,7 @@ export const marketEvidenceCorpusSchema = z
       )
       .max(3)
       .default([]),
+    waveSummaries: z.array(marketResearchWaveSummarySchema).max(1).default([]),
     policy: z
       .object({
         maxMarketResearchWaves: z.number().int().min(1).max(3),
@@ -77,3 +101,4 @@ export const marketEvidenceCorpusSchema = z
 
 export type MarketResearchQuestion = z.infer<typeof marketResearchQuestionSchema>;
 export type MarketEvidenceCorpus = z.infer<typeof marketEvidenceCorpusSchema>;
+export type MarketResearchWaveSummary = z.infer<typeof marketResearchWaveSummarySchema>;

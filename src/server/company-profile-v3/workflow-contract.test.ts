@@ -96,7 +96,7 @@ test("native profile source collection persists bounded first-party evidence", (
   assert.match(sourceService, /searchWeb/);
   assert.match(sourceService, /extractWebPages/);
   assert.match(sourceService, /subject_type: "company_profile_draft"/);
-  assert.match(sourceService, /provider_execution_id: execution\.id/);
+  assert.match(sourceService, /provider_execution_id: providerExecutionId/);
   assert.match(sourceService, /maximumPages = 5/);
   assert.match(sourceService, /maximumPageLength = 8_000/);
 });

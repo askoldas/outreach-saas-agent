@@ -16,14 +16,17 @@ test("Company Profile uses the canonical native V3 review path", () => {
   assert.doesNotMatch(page, /getWorkspaceIntelligenceSettings/);
   assert.doesNotMatch(page, /CompanyProfileWorkspace/);
   assert.match(page, /Create Company Intelligence/);
-  assert.match(page, /Improve Company Intelligence/);
+  assert.match(page, /Refresh Company Intelligence/);
+  assert.match(page, /Force rebuild/);
   assert.match(page, /website=\{currentWorkspace\.websiteUrl\}/);
 });
 
 test("V3 review exposes commercial mechanics, buyer logic, rules, and questions", () => {
   assert.match(workspace, /Business model/);
   assert.match(workspace, /Offerings and buyer logic/);
-  assert.match(workspace, /Buyer archetypes/);
+  assert.match(workspace, /Target organisations/);
+  assert.match(workspace, /Target roles/);
+  assert.match(workspace, /Advanced/);
   assert.match(workspace, /Commercial rules/);
   assert.match(workspace, /Clarification questions/);
   assert.match(workspace, /optional clarification/);

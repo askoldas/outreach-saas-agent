@@ -85,7 +85,7 @@ test("commercial synthesis is compact and has enough completion headroom", () =>
   );
   assert.ok(definition);
   assert.equal(definition.schemaVersion, "profile-commercial-synthesis-schema-v2");
-  assert.match(definition.promptVersion, /-v4$/);
+  assert.match(definition.promptVersion, /-v5$/);
   assert.equal(definition.maxCompletionTokens, 7_000);
   const schema = JSON.stringify(z.toJSONSchema(definition.outputSchema));
   assert.match(schema, /"primaryRoles"[\s\S]*?"maxItems":6/);
@@ -125,14 +125,18 @@ test("profile buyer rules expose only durable, compact profile scopes", () => {
   assert.ok(definition);
   assert.equal(
     definition.schemaVersion,
-    "profile-buyer-logic-schema-v8-commercial-opportunity",
+    "profile-buyer-logic-schema-v9-cross-offering-completeness",
   );
-  assert.match(definition.promptVersion, /-v9$/);
+  assert.match(definition.promptVersion, /-v10$/);
   const schema = JSON.stringify(z.toJSONSchema(definition.outputSchema));
   assert.match(schema, /"scope":\{"type":"string","enum":\["workspace","offering"\]\}/);
   assert.doesNotMatch(schema, /"scope"[\s\S]*?"candidate"/);
   assert.match(definition.description, /never campaign or candidate scope/i);
-  assert.match(definition.description, /one exact supplied offeringKey/i);
+  assert.match(definition.description, /every exact offeringKey/i);
+  assert.match(
+    definition.description,
+    /exactly one offeringBuyerLogic record per supplied offering/i,
+  );
   assert.match(
     definition.description,
     /at most two distinct high-value opportunity hypotheses/i,

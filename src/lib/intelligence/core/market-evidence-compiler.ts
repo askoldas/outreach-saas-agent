@@ -1,6 +1,25 @@
 import { hashCanonical } from "../campaign-strategy-v2/context-compiler.ts";
 import type { CampaignTargetModel } from "./campaign-target-model.ts";
-import type { MarketResearchQuestion } from "./market-evidence.ts";
+import type { MarketResearchQuestion, MarketResearchWaveSummary } from "./market-evidence.ts";
+
+export function sanitizeMarketResearchWaveSummary(
+  summary: MarketResearchWaveSummary,
+  allowedEvidenceIds: Set<string>,
+  approvedRelationships: Set<string>,
+) {
+  const clean = (items: MarketResearchWaveSummary["discoveredLaneHypotheses"]) =>
+    items.map((item) => ({ ...item, evidenceIds: item.evidenceIds.filter((id) => allowedEvidenceIds.has(id)) }));
+  const discovered = clean(summary.discoveredLaneHypotheses);
+  return {
+    ...summary,
+    discoveredLaneHypotheses: discovered.filter(({ relationshipType, evidenceIds }) => approvedRelationships.has(relationshipType) && evidenceIds.length > 0),
+    weakenedLaneHypotheses: [...clean(summary.weakenedLaneHypotheses), ...discovered.filter(({ relationshipType }) => !approvedRelationships.has(relationshipType))].slice(0, 6),
+    strengthenedLaneHypotheses: clean(summary.strengthenedLaneHypotheses), localTerminology: clean(summary.localTerminology),
+    importantSourceLeads: clean(summary.importantSourceLeads), scaleDriverFindings: clean(summary.scaleDriverFindings),
+    buyingSignalFindings: clean(summary.buyingSignalFindings), marketStructureFindings: clean(summary.marketStructureFindings), evidenceGaps: clean(summary.evidenceGaps),
+    evidenceIds: summary.evidenceIds.filter((id) => allowedEvidenceIds.has(id)),
+  };
+}
 
 export const MARKET_RECONNAISSANCE_COMPILER_VERSION =
   "market-reconnaissance-questions/v2-adaptive-waves";
@@ -85,6 +104,7 @@ export function compileMarketResearchFollowUpQuestions(input: {
   waveNumber: 2 | 3;
   priorityGapKeys?: string[];
   maximum?: number;
+  waveSummary?: MarketResearchWaveSummary;
 }): MarketResearchQuestion[] {
   const maximum = Math.max(0, Math.min(input.maximum ?? 3, 3));
   const geography = input.target.geography.displayName;
@@ -111,6 +131,21 @@ export function compileMarketResearchFollowUpQuestions(input: {
       });
     }
     return questions;
+  }
+  const approvedRelationships = new Set(input.target.objective.desiredRelationships);
+  for (const [index, lane] of (input.waveSummary?.discoveredLaneHypotheses ?? [])
+    .filter(({ relationshipType }) => approvedRelationships.has(relationshipType as never))
+    .slice(0, maximum)
+    .entries()) {
+    questions.push({
+      id: `market-question.wave-2-discovered-lane-${index + 1}`,
+      purpose: "buyer_landscape",
+      query: bounded(`${geography} "${lane.label}" organizations directories scale procurement ${input.waveSummary?.localTerminology.map(({ label }) => label).slice(0, 2).join(" ") ?? ""}`),
+      rationale: `Validate Wave-1 discovered lane: ${lane.rationale}`,
+      waveNumber: 2,
+      direction: "lane_validation",
+      derivedFromEvidenceIds: lane.evidenceIds,
+    });
   }
   const source = ranked.find(({ url }) => usefulSourceHost(url));
   if (source && questions.length < maximum) {

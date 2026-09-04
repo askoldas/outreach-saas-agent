@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { readNativeCompanyProfileSourceSet } from "@/lib/intelligence/company-profile-v3/native-source";
+import { nativeCompanyProfileForceRefresh, nativeCompanyProfileId, readNativeCompanyProfileSourceSet } from "@/lib/intelligence/company-profile-v3/native-source";
 import { assertIntelligenceExternalCallsAllowed } from "@/lib/intelligence/external-call-controls";
 import { extractWebPages, searchWeb, type SearchResult } from "@/lib/providers/tavily";
 import { createServiceRoleClient } from "@/lib/supabase/service";
@@ -7,6 +7,8 @@ import type { Database, Json } from "@/types/database.types";
 
 const maximumPages = 5;
 const maximumPageLength = 8_000;
+const extractorVersion = "company-profile-pages/v2-commercial-selective";
+const cacheFreshMs = 24 * 60 * 60 * 1_000;
 
 type EvidenceInsert = Database["public"]["Tables"]["evidence_items"]["Insert"];
 
@@ -21,6 +23,9 @@ export async function ensureNativeCompanyProfileEvidence(input: {
   if (existing.length) return existing;
 
   const sourceSet = readNativeCompanyProfileSourceSet(input.draftSnapshot);
+  const companyProfileId = nativeCompanyProfileId(input.draftSnapshot);
+  const forceRefresh = nativeCompanyProfileForceRefresh(input.draftSnapshot);
+  const cachedPages = forceRefresh ? [] : await loadCachedPages(input.workspaceId, companyProfileId, new URL(sourceSet.primaryWebsiteUrl).hostname.replace(/^www\./, ""));
   const operation = "company_profile_source_collection";
   const idempotencyKey = [
     "profile-v3-source",
@@ -77,45 +82,24 @@ export async function ensureNativeCompanyProfileEvidence(input: {
     );
   }
 
+  if (cachedPages.length) {
+    await persistEvidenceRows(input, cachedPages, execution.id);
+    const completedAt = new Date().toISOString();
+    await supabase.from("provider_executions").update({
+      status:"completed", dispatch_state:"completed", dispatch_updated_at:completedAt, completed_at:completedAt,
+      metadata:{ contractVersion:sourceSet.contractVersion, profileDraftId:input.profileDraftId, primaryWebsiteUrl:sourceSet.primaryWebsiteUrl, cacheHits:cachedPages.length, cacheMisses:0, extractorVersion },
+    }).eq("workspace_id",input.workspaceId).eq("id",execution.id);
+    return loadEvidence(input.workspaceId, input.profileDraftId);
+  }
+
   try {
     assertIntelligenceExternalCallsAllowed("provider");
     const pages = await collectOfficialPages(sourceSet);
     if (!pages.length) {
       throw new Error("The official company website returned no usable public content.");
     }
-    const retrievedAt = new Date().toISOString();
-    const evidenceRows: EvidenceInsert[] = pages.map((page) => ({
-      workspace_id: input.workspaceId,
-      subject_type: "company_profile_draft",
-      subject_id: input.profileDraftId,
-      provider_execution_id: execution.id,
-      evidence_type: "official_web_page",
-      structured_value_json: {
-        content: page.content,
-        title: page.title,
-        url: page.url,
-      },
-      excerpt: compact(page.content).slice(0, 800),
-      location_json: { title: page.title, url: page.url },
-      directness: "direct",
-      source_reliability: "first_party",
-      freshness_state: "current",
-      observed_at: retrievedAt,
-      retrieved_at: retrievedAt,
-      content_hash: digest(`${page.url}\n${page.content}`),
-      visibility: "workspace_private",
-    }));
-    const { error: evidenceError } = await supabase
-      .from("evidence_items")
-      .upsert(evidenceRows, {
-        ignoreDuplicates: true,
-        onConflict: "workspace_id,subject_type,subject_id,content_hash",
-      });
-    if (evidenceError) {
-      throw new Error(
-        `Could not persist Company Intelligence evidence: ${evidenceError.message}`,
-      );
-    }
+    await persistEvidenceRows(input, pages, execution.id);
+    await persistPageCache(input.workspaceId, companyProfileId, sourceSet.primaryWebsiteUrl, pages);
     const evidence = await loadEvidence(input.workspaceId, input.profileDraftId);
     if (!evidence.length) {
       throw new Error("Company Intelligence evidence was not persisted.");
@@ -124,24 +108,10 @@ export async function ensureNativeCompanyProfileEvidence(input: {
     const { error: completionError } = await supabase
       .from("provider_executions")
       .update({
-        status: "completed",
-        dispatch_state: "completed",
-        dispatch_updated_at: completedAt,
-        completed_at: completedAt,
-        metadata: {
-          contractVersion: sourceSet.contractVersion,
-          evidenceCount: evidence.length,
-          profileDraftId: input.profileDraftId,
-          primaryWebsiteUrl: sourceSet.primaryWebsiteUrl,
-        },
-      })
-      .eq("workspace_id", input.workspaceId)
-      .eq("id", execution.id);
-    if (completionError) {
-      throw new Error(
-        `Could not settle Company Intelligence source collection: ${completionError.message}`,
-      );
-    }
+        status: "completed", dispatch_state: "completed", dispatch_updated_at: completedAt, completed_at: completedAt,
+        metadata: { contractVersion: sourceSet.contractVersion, evidenceCount: evidence.length, profileDraftId: input.profileDraftId, primaryWebsiteUrl: sourceSet.primaryWebsiteUrl, cacheHits: 0, cacheMisses: pages.length, extractorVersion },
+      }).eq("workspace_id", input.workspaceId).eq("id", execution.id);
+    if (completionError) throw new Error(`Could not settle Company Intelligence source collection: ${completionError.message}`);
     return evidence;
   } catch (error) {
     const completedAt = new Date().toISOString();
@@ -183,6 +153,8 @@ async function collectOfficialPages(
   const urls = [sourceSet.primaryWebsiteUrl, ...searchResults.map((result) => result.url)]
     .filter((url, index, entries) => entries.indexOf(url) === index)
     .filter((url) => isAllowedOfficialUrl(url, sourceSet.allowedDomains))
+    .filter((url) => isCommerciallyUsefulUrl(url, sourceSet.primaryWebsiteUrl))
+    .sort((left, right) => commercialUrlScore(right, sourceSet.primaryWebsiteUrl) - commercialUrlScore(left, sourceSet.primaryWebsiteUrl))
     .slice(0, maximumPages);
   let extracted: SearchResult[] = [];
   let extractionFailure: unknown;
@@ -223,6 +195,65 @@ async function collectOfficialPages(
     );
   }
   return pages;
+}
+
+function isCommerciallyUsefulUrl(value: string, primaryWebsiteUrl: string) {
+  if (value === primaryWebsiteUrl) return true;
+  const path = new URL(value).pathname.toLowerCase();
+  return !/(?:privacy|terms|cookies?|login|account|cart|checkout|page\/\d+|news\/page|\?.*page=)/.test(path);
+}
+
+function commercialUrlScore(value: string, primaryWebsiteUrl: string) {
+  if (value === primaryWebsiteUrl) return 100;
+  const path = new URL(value).pathname.toLowerCase();
+  if (/customer|case-stud|client|reference/.test(path)) return 90;
+  if (/product|service|solution|industr|categor/.test(path)) return 80;
+  if (/about|company|capabilit/.test(path)) return 70;
+  return 10;
+}
+
+async function loadCachedPages(workspaceId: string, companyProfileId: string, canonicalDomain: string): Promise<SearchResult[]> {
+  const database = createServiceRoleClient() as unknown as { from(table: string): { select(columns: string): CacheSelectBuilder } };
+  const cutoff = new Date(Date.now() - cacheFreshMs).toISOString();
+  const { data, error } = await database.from("company_profile_page_cache_v2")
+    .select("url,title,content,content_hash,fetched_at")
+    .eq("workspace_id", workspaceId).eq("company_profile_id", companyProfileId).eq("canonical_domain", canonicalDomain)
+    .eq("extractor_version", extractorVersion).gte("fetched_at", cutoff)
+    .order("fetched_at", { ascending: false }).limit(20);
+  if (error) throw new Error(`Could not inspect Company Intelligence page cache: ${error.message}`);
+  const seen = new Set<string>();
+  return (data ?? []).filter((row) => !seen.has(row.url) && Boolean(seen.add(row.url))).slice(0, maximumPages)
+    .map((row) => ({ url: row.url, title: row.title, content: row.content, score: null }));
+}
+
+type CacheSelectBuilder = PromiseLike<{ data: Array<{url:string;title:string;content:string;content_hash:string;fetched_at:string}> | null; error: {message:string}|null }> & {
+  eq(column:string,value:string): CacheSelectBuilder; gte(column:string,value:string): CacheSelectBuilder;
+  order(column:string,options:{ascending:boolean}): CacheSelectBuilder; limit(value:number): CacheSelectBuilder;
+};
+
+async function persistPageCache(workspaceId: string, companyProfileId: string, primaryWebsiteUrl: string, pages: SearchResult[]) {
+  const database = createServiceRoleClient() as unknown as { from(table:string): { upsert(values:Record<string,unknown>[],options:Record<string,unknown>): PromiseLike<{error:{message:string}|null}> } };
+  const canonicalDomain = new URL(primaryWebsiteUrl).hostname.toLowerCase().replace(/^www\./, "");
+  const { error } = await database.from("company_profile_page_cache_v2").upsert(pages.map((page) => ({
+    workspace_id: workspaceId, company_profile_id: companyProfileId, canonical_domain: canonicalDomain, url: page.url, title: page.title,
+    content: page.content, content_hash: digest(`${page.url}\n${page.content}`), extractor_version: extractorVersion, fetched_at: new Date().toISOString(),
+  })), { onConflict: "workspace_id,url,content_hash,extractor_version", ignoreDuplicates: true });
+  if (error) throw new Error(`Could not persist Company Intelligence page cache: ${error.message}`);
+}
+
+async function persistEvidenceRows(input: {workspaceId:string;profileDraftId:string}, pages: SearchResult[], providerExecutionId: string | null) {
+  const retrievedAt = new Date().toISOString();
+  const evidenceRows: EvidenceInsert[] = pages.map((page) => ({
+    workspace_id: input.workspaceId, subject_type: "company_profile_draft", subject_id: input.profileDraftId,
+    provider_execution_id: providerExecutionId, evidence_type: "official_web_page",
+    structured_value_json: { content: page.content, title: page.title, url: page.url },
+    excerpt: compact(page.content).slice(0,800), location_json:{title:page.title,url:page.url}, directness:"direct",
+    source_reliability:"first_party", freshness_state:"current", observed_at:retrievedAt, retrieved_at:retrievedAt,
+    content_hash:digest(`${page.url}\n${page.content}`), visibility:"workspace_private",
+  }));
+  const supabase = createServiceRoleClient();
+  const { error } = await supabase.from("evidence_items").upsert(evidenceRows,{ignoreDuplicates:true,onConflict:"workspace_id,subject_type,subject_id,content_hash"});
+  if (error) throw new Error(`Could not persist Company Intelligence evidence: ${error.message}`);
 }
 
 async function loadEvidence(workspaceId: string, profileDraftId: string) {

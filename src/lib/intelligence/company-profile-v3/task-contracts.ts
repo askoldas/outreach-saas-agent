@@ -84,6 +84,15 @@ export const profileCommercialSynthesisOutputSchema = z
     commercialConstraints: z.array(intelligenceClaimSchema).max(12),
     unresolvedCommercialQuestions: z.array(z.string().max(320)).max(12),
     conciseCommercialSummary: z.string().max(1800),
+    knownRelationships: z.array(z.object({
+      organizationName: z.string().min(1).max(300),
+      canonicalDomain: z.string().min(3).max(253).nullable(),
+      relationshipType: z.enum(["existing_customer", "former_customer", "partner", "distributor", "competitor", "other"]),
+      status: z.enum(["confirmed", "probable", "ambiguous"]),
+      confidence: z.number().min(0).max(1),
+      source: z.enum(["company_profile", "seller_site", "other"]),
+      evidenceIds: z.array(z.string().min(1).max(160)).min(1).max(12),
+    }).strict()).max(20).default([]),
   })
   .strict();
 
@@ -363,7 +372,7 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
     "profile-commercial-synthesis-schema-v2",
     "profile_commercial_reasoning",
     profileCommercialSynthesisOutputSchema,
-    "Interpret how the company creates, delivers, and captures value. Each primaryRoles.role must be a concise role label of at most 120 characters, never a sentence or explanation.",
+    "Interpret how the company creates, delivers, and captures value. Each primaryRoles.role must be a concise role label of at most 120 characters, never a sentence or explanation. Extract named commercial relationships only when supplied evidence supports them. A mere logo, mention, listing, or ambiguous association is not a confirmed customer; preserve it as probable or ambiguous. Every relationship must cite visible evidence.",
   ),
   definition(
     "profile.offering_decomposition",
@@ -374,10 +383,10 @@ export const profileV3TaskDefinitions: Array<PromptDefinition<unknown, unknown>>
   ),
   definition(
     "profile.buyer_logic",
-    "profile-buyer-logic-schema-v8-commercial-opportunity",
+    "profile-buyer-logic-schema-v9-cross-offering-completeness",
     "profile_commercial_reasoning",
     profileBuyerLogicOutputSchema,
-    "Build compact buyer logic for the one exact supplied offeringKey. Return exactly one offeringBuyerLogic record and never reference another offering. Include at most two distinct high-value opportunity hypotheses and at most one rule, only when that rule materially changes qualification. For each hypothesis preserve observable organization roles, business models, industries, required/preferred/incompatible conditions, offering-specific scale or account-value drivers, buying triggers, decision roles, and evidence IDs when supported. These are initial hypotheses, not a closed final market universe. Keep lists to the strongest few items, keep each sentence concise, and prefer an empty array over speculation. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
+    "Build compact buyer logic for every exact offeringKey supplied by profile.offering_decomposition. Return exactly one offeringBuyerLogic record per supplied offering, with no omissions, duplicates, or invented offering keys. Across each offering include at most two distinct high-value opportunity hypotheses and at most one rule, only when that rule materially changes qualification. Preserve observable organization roles, business models, industries, required/preferred/incompatible conditions, offering-specific scale or account-value drivers, buying triggers, decision roles, and evidence IDs when supported. These are initial hypotheses, not a closed final market universe. Keep lists to the strongest few items, keep each sentence concise, and prefer an empty array over speculation. Every proposed rule must use only workspace or offering scope; never campaign or candidate scope.",
   ),
   definition(
     "profile.clarification",
@@ -405,9 +414,9 @@ function definition(
   const outputJsonSchema = z.toJSONSchema(outputSchema) as Record<string, unknown>;
   const promptRevision =
     taskId === "profile.buyer_logic"
-      ? "v9"
+      ? "v10"
       : taskId === "profile.commercial_synthesis"
-        ? "v4"
+        ? "v5"
         : taskId === "profile.clarification"
           ? "v3"
           : taskId === "profile.consistency_audit"

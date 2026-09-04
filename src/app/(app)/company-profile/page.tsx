@@ -9,7 +9,7 @@ import styles from "@/features/shared/Feature.module.css";
 import { getCampaignResearchProgress } from "@/server/research/repository";
 import { RunProgressPanel } from "@/features/progress/RunProgressPanel";
 import { getCurrentCompanyProfileV3Review } from "@/server/company-profile-v3/repository";
-import { createCompanyProfileV3DraftAction } from "@/server/company-profile-v3/actions";
+import { createCompanyProfileV3DraftAction, forceRefreshCompanyProfileV3Action } from "@/server/company-profile-v3/actions";
 import { CompanyProfileV3Workspace } from "@/features/company-profile/CompanyProfileV3Workspace";
 import { Card, CardHeader } from "@/components/ui/Card";
 
@@ -49,9 +49,14 @@ export default async function CompanyProfilePage({
               </ButtonLink>
             ) : null}
             {reviewable && currentWorkspace.websiteUrl ? (
-              <form action={createCompanyProfileV3DraftAction}>
-                <Button type="submit">Improve Company Intelligence</Button>
-              </form>
+              <>
+                <form action={createCompanyProfileV3DraftAction}>
+                  <Button type="submit">Refresh Company Intelligence</Button>
+                </form>
+                <form action={forceRefreshCompanyProfileV3Action}>
+                  <Button type="submit">Force rebuild</Button>
+                </form>
+              </>
             ) : null}
             {pendingQuestions ? (
               <ButtonLink variant="primary" href="#profile-v3-review">

@@ -1,14 +1,9 @@
 import { createHash } from "node:crypto";
 import { compileProfileV3Draft } from "@/lib/intelligence/company-profile-v3/draft-compiler";
-import {
-  buyerLogicShardContexts,
-  mergeBuyerLogicShardOutputs,
-} from "@/lib/intelligence/company-profile-v3/buyer-logic-shards";
 import { normalizeProfileStageProviderOutput } from "@/lib/intelligence/company-profile-v3/output-normalization";
 import { normalizeLegacyProfileBuyerRuleScopes } from "@/lib/intelligence/company-profile-v3/profile-rule-scopes";
 import {
   profileBuyerLogicOutputSchema,
-  profileBuyerLogicShardOutputSchema,
   profileClarificationOutputSchema,
   profileCommercialSynthesisOutputSchema,
   profileConsistencyOutputSchema,
@@ -377,6 +372,16 @@ export async function finalizeProfileV3Draft(input: {
     throw new Error(
       `Could not compile Company Intelligence draft: ${compileError.message}`,
     );
+  const { error: extensionError } = await supabase.rpc(
+    "persist_company_profile_commercial_extensions_v2" as never,
+    {
+      target_workspace_id: input.workspaceId,
+      target_profile_draft_id: input.profileDraftId,
+      target_compilation: compilation as Json,
+    } as never,
+  );
+  if (extensionError)
+    throw new Error(`Could not persist Company Intelligence commercial extensions: ${extensionError.message}`);
 
   const { data: audit, error: auditError } = await supabase
     .from("profile_task_runs")
@@ -478,47 +483,7 @@ async function generateValidatedProfileStageOutput(input: {
   inputHash: string;
   taskRunId: string;
 }): Promise<ValidatedProfileStageGeneration> {
-  if (input.taskId !== "profile.buyer_logic") {
-    return generateSingleValidatedProfileStageOutput(input);
-  }
-  const shards = buyerLogicShardContexts(input.context);
-  const generated = await Promise.all(
-    shards.map(({ context, offeringKey }) =>
-      generateSingleValidatedProfileStageOutput({
-        ...input,
-        context,
-        definition: {
-          ...input.definition,
-          schemaVersion: "profile-buyer-logic-shard-schema/v1",
-          outputSchema: profileBuyerLogicShardOutputSchema,
-        },
-        inputHash: hash({ inputHash: input.inputHash, offeringKey }),
-        offeringKey,
-      }).catch((error) => {
-        throw new Error(
-          `Buyer logic failed for offering ${offeringKey}: ${errorMessage(error)}`,
-          {
-            cause: error,
-          },
-        );
-      }),
-    ),
-  );
-  const output = mergeBuyerLogicShardOutputs(
-    generated.map((generation, index) => ({
-      offeringKey: shards[index]!.offeringKey,
-      output: generation.output,
-    })),
-  );
-  return {
-    calls: generated.flatMap((item) => item.calls),
-    output,
-    structuredOutputFallbackUsed: generated.some(
-      (item) => item.structuredOutputFallbackUsed,
-    ),
-    truncationRetryUsed: false,
-    repairAttempted: generated.some((item) => item.repairAttempted),
-  };
+  return generateSingleValidatedProfileStageOutput(input);
 }
 
 async function generateSingleValidatedProfileStageOutput(input: {
@@ -538,7 +503,10 @@ async function generateSingleValidatedProfileStageOutput(input: {
     taskId: input.definition.taskId,
     schemaVersion: input.definition.schemaVersion,
     schema: input.definition.outputSchema,
-    semanticValidators: [],
+    semanticValidators:
+      input.taskId === "profile.buyer_logic"
+        ? [(output) => assertCompleteBuyerLogic(output, input.context)]
+        : [],
   });
   const result = await executeValidatedAiTask<unknown, unknown>({
     registry: tasks,
@@ -605,6 +573,33 @@ async function generateSingleValidatedProfileStageOutput(input: {
     truncationRetryUsed: false,
     repairAttempted: provenance.repairAttempted,
   };
+}
+
+function assertCompleteBuyerLogic(output: unknown, context: unknown) {
+  const contextRecord = objectValue(context);
+  const previous = Array.isArray(contextRecord.previousStageOutputs)
+    ? contextRecord.previousStageOutputs
+    : [];
+  const decomposition = previous.find(
+    (stage) => objectValue(stage).taskId === "profile.offering_decomposition",
+  );
+  const expected = Array.isArray(objectValue(objectValue(decomposition).output).offerings)
+    ? objectValue(objectValue(decomposition).output).offerings as unknown[]
+    : [];
+  const expectedKeys = expected
+    .map((offering) => objectValue(offering).offeringKey)
+    .filter((key): key is string => typeof key === "string");
+  const actual = objectValue(output).offeringBuyerLogic;
+  const actualKeys = Array.isArray(actual)
+    ? actual.map((logic) => objectValue(logic).offeringKey).filter((key): key is string => typeof key === "string")
+    : [];
+  const missing = expectedKeys.filter((key) => !actualKeys.includes(key));
+  const unknown = actualKeys.filter((key) => !expectedKeys.includes(key));
+  if (missing.length || unknown.length || new Set(actualKeys).size !== actualKeys.length) {
+    throw new Error(
+      `Buyer logic must contain exactly one record for every supplied offering. Missing: ${missing.join(", ") || "none"}; unknown: ${unknown.join(", ") || "none"}.`,
+    );
+  }
 }
 
 function sumMetric(

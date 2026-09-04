@@ -28,13 +28,19 @@ export async function runBudgetedOpenRouterCall<T>(input: {
   try {
     call = await input.execute();
   } catch (error) {
-    await releaseResearchCredits({
-      workspaceId: input.workspaceId,
-      campaignRunId: input.campaignRunId,
-      reservationId: String(reservation.id),
-      idempotencyKey: input.idempotencyKey,
-      reason: error instanceof Error ? error.message : "OpenRouter call failed",
-    });
+    try {
+      await releaseResearchCredits({
+        workspaceId: input.workspaceId,
+        campaignRunId: input.campaignRunId,
+        reservationId: String(reservation.id),
+        idempotencyKey: input.idempotencyKey,
+        reason: error instanceof Error ? error.message : "OpenRouter call failed",
+      });
+    } catch (releaseError) {
+      if (error instanceof Error) {
+        error.cause = releaseError;
+      }
+    }
     throw error;
   }
   const actualCostUsd = call.providerReportedCost ?? 0;

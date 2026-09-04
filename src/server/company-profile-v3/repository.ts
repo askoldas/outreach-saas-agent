@@ -30,6 +30,16 @@ export type CompanyProfileV3Review = {
   publicName: string;
   canonicalDomain: string;
   commercialSummary: string;
+  relationships: Array<{
+    id: string; organization_name: string; canonical_domain: string | null;
+    relationship_type: string; status: string; confidence: number;
+    evidence_ids: string[]; source: string; scope: string;
+  }>;
+  targetRoles: Array<{
+    id: string; role_key: string; label: string; offering_keys: string[];
+    archetype_keys: string[]; confidence: number; evidence_ids: string[]; origin: string;
+  }>;
+  diagnostics: { stages: Json[]; sourceCollections: Json[] };
 };
 
 export async function getCurrentCompanyProfileV3Review(
@@ -55,6 +65,10 @@ export async function getCurrentCompanyProfileV3Review(
     { data: archetypes, error: archetypeError },
     { data: rules, error: ruleError },
     { data: questions, error: questionError },
+    relationshipResult,
+    targetRoleResult,
+    { data: stageDiagnostics, error: stageDiagnosticsError },
+    { data: sourceDiagnostics, error: sourceDiagnosticsError },
   ] = await Promise.all([
     supabase
       .from("company_profile_drafts")
@@ -94,6 +108,12 @@ export async function getCurrentCompanyProfileV3Review(
       .eq("workspace_id", workspaceId)
       .eq("profile_draft_id", draftId)
       .order("created_at"),
+    (supabase as unknown as { from(table: string): { select(columns: string): { eq(column: string, value: string): PromiseLike<{ data: CompanyProfileV3Review["relationships"] | null; error: { message: string } | null }> } } })
+      .from("organization_relationship_memories_v2").select("id,organization_name,canonical_domain,relationship_type,status,confidence,evidence_ids,source,scope").eq("workspace_id", workspaceId),
+    (supabase as unknown as { from(table: string): { select(columns: string): { eq(column: string, value: string): PromiseLike<{ data: CompanyProfileV3Review["targetRoles"] | null; error: { message: string } | null }> } } })
+      .from("company_target_roles_v2").select("id,role_key,label,offering_keys,archetype_keys,confidence,evidence_ids,origin").eq("profile_draft_id", draftId),
+    supabase.from("profile_task_runs").select("task_id,status,attempt_count,started_at,completed_at,ai_request_ids").eq("workspace_id", workspaceId).eq("profile_draft_id", draftId).order("created_at"),
+    supabase.from("provider_executions").select("operation,status,attempt,started_at,completed_at,metadata").eq("workspace_id", workspaceId).eq("operation", "company_profile_source_collection").contains("metadata", { profileDraftId: draftId }).order("started_at", { ascending: false }).limit(5),
   ]);
   const error =
     draftError ??
@@ -102,8 +122,9 @@ export async function getCurrentCompanyProfileV3Review(
     archetypeError ??
     ruleError ??
     questionError;
-  if (error)
-    throw new Error(`Could not load Company Intelligence review: ${error.message}`);
+  const combinedError = error ?? relationshipResult.error ?? targetRoleResult.error ?? stageDiagnosticsError ?? sourceDiagnosticsError;
+  if (combinedError)
+    throw new Error(`Could not load Company Intelligence review: ${combinedError.message}`);
   if (!draft) throw new Error("Could not load Company Intelligence review draft.");
 
   const businessModel = (models?.[0] as BusinessModelRow | undefined) ?? null;
@@ -138,6 +159,12 @@ export async function getCurrentCompanyProfileV3Review(
       "commercialSynthesis",
       "conciseCommercialSummary",
     ),
+    relationships: relationshipResult.data ?? [],
+    targetRoles: targetRoleResult.data ?? [],
+    diagnostics: {
+      stages: (stageDiagnostics ?? []) as unknown as Json[],
+      sourceCollections: (sourceDiagnostics ?? []) as unknown as Json[],
+    },
   };
 }
 
@@ -161,7 +188,7 @@ async function loadBusinessRoles(workspaceId: string, businessModelId: string) {
   return data ?? [];
 }
 
-export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: string) {
+export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: string, options: { forceRefresh?: boolean } = {}) {
   const settings = await getWorkspaceIntelligenceSettings(workspaceId);
   if (settings.profileVersion !== "v2")
     throw new Error("Company Intelligence V3 is not enabled for this workspace.");
@@ -183,6 +210,7 @@ export async function createAndDispatchCompanyIntelligenceV3Draft(workspaceId: s
     publicName: workspace.name,
     websiteUrl: workspace.website_url,
     workspaceId,
+    forceRefresh: options.forceRefresh,
   });
   const inputHash = createHash("sha256")
     .update(

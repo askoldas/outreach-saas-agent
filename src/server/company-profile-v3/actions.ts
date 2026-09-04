@@ -20,6 +20,18 @@ export async function createCompanyProfileV3DraftAction() {
   redirect("/company-profile?message=v3-analysis-started");
 }
 
+export async function forceRefreshCompanyProfileV3Action() {
+  const { currentWorkspace } = await getWorkspaceContext();
+  if (!currentWorkspace) redirect("/onboarding/workspace");
+  try {
+    await createAndDispatchCompanyIntelligenceV3Draft(currentWorkspace.id, { forceRefresh: true });
+  } catch (error) {
+    redirect(`/company-profile?error=${companyIntelligenceStartErrorCode(error)}`);
+  }
+  revalidatePath("/company-profile");
+  redirect("/company-profile?message=v3-analysis-started");
+}
+
 export async function answerCompanyProfileV3QuestionAction(formData: FormData) {
   const { currentWorkspace } = await getWorkspaceContext();
   if (!currentWorkspace) redirect("/onboarding/workspace");

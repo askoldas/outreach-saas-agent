@@ -6,6 +6,7 @@ export * from "./campaign-target-model.ts";
 export * from "./campaign-target-model-compiler.ts";
 export * from "./market-intelligence.ts";
 export * from "./market-evidence.ts";
+export * from "./market-evidence-selection.ts";
 export * from "./market-evidence-compiler.ts";
 export * from "./market-analysis-compiler.ts";
 export * from "./market-research-plan-compiler.ts";
